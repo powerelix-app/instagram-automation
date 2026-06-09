@@ -329,53 +329,79 @@ def _scrim(img: Image.Image, top=140, bottom=460):
     return Image.composite(black, img, ov)
 
 
-def _hero_topbar(img, d):
-    """Верхний бар: слоган-стрип слева + фирменный знак справа (как у PWR, но наш)."""
-    f = _font(INTER_MED, 26)
-    y = 70
-    _spaced(d, (M, y), SLOGAN, f, WHITE, 5)
-    tw = _spaced_width(d, SLOGAN, f, 5)
-    mk = brand_mark(52)
-    img.paste(mk, (W - M - mk.width, y - 16), mk)
-    d.line([(M + tw + 24, y + 14), (W - M - mk.width - 24, y + 14)], fill=WHITE, width=2)
+def _corner_mark(img, d, wordmark="POWERELIX", fill=WHITE):
+    """Скромная подпись в углу: знак + вордмарк (не PWR-бар на всю ширину)."""
+    mk = brand_mark(44)
+    img.paste(mk, (M, 56), mk)
+    _spaced(d, (M + mk.width + 18, 64), wordmark.upper(), _font(INTER_XB, 28), fill, 3)
 
 
 def render_hero(
     style: str,
     title: str,
-    hook: str,
     out_path: str | Path,
     bg_path: str | Path | None = None,
     accent_hex: str = "#B6F000",
     subtitle: str = "",
+    wordmark: str = "POWERELIX",
 ) -> Path:
-    """Hero-карточка: брендовый оверлей поверх фотосцены (или тёмной заглушки)."""
+    """Hero-оверлей бренда поверх сцены — СВОИ каркасы (не PWR).
+
+    style: block (чистый блок + скобка) | band (градиент-лента) | anchor (знак-якорь).
+    """
     accent = _hex(accent_hex)
     img = _cover(Image.open(bg_path)) if bg_path else _dark_scene()
-    img = _scrim(img)
-    d = ImageDraw.Draw(img)
 
-    if style == "xmark":
-        big = brand_mark(560, opacity=42)
-        img.paste(big, (int(W / 2 - big.width / 2), 360), big)
+    if style == "block":
+        img = _scrim(img, top=150, bottom=560)
+        d = ImageDraw.Draw(img)
+        _corner_mark(img, d, wordmark)
+        ft = _font(MONT_BLACK, 100)
+        lines = _wrap_upper(d, title, ft, W - 2 * M)
+        y = H - 130 - len(lines) * 104 - (62 if subtitle else 0)
+        for ln in lines:
+            d.text((M, y), ln, font=ft, fill=WHITE)
+            y += 104
+        if subtitle:
+            d.rectangle([M, y + 8, M + 120, y + 15], fill=accent)
+            _brace(d, (M, y + 30), subtitle, _font(INTER_SB, 40), accent)
 
-    _hero_topbar(img, d)
+    elif style == "band":
+        bh = 200
+        img = _scrim(img, top=150, bottom=bh + 200)
+        d = ImageDraw.Draw(img)
+        _corner_mark(img, d, wordmark)
+        # заголовок на фото, над лентой
+        ft = _font(MONT_BLACK, 96)
+        lines = _wrap_upper(d, title, ft, W - 2 * M)
+        y = H - bh - 60 - len(lines) * 100
+        for ln in lines:
+            d.text((M, y), ln, font=ft, fill=WHITE)
+            y += 100
+        # фирменная градиент-лента снизу со слоганом (тёмный текст по светлой ленте)
+        img.paste(_gradient((W, bh), LIME, TEAL, vertical=False), (0, H - bh))
+        d = ImageDraw.Draw(img)
+        fs = _font(INTER_XB, 30)
+        sw = _spaced_width(d, SLOGAN, fs, 5)
+        _spaced(d, ((W - sw) / 2, H - bh + (bh - 36) // 2), SLOGAN, fs, INK, 5)
 
-    # хук-фраза акцентом (справа, как «СТАНЦУЕМ?»)
-    fh = _font(MONT_BLACK, 52)
-    hw = d.textlength(hook.upper(), font=fh)
-    d.text((W - M - hw, 560), hook.upper(), font=fh, fill=accent)
+    elif style == "anchor":
+        img = _scrim(img, top=150, bottom=420)
+        d = ImageDraw.Draw(img)
+        _corner_mark(img, d, wordmark)
+        big = brand_mark(360)  # знак-якорь крупно, нижний-левый угол
+        img.paste(big, (M - 20, H - big.height - 230), big)
+        ft = _font(MONT_BLACK, 92)
+        lines = _wrap_upper(d, title, ft, W - 2 * M)
+        y = H - 150 - len(lines) * 96 - (56 if subtitle else 0)
+        for ln in lines:
+            d.text((M, y), ln, font=ft, fill=WHITE)
+            y += 96
+        if subtitle:
+            _brace(d, (M, y + 18), subtitle, _font(INTER_SB, 38), accent)
 
-    # крупный тайтл снизу (Montserrat Black, белый)
-    ft = _font(MONT_BLACK, 124)
-    lines = _wrap_upper(d, title, ft, W - 2 * M)
-    y = H - 90 - len(lines) * 124
-    for ln in lines:
-        d.text((M, y), ln, font=ft, fill=WHITE)
-        y += 124
-
-    if style == "chips" and subtitle:
-        _chip(img, d, (W - M, y - len(lines) * 124 - 80), subtitle, accent, right=True)
+    else:
+        raise ValueError(f"unknown hero style: {style!r} (block|band|anchor)")
 
     img.save(out_path)
     return Path(out_path)
