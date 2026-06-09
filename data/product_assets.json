@@ -1,0 +1,14 @@
+{
+  "_comment": "IG-маппинг продукт→ассеты: банка (файл в ~/Downloads/Архив), акцент-hex (из MASTER_BRAND_BRIEF), короткий заголовок и подзаголовок для карточек. Ключ = id из brand_powerelix.json. units = что писать в чипе количества.",
+  "1":  {"image": "ChatGPT Image 11 мая 2026 г., 13_38_58.png", "accent": "#00C29B", "short": "ХЛОРОФИЛЛ",        "subtitle": "Очищение и иммунитет",        "units": "500 мл"},
+  "2":  {"image": "9e8752e29b5e4086917bf42fe46d1885_img.jpg",   "accent": "#8975BF", "short": "МАГНИЙ + B6",       "subtitle": "Нервы под контролем",         "units": "120 капсул"},
+  "3":  {"image": "a07e1593f54d44e59045c77c52efa5b1_img.jpg",   "accent": "#4983CD", "short": "ПИКОЛИНАТ ХРОМА",   "subtitle": "Контроль аппетита",           "units": "60 капсул"},
+  "4":  {"image": "46cf9e54bae3412dbd60cb8e5bb8d720_img.jpg",   "accent": "#2FCDD7", "short": "МОРСКОЙ КОЛЛАГЕН", "subtitle": "Формула молодости",           "units": "90 капсул"},
+  "5":  {"image": "52a7688217b94d82a10a275336ee3829_img.jpg",   "accent": "#FA5098", "short": "ИНОЗИТОЛ",          "subtitle": "Женский баланс",              "units": "60 капсул"},
+  "6":  {"image": "387b4f9f11a841dc9ead401dbab3641d_img.jpg",   "accent": "#AC68B3", "short": "СПОКОЙСТВИЕ",       "subtitle": "Здоровье нервной системы",    "units": "60 капсул"},
+  "7":  {"image": "948954e789c44354b90d61635ae5f1d5_img.jpg",   "accent": "#213D87", "short": "МУЖСКОЙ КОМПЛЕКС", "subtitle": "Заряд для настоящих мужчин",  "units": "60 капсул"},
+  "8":  {"image": "0e15c9e72351498ab6e60781fbdedec6_img.jpg",   "accent": "#FC7C9C", "short": "ЖЕНСКИЙ КОМПЛЕКС", "subtitle": "Гармония и забота",           "units": "60 капсул"},
+  "9":  {"image": "77a1c28caba8446295bf1c918dbbe8fe_img.jpg",   "accent": "#FFDE00", "short": "ДЕТСКИЕ ВИТАМИНЫ", "subtitle": "Энергия для учёбы и игр",     "units": "60 капсул"},
+  "10": {"image": "fb503c875384476c8b0a6d5d42d9748b_img.jpg",   "accent": "#6FC83B", "short": "L-АРГИНИН",         "subtitle": "Сила и приток энергии",       "units": "90 капсул"},
+  "11": {"image": "0531f01663ca4607a83bdc183437eca9_img.jpg",   "accent": "#FF8522", "short": "ОМЕГА-3",           "subtitle": "Сердце и сосуды",             "units": "120 капсул"}
+}

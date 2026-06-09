@@ -235,6 +235,8 @@ def render(
     product_path: str | Path,
     out_path: str | Path,
     accent_hex: str = "#A8324F",
+    units: str = "60 капсул",
+    days: int = 30,
 ) -> Path:
     accent = _hex(accent_hex)
     img = _canvas()
@@ -264,9 +266,9 @@ def render(
             y += 90
         _place_bottle(img, product_path, scale=0.44, bottom=170)
         # фирменные скобки-чипы по краям, в свободной зоне у банки
-        _chip(img, d, (M, y + 60), "180 таблеток", accent)
+        _chip(img, d, (M, y + 60), units, accent)
         _chip(img, d, (W - M, y + 230), subtitle, accent, right=True)
-        _chip(img, d, (M, y + 410), "30 дней", accent)
+        _chip(img, d, (M, y + 410), f"{days} дней", accent)
         _slogan_strip(img, d, text=TAGLINE)
 
     elif style == "xmark":
@@ -290,3 +292,39 @@ def render(
 
     img.save(out_path)
     return Path(out_path)
+
+
+ARCHIVE = Path.home() / "Downloads" / "Архив"
+_ASSETS_FILE = ROOT / "data" / "product_assets.json"
+_CATALOG_FILE = ROOT / "data" / "brand_powerelix.json"
+
+
+def _load_assets() -> dict:
+    import json
+
+    a = json.loads(_ASSETS_FILE.read_text(encoding="utf-8"))
+    return {k: v for k, v in a.items() if not k.startswith("_")}
+
+
+def _catalog_days() -> dict[str, int]:
+    import json
+
+    cat = json.loads(_CATALOG_FILE.read_text(encoding="utf-8"))
+    return {str(p["id"]): p.get("duration_days", 30) for p in cat["products"]}
+
+
+def render_product(pid: int | str, style: str, out_path: str | Path,
+                   headline: str | None = None) -> Path:
+    """Рендер карточки по id продукта: тянет банку, акцент, подпись, капсулы/дни."""
+    a = _load_assets()[str(pid)]
+    days = _catalog_days().get(str(pid), 30)
+    return render(
+        style=style,
+        headline=headline or a["short"],
+        subtitle=a["subtitle"],
+        product_path=ARCHIVE / a["image"],
+        out_path=out_path,
+        accent_hex=a["accent"],
+        units=a["units"],
+        days=days,
+    )
