@@ -21,6 +21,9 @@ IG_ACCESS_TOKEN = os.getenv("IG_ACCESS_TOKEN", "")
 IG_TOKEN_EXPIRES_AT = os.getenv("IG_TOKEN_EXPIRES_AT", "")
 IG_API_BASE = "https://graph.instagram.com/v23.0"
 
+# ── Apify ──
+APIFY_TOKEN = os.getenv("APIFY_TOKEN", "")
+
 # ── Claude ──
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
