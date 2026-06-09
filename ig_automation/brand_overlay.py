@@ -55,35 +55,56 @@ def _gradient(size: tuple[int, int], c1, c2, vertical: bool = True) -> Image.Ima
     return Image.fromarray(arr, "RGB")
 
 
-def brand_mark(size: int, opacity: int = 255) -> Image.Image:
-    """Фирменный знак POWERELIX — две скруглённые ленты в градиенте lime→бирюза.
+MARK_PNG = ROOT / "assets" / "brand" / "mark.png"
 
-    Воссоздан в коде (не буква X): верхняя лента — диагональ из верх-лева →
-    горизонтальный рукав вправо; нижняя — горизонталь слева → диагональ вниз-вправо.
-    Возвращает квадратный RGBA size×size с прозрачным фоном.
-    """
-    ss = 3  # суперсэмплинг для гладких краёв
-    S = size * ss
-    w = int(0.205 * S)  # толщина ленты
-    # полилинии лент в долях от стороны
+
+def _mark_asset() -> Image.Image | None:
+    """Настоящий знак из assets/brand/mark.png (белый фон → прозрачность), crop по bbox."""
+    if not MARK_PNG.exists():
+        return None
+    src = Image.open(MARK_PNG).convert("RGBA")
+    a = np.array(src.convert("RGB")).astype(int)
+    if src.getextrema()[3][0] < 250:  # уже есть альфа — используем её
+        out = src
+    else:  # белый фон → альфа по «белизне» (min канал), мягкий край
+        m = a.min(axis=2)
+        alpha = np.clip((238 - m) * (255 / 28), 0, 255).astype("uint8")
+        out = Image.fromarray(
+            np.dstack([np.array(src.convert("RGB")), alpha]).astype("uint8"), "RGBA"
+        )
+    return out.crop(out.getbbox())
+
+
+def _mark_drawn() -> Image.Image:
+    """Запасная кодовая версия знака (если нет mark.png) — две ленты, градиент."""
+    S = 900
+    w = int(0.205 * S)
     top = [(0.13, 0.20), (0.53, 0.45), (0.94, 0.45)]
     bot = [(0.06, 0.62), (0.47, 0.62), (0.87, 0.90)]
-
     mask = Image.new("L", (S, S), 0)
     md = ImageDraw.Draw(mask)
     for pts in (top, bot):
         px = [(int(x * S), int(y * S)) for x, y in pts]
         md.line(px, fill=255, width=w, joint="curve")
         r = w // 2
-        for cx, cy in (px[0], px[-1]):  # скруглить торцы
+        for cx, cy in (px[0], px[-1]):
             md.ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
-    mask = mask.resize((size, size), Image.LANCZOS)
-
-    grad = _gradient((size, size), LIME, TEAL, vertical=True)
-    out = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    grad = _gradient((S, S), LIME, TEAL, vertical=True)
+    out = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     out.paste(grad, (0, 0), mask)
+    return out.crop(out.getbbox())
+
+
+def brand_mark(height: int, opacity: int = 255) -> Image.Image:
+    """Фирменный знак POWERELIX, масштабированный к заданной высоте (RGBA).
+
+    Берёт настоящий PNG (assets/brand/mark.png), иначе — кодовую заглушку.
+    """
+    base = _mark_asset() or _mark_drawn()
+    w = max(1, int(base.width * height / base.height))
+    out = base.resize((w, height), Image.LANCZOS)
     if opacity < 255:
-        out.putalpha(out.getchannel("A").point(lambda a: int(a * opacity / 255)))
+        out.putalpha(out.getchannel("A").point(lambda v: int(v * opacity / 255)))
     return out
 
 
@@ -250,8 +271,8 @@ def render(
 
     elif style == "xmark":
         _header(img, d)
-        big = brand_mark(880, opacity=58)
-        img.paste(big, (int(W / 2 - big.width / 2), 360), big)
+        big = brand_mark(620, opacity=58)
+        img.paste(big, (int(W / 2 - big.width / 2), 430), big)
         f = _font(MONT_BLACK, 96)
         lines = _wrap_upper(d, headline, f, W - 2 * M)
         y = 150
