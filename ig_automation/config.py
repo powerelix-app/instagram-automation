@@ -27,3 +27,7 @@ APIFY_TOKEN = os.getenv("APIFY_TOKEN", "")
 # ── Claude ──
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
+
+# ── Replicate (генерация сцен, фаза D) ──
+REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
+IMAGE_MODEL = os.getenv("IMAGE_MODEL", "black-forest-labs/flux-dev")  # дефолт-«test», дёшево

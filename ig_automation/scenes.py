@@ -1,0 +1,108 @@
+"""Генерация фоновых сцен через Replicate (фаза 1 плана scene-generation).
+
+Паттерн переиспользован из wb-design/scripts/generate_images.py: call_replicate с
+заголовком `Prefer: wait`, sanitize промпта, модели Flux. Текст на сцене НЕ рисуем —
+он накладывается нашим бренд-оверлеем (brand_overlay), поэтому в промпт добавляем
+«no text/no watermark», а из пользовательского промпта вырезаем hex и закавыченные фразы.
+"""
+from __future__ import annotations
+
+import re
+import time
+from io import BytesIO
+from pathlib import Path
+
+import requests
+from PIL import Image
+
+from . import config
+
+SCENES_DIR = config.OUTPUT_DIR / "scenes"
+MODEL_HQ = "black-forest-labs/flux-1.1-pro-ultra"  # флаг --hq, проверенная hero-модель
+RATIOS = {"4:5": (1080, 1350), "9:16": (1080, 1920), "1:1": (1080, 1080)}
+
+_HEX_RE = re.compile(r"#?\b[0-9A-Fa-f]{6}\b")
+_QUOTED_RE = re.compile(r'["«»][^"«»]{1,150}["«»]')
+_NO_TEXT = "no text, no words, no letters, no watermark, no logo, no caption"
+
+
+def sanitize(prompt: str) -> str:
+    """Убрать hex-коды и закавыченные фразы — модели печатают их буквами на картинке."""
+    return _QUOTED_RE.sub("", _HEX_RE.sub("", prompt or "")).strip()
+
+
+def _headers() -> dict:
+    if not config.REPLICATE_API_TOKEN:
+        raise SystemExit(
+            "Не задан REPLICATE_API_TOKEN в .env. Скопируй токен из wb-design/.env и повтори."
+        )
+    return {
+        "Authorization": f"Bearer {config.REPLICATE_API_TOKEN}",
+        "Content-Type": "application/json",
+        "Prefer": "wait",
+    }
+
+
+def _call_replicate(model: str, body: dict, timeout: int = 300, retries: int = 3) -> dict:
+    url = f"https://api.replicate.com/v1/models/{model}/predictions"
+    last: Exception | None = None
+    for i in range(retries):
+        try:
+            r = requests.post(url, headers=_headers(), json={"input": body}, timeout=timeout)
+            if r.status_code == 402:
+                raise SystemExit("Replicate: недостаточно баланса на аккаунте (HTTP 402).")
+            if r.status_code >= 400:
+                last = RuntimeError(f"{model} → HTTP {r.status_code}: {r.text[:300]}")
+                time.sleep(2 * (i + 1))
+                continue
+            return r.json()
+        except requests.RequestException as e:  # сеть/таймаут → backoff и retry
+            last = e
+            time.sleep(2 * (i + 1))
+    raise last or RuntimeError("Replicate: запрос не удался")
+
+
+def _output_url(resp: dict) -> str:
+    out = resp.get("output")
+    if isinstance(out, list):
+        out = out[0] if out else None
+    if not out:
+        raise RuntimeError(f"Replicate: пустой output (status={resp.get('status')!r})")
+    return out
+
+
+def _fit(im: Image.Image, ratio: str) -> Image.Image:
+    """Cover-fit к точному размеру под ratio (на случай если модель дала чуть иной)."""
+    w, h = RATIOS[ratio]
+    s = max(w / im.width, h / im.height)
+    im = im.resize((round(im.width * s), round(im.height * s)), Image.LANCZOS)
+    x, y = (im.width - w) // 2, (im.height - h) // 2
+    return im.crop((x, y, x + w, y + h))
+
+
+def generate_scene(
+    prompt: str,
+    ratio: str = "4:5",
+    hq: bool = False,
+    model: str | None = None,
+    out_name: str | None = None,
+) -> Path:
+    """Промпт → сцена нужного ratio → PNG в output/scenes/. Возвращает путь."""
+    if ratio not in RATIOS:
+        raise ValueError(f"ratio {ratio!r} не из {list(RATIOS)}")
+    mdl = model or (MODEL_HQ if hq else config.IMAGE_MODEL)
+    full_prompt = f"{sanitize(prompt)}. {_NO_TEXT}. vertical {ratio} composition"
+    body = {"prompt": full_prompt, "aspect_ratio": ratio, "output_format": "png"}
+    if "flux-1.1-pro" in mdl:
+        body |= {"raw": False, "safety_tolerance": 5}
+
+    resp = _call_replicate(mdl, body)
+    img_url = _output_url(resp)
+    r = requests.get(img_url, timeout=120)
+    r.raise_for_status()
+    im = _fit(Image.open(BytesIO(r.content)).convert("RGB"), ratio)
+
+    SCENES_DIR.mkdir(parents=True, exist_ok=True)
+    out = SCENES_DIR / (out_name or "scene.png")
+    im.save(out)
+    return out
