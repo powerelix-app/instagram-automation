@@ -294,6 +294,93 @@ def render(
     return Path(out_path)
 
 
+WHITE = (255, 255, 255)
+
+
+def _cover(bg: Image.Image) -> Image.Image:
+    """Фото под холст 1080×1350 (cover-fit)."""
+    bg = bg.convert("RGB")
+    s = max(W / bg.width, H / bg.height)
+    bg = bg.resize((int(bg.width * s), int(bg.height * s)), Image.LANCZOS)
+    x = (bg.width - W) // 2
+    y = (bg.height - H) // 2
+    return bg.crop((x, y, x + W, y + H))
+
+
+def _dark_scene() -> Image.Image:
+    """Тёмная синтетическая подложка-заглушка (пока нет реального фото/AI-сцены)."""
+    base = _gradient((W, H), (28, 36, 52), (12, 16, 23))
+    d = ImageDraw.Draw(base)
+    for x in range(0, W, 16):  # вертикальные «рёбра» как студийный фон
+        d.line([(x, 0), (x, H)], fill=(255, 255, 255), width=1)
+    base = Image.blend(base, _gradient((W, H), (28, 36, 52), (12, 16, 23)), 0.92)
+    return base
+
+
+def _scrim(img: Image.Image, top=140, bottom=460):
+    """Затемнение сверху/снизу под читаемость текста."""
+    ov = Image.new("L", (W, H), 0)
+    da = np.array(ov)
+    ys = np.arange(H)[:, None]
+    da = np.clip(np.where(ys < top, (top - ys) / top * 150, 0)
+                 + np.where(ys > H - bottom, (ys - (H - bottom)) / bottom * 200, 0), 0, 220)
+    ov = Image.fromarray(da.astype("uint8").repeat(W, axis=1).reshape(H, W))
+    black = Image.new("RGB", (W, H), (0, 0, 0))
+    return Image.composite(black, img, ov)
+
+
+def _hero_topbar(img, d):
+    """Верхний бар: слоган-стрип слева + фирменный знак справа (как у PWR, но наш)."""
+    f = _font(INTER_MED, 26)
+    y = 70
+    _spaced(d, (M, y), SLOGAN, f, WHITE, 5)
+    tw = _spaced_width(d, SLOGAN, f, 5)
+    mk = brand_mark(52)
+    img.paste(mk, (W - M - mk.width, y - 16), mk)
+    d.line([(M + tw + 24, y + 14), (W - M - mk.width - 24, y + 14)], fill=WHITE, width=2)
+
+
+def render_hero(
+    style: str,
+    title: str,
+    hook: str,
+    out_path: str | Path,
+    bg_path: str | Path | None = None,
+    accent_hex: str = "#B6F000",
+    subtitle: str = "",
+) -> Path:
+    """Hero-карточка: брендовый оверлей поверх фотосцены (или тёмной заглушки)."""
+    accent = _hex(accent_hex)
+    img = _cover(Image.open(bg_path)) if bg_path else _dark_scene()
+    img = _scrim(img)
+    d = ImageDraw.Draw(img)
+
+    if style == "xmark":
+        big = brand_mark(560, opacity=42)
+        img.paste(big, (int(W / 2 - big.width / 2), 360), big)
+
+    _hero_topbar(img, d)
+
+    # хук-фраза акцентом (справа, как «СТАНЦУЕМ?»)
+    fh = _font(MONT_BLACK, 52)
+    hw = d.textlength(hook.upper(), font=fh)
+    d.text((W - M - hw, 560), hook.upper(), font=fh, fill=accent)
+
+    # крупный тайтл снизу (Montserrat Black, белый)
+    ft = _font(MONT_BLACK, 124)
+    lines = _wrap_upper(d, title, ft, W - 2 * M)
+    y = H - 90 - len(lines) * 124
+    for ln in lines:
+        d.text((M, y), ln, font=ft, fill=WHITE)
+        y += 124
+
+    if style == "chips" and subtitle:
+        _chip(img, d, (W - M, y - len(lines) * 124 - 80), subtitle, accent, right=True)
+
+    img.save(out_path)
+    return Path(out_path)
+
+
 ARCHIVE = Path.home() / "Downloads" / "Архив"
 _ASSETS_FILE = ROOT / "data" / "product_assets.json"
 _CATALOG_FILE = ROOT / "data" / "brand_powerelix.json"
