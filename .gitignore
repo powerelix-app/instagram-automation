@@ -3,6 +3,6 @@
 venv/
 __pycache__/
 *.pyc
-output/*.json
-output/*.md
+.DS_Store
+output/*
 !output/.gitkeep
