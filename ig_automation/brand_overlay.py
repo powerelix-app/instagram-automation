@@ -338,19 +338,30 @@ def _corner_mark(img, d, wordmark="POWERELIX", fill=WHITE):
 
 def render_hero(
     style: str,
-    title: str,
-    out_path: str | Path,
+    title: str = "",
+    out_path: str | Path = "hero.png",
     bg_path: str | Path | None = None,
     accent_hex: str = "#B6F000",
     subtitle: str = "",
     wordmark: str = "POWERELIX",
+    product_id: int | str | None = None,
 ) -> Path:
     """Hero-оверлей бренда поверх сцены — СВОИ каркасы (не PWR).
 
     style: block (чистый блок + скобка) | band (градиент-лента) | anchor (знак-якорь).
+    product_id → врезать реальную банку в сцену + взять акцент/заголовок/подпись из маппинга.
+    Пустой title → заголовок не рисуется (чистая лайфстайл-обложка).
     """
     accent = _hex(accent_hex)
     img = _cover(Image.open(bg_path)) if bg_path else _dark_scene()
+
+    if product_id is not None:  # врезка реальной банки + дефолты из каталога
+        a = _load_assets()[str(product_id)]
+        accent = _hex(a["accent"])
+        title = title or a["short"]
+        subtitle = subtitle or a["subtitle"]
+        # компактный инсет вверху-справа (не перекрывает нижний текст-блок)
+        _place_bottle(img, ARCHIVE / a["image"], scale=0.36, cx=0.66, bottom=720)
 
     if style == "block":
         img = _scrim(img, top=150, bottom=560)
