@@ -44,7 +44,7 @@ def _counts() -> Dict[str, int]:
 
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request, _: bool = Depends(require_user)):
-    return templates.TemplateResponse("home.html", _ctx(request, counts=_counts()))
+    return templates.TemplateResponse(request, "home.html", _ctx(request, counts=_counts()))
 
 
 @router.get("/status", response_class=HTMLResponse)
@@ -60,6 +60,7 @@ def status(request: Request, _: bool = Depends(require_user)):
         "CF_SESSION_SECRET": bool(config.SESSION_SECRET),
     }
     return templates.TemplateResponse(
+        request,
         "status.html",
         _ctx(
             request,
@@ -78,7 +79,7 @@ def status(request: Request, _: bool = Depends(require_user)):
 @router.get("/recon", response_class=HTMLResponse)
 def recon_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
     return templates.TemplateResponse(
-        "recon.html", _ctx(request, reels=recon.list_reels(), msg=msg)
+        request, "recon.html", _ctx(request, reels=recon.list_reels(), msg=msg)
     )
 
 
@@ -116,7 +117,7 @@ def recon_to_idea(request: Request, reel_id: int, _: bool = Depends(require_user
 @router.get("/plan", response_class=HTMLResponse)
 def plan_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
     return templates.TemplateResponse(
-        "plan.html", _ctx(request, plans=planner.list_plans(), msg=msg)
+        request, "plan.html", _ctx(request, plans=planner.list_plans(), msg=msg)
     )
 
 
@@ -142,7 +143,7 @@ def plan_detail(request: Request, plan_id: int, msg: str = "", _: bool = Depends
     plan = planner.get_plan(plan_id)
     if not plan:
         return RedirectResponse("/plan?msg=План не найден", status_code=303)
-    return templates.TemplateResponse("plan_detail.html", _ctx(request, plan=plan, msg=msg))
+    return templates.TemplateResponse(request, "plan_detail.html", _ctx(request, plan=plan, msg=msg))
 
 
 @router.post("/plan/{plan_id}/materialize")
@@ -157,7 +158,7 @@ def plan_materialize(request: Request, plan_id: int, _: bool = Depends(require_u
 @router.get("/ideas", response_class=HTMLResponse)
 def ideas_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
     return templates.TemplateResponse(
-        "ideas.html", _ctx(request, ideas=ideas_svc.list_ideas(), msg=msg)
+        request, "ideas.html", _ctx(request, ideas=ideas_svc.list_ideas(), msg=msg)
     )
 
 

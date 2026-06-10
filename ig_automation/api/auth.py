@@ -44,7 +44,7 @@ def _check_password(pw: str) -> bool:
 def login_page(request: Request):
     if is_authed(request):
         return RedirectResponse("/", status_code=303)
-    return templates.TemplateResponse("login.html", {"request": request, "error": None})
+    return templates.TemplateResponse(request, "login.html", {"error": None})
 
 
 @router.post("/login", response_class=HTMLResponse)
@@ -53,7 +53,7 @@ def login_submit(request: Request, password: str = Form("")):
         request.session["authed"] = True
         return RedirectResponse("/", status_code=303)
     return templates.TemplateResponse(
-        "login.html", {"request": request, "error": "Неверный пароль"}, status_code=401
+        request, "login.html", {"error": "Неверный пароль"}, status_code=401
     )
 
 
