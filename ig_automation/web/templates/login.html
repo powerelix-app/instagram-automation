@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Вход · Контент-завод</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen flex items-center justify-center">
+  <form action="/login" method="post" class="bg-slate-800 rounded-xl p-6 w-80 space-y-4">
+    <div class="text-lg font-semibold">🏭 Контент-завод</div>
+    {% if error %}<div class="text-red-400 text-sm">{{ error }}</div>{% endif %}
+    <input type="password" name="password" placeholder="Пароль" autofocus
+           class="w-full px-3 py-2 rounded bg-slate-700 text-white outline-none">
+    <button class="w-full bg-blue-600 hover:bg-blue-500 rounded py-2 font-medium">Войти</button>
+  </form>
+</body>
+</html>

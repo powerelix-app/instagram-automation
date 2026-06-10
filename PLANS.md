@@ -17,6 +17,12 @@
 - **E. Плейбуки** — визуал + цепляющие заголовки, копим в prompt-lab (по референсам/урокам от пользователя).
 - **F. Публикация** — постинг/Reels/Stories по плану + расписание.
 
+## 🏭 Сервис «Контент-завод» (FastAPI) — строится с 2026-06-10
+Развиваем этот репо в полноценный сервис на полке Штаба (стек как wb-promotion: FastAPI+SQLite+APScheduler+Jinja2/HTMX). План: `plans/content-factory-service/` (spec/plan/tasks). Конвейер: разведка → план → идеи → генерация → аппрув → публикация → аналитика.
+- ✅ **Фаза 1 — фундамент** (2026-06-10): `ig_automation/app.py` (FastAPI + lifespan + scheduler), `db/` (SQLAlchemy 2.0: app_state, trend_reels, hook_analyses, ideas, content_plans, posts, post_assets, post_metrics; create_all), `api/auth.py` (cookie-сессия, dev-режим без пароля), `api/pages.py` (Главная + Статус), `scheduler.py` (heartbeat + refresh токена), шаблоны `web/templates/`. Запуск: `python serve.py` (порт 8010). Проверено вживую: аккаунт @powerelix **BUSINESS** (публикация доступна), токен 57 дн, ProxyAPI поддерживает `messages.parse` (structured output, opus-4-8).
+- ⬜ Фазы 2-8: разведка (Apify search-reels + разбор хуков), план+банк идей, генерация (scenes.py + лицо бренда), аппрув + БАД-линт, публикация (Graph API + планировщик), аналитика (insights), деплой на VPS + плитка Штаба.
+- Примечание: IG-приложение в **dev-режиме** с `content_publish` (аккаунт — админ) → возможно, реальный постинг заработает **без App Review**; флаг `CF_SIMULATE_PUBLISH=1` оставлен как страховка до проверки в Фазе 6.
+
 ## ✅ Готово
 - Подключён официальный Instagram API (Instagram Login): приложение Meta «POWERELIX Automation», аккаунт @powerelix (BUSINESS), долгоживущий токен 60 дней.
 - Все 5 разрешений в dev-режиме: basic, content_publish, manage_comments, manage_messages, manage_insights.

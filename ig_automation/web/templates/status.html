@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Статус{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-6">⚙️ Статус сервиса</h1>
+
+<div class="bg-white border rounded-xl p-5 mb-5">
+  <div class="font-semibold mb-3">Instagram-аккаунт</div>
+  {% if account.ok %}
+    <table class="text-sm w-full">
+      <tr><td class="text-slate-500 py-1 pr-4">Аккаунт</td><td>@{{ account.username }} ({{ account.name }})</td></tr>
+      <tr><td class="text-slate-500 py-1 pr-4">Тип</td>
+        <td>{{ account.account_type }}
+          {% if account.can_publish %}<span class="text-emerald-600">— публикация доступна ✅</span>
+          {% else %}<span class="text-red-600">— НЕ Business: публикация через API недоступна ❌</span>{% endif %}
+        </td></tr>
+      <tr><td class="text-slate-500 py-1 pr-4">Подписчиков</td><td>{{ account.followers_count }}</td></tr>
+      <tr><td class="text-slate-500 py-1 pr-4">Постов</td><td>{{ account.media_count }}</td></tr>
+      <tr><td class="text-slate-500 py-1 pr-4">Токен истекает через</td>
+        <td>{% if days_left is none %}<span class="text-amber-600">неизвестно (нет CF/IG_TOKEN_EXPIRES_AT)</span>
+            {% elif days_left < 7 %}<span class="text-red-600">{{ days_left }} дн. — скоро!</span>
+            {% else %}{{ days_left }} дн.{% endif %}</td></tr>
+    </table>
+  {% else %}
+    <div class="text-red-600 text-sm">Не удалось получить профиль: {{ account.error }}</div>
+  {% endif %}
+</div>
+
+<div class="bg-white border rounded-xl p-5 mb-5">
+  <div class="font-semibold mb-3">Конфигурация (ключи в .env)</div>
+  <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm">
+    {% for key, ok in cfg_state.items() %}
+    <div>{% if ok %}🟢{% else %}⚪{% endif %} {{ key }}</div>
+    {% endfor %}
+  </div>
+  <div class="text-sm text-slate-500 mt-3">Claude-модель: <code>{{ claude_model }}</code></div>
+</div>
+
+<div class="bg-white border rounded-xl p-5">
+  <div class="font-semibold mb-3">Сервис</div>
+  <div class="text-sm text-slate-600 space-y-1">
+    <div>Режим публикации: {% if simulate %}🧪 симуляция{% else %}🔴 боевой (постит в IG){% endif %}</div>
+    <div>Планировщик, последний тик: <b>{{ last_tick }}</b></div>
+    <div>В базе: {{ counts.trends }} трендов · {{ counts.ideas }} идей · {{ counts.plans }} планов · {{ counts.posts }} постов</div>
+  </div>
+</div>
+{% endblock %}

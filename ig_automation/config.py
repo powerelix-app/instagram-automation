@@ -39,3 +39,15 @@ IMAGE_MODEL = os.getenv("IMAGE_MODEL", "black-forest-labs/flux-dev")  # дефо
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 # ── xAI / Grok (grok-2-image) — пока не задан, добавить XAI_API_KEY в .env ──
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
+
+# ── Content Factory сервис (FastAPI) ──
+DB_PATH = os.getenv("CF_DB_PATH", str(DATA_DIR / "content_factory.db"))
+MEDIA_DIR = DATA_DIR / "media"
+# Секрет сессионной cookie. В проде задать CF_SESSION_SECRET в .env (иначе при
+# каждом рестарте все сессии слетают — фолбэк только для локалки).
+SESSION_SECRET = os.getenv("CF_SESSION_SECRET", "")
+# Пароль единственного админа. Пусто = dev-режим (вход открыт, баннер-предупреждение).
+ADMIN_PASSWORD = os.getenv("CF_ADMIN_PASSWORD", "")
+# Пока не пройден App Review Meta — публикация в IG идёт в режиме симуляции
+# (пишем в БД «как бы опубликовано», без вызова Graph API). Выключить = "0".
+SIMULATE_PUBLISH = os.getenv("CF_SIMULATE_PUBLISH", "1") not in ("0", "false", "False")

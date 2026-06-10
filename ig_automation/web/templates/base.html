@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% block title %}Контент-завод{% endblock %} · POWERELIX</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body class="bg-slate-50 text-slate-900">
+<nav class="bg-slate-900 text-white">
+  <div class="max-w-full px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-5 flex-wrap text-sm sm:text-base">
+    <a href="/" class="font-semibold">🏭 Контент-завод</a>
+    {# Готовые разделы — ссылки; будущие стадии конвейера — серым «скоро». #}
+    <span class="text-slate-500" title="Фаза 2">🔍 Разведка</span>
+    <span class="text-slate-500" title="Фаза 3">🗓️ План</span>
+    <span class="text-slate-500" title="Фаза 3">💡 Идеи</span>
+    <span class="text-slate-500" title="Фаза 4-6">📝 Посты</span>
+    <span class="text-slate-500" title="Фаза 7">📊 Аналитика</span>
+    <a href="/status" class="text-slate-300 hover:text-white">⚙️ Статус</a>
+    <div class="ml-auto flex items-center gap-3">
+      <a href="https://dashboard.bandabogachey.online/" class="text-slate-400 hover:text-white text-sm">← Штаб</a>
+      {% if not auth_disabled %}
+      <form action="/logout" method="post"><button class="text-sm text-slate-300 hover:text-white">Выйти</button></form>
+      {% endif %}
+    </div>
+  </div>
+</nav>
+
+{% if auth_disabled %}
+<div class="bg-amber-100 text-amber-900 text-sm px-6 py-2 border-b border-amber-300">
+  ⚠️ Dev-режим: вход без пароля. Перед деплоем задай <code>CF_ADMIN_PASSWORD</code> в .env.
+</div>
+{% endif %}
+{% if simulate %}
+<div class="bg-sky-100 text-sky-900 text-sm px-6 py-2 border-b border-sky-300">
+  🧪 Режим симуляции публикации (App Review Meta ещё не пройден). Посты не уходят в IG по-настоящему.
+</div>
+{% endif %}
+
+<main class="max-w-5xl mx-auto px-4 sm:px-6 py-6">
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

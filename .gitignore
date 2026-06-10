@@ -6,3 +6,5 @@ __pycache__/
 .DS_Store
 output/*
 !output/.gitkeep
+data/content_factory.db
+data/media/
