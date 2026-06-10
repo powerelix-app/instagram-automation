@@ -5,6 +5,19 @@
 """
 import os
 from PIL import Image, ImageDraw, ImageFilter
+from rembg import remove
+
+
+def rembg_cut(pid, src):
+    """Чистый вырез банки через rembg (AI-маттинг) с кэшем в output/cutouts/."""
+    os.makedirs("output/cutouts", exist_ok=True)
+    cache = f"output/cutouts/{pid}.png"
+    if os.path.exists(cache):
+        return Image.open(cache).convert("RGBA")
+    out = remove(Image.open(src).convert("RGBA"))
+    out = out.crop(out.getbbox())
+    out.save(cache)
+    return out
 
 from ig_automation.brand_overlay import (
     W, H, M, _font, _canvas, _cover, _scrim, brand_mark, _spaced, _gradient, _hex,
@@ -132,7 +145,7 @@ def product_photo_slide(path, pid, scene, heading, benefit, disclaimer=None):
     for ln in _wrap(d, benefit, fb, W - 2 * M):
         d.text((M, y), ln, font=fb, fill=WHITE)
         y += 50
-    prod = _cutout(ARCHIVE / a["image"])
+    prod = rembg_cut(pid, ARCHIVE / a["image"])
     ph = int(H * 0.44)
     pw = int(prod.width * ph / prod.height)
     prod = prod.resize((pw, ph), Image.LANCZOS)
