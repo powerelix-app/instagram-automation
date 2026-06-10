@@ -35,6 +35,18 @@ def init(db_path: Optional[str] = None) -> None:
     )
     from . import models  # noqa: F401  — регистрация таблиц до create_all
     Base.metadata.create_all(_engine)
+    _migrate(_engine)
+
+
+def _migrate(engine) -> None:
+    """Лёгкие идемпотентные миграции (create_all не добавляет новые колонки)."""
+    adds = {"trend_reels": [("thumbnail_url", "VARCHAR DEFAULT ''")]}
+    with engine.begin() as conn:
+        for table, cols in adds.items():
+            existing = {r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()}
+            for name, ddl in cols:
+                if name not in existing:
+                    conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
 
 def get_session() -> Session:

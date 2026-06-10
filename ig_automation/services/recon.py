@@ -18,20 +18,28 @@ log = logging.getLogger(__name__)
 
 # ── Сбор ──
 
+# CDN Instagram (cdninstagram.com) недоступен с РФ-VPS — после первого таймаута
+# выключаем скачивание превью на этот процесс, чтобы сбор не висел минутами.
+# Удалённый URL всё равно сохраняем — браузер пользователя (с VPN) подтянет сам.
+_cdn_blocked = False
+
+
 def _download_thumb(url: str) -> str:
-    """Качаем превью сразу (ссылки Apify живут ~3 дня). Возвращает /media-путь или ''."""
-    if not url:
+    """Best-effort скачивание превью (fail-fast). Возвращает /media-путь или ''."""
+    global _cdn_blocked
+    if not url or _cdn_blocked:
         return ""
     try:
         name = "thumb_" + hashlib.md5(url.encode()).hexdigest()[:16] + ".jpg"
         dest = config.MEDIA_DIR / name
         if not dest.exists():
-            r = requests.get(url, timeout=30)
+            r = requests.get(url, timeout=6)
             r.raise_for_status()
             dest.write_bytes(r.content)
         return f"/media/{name}"
     except requests.RequestException as e:
-        log.warning("thumb download failed: %s", e)
+        _cdn_blocked = True
+        log.warning("thumb download failed — отключаю скачивание превью на процесс: %s", e)
         return ""
 
 
@@ -58,6 +66,7 @@ def scrape_topic(topic: str, limit: int = 30) -> int:
                 hashtags=r["hashtags"],
                 video_url=r["video_url"],
                 local_media_path=_download_thumb(r["thumbnail_url"]),
+                thumbnail_url=r["thumbnail_url"],
                 music_info=str(r["music_info"])[:512],
                 transcript=str(r["transcript"]),
                 topic=topic,
@@ -173,7 +182,8 @@ def list_reels() -> List[dict]:
             out.append({
                 "id": r.id, "username": r.username, "url": r.url,
                 "play_count": r.play_count, "likes": r.likes, "comments": r.comments,
-                "caption": (r.caption or "")[:240], "thumb": r.local_media_path,
+                "caption": (r.caption or "")[:240],
+                "thumb": r.local_media_path or r.thumbnail_url,
                 "video_url": r.video_url, "topic": r.topic,
                 "analyzed": r.id in analyzed_ids, "analysis": an,
             })

@@ -36,6 +36,7 @@ class TrendReel(Base):
     hashtags: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     video_url: Mapped[str] = mapped_column(String(1024), default="")
     local_media_path: Mapped[str] = mapped_column(String(512), default="")
+    thumbnail_url: Mapped[str] = mapped_column(String(1024), default="")
     music_info: Mapped[str] = mapped_column(String(512), default="")
     transcript: Mapped[str] = mapped_column(Text, default="")
     topic: Mapped[str] = mapped_column(String(128), default="")
