@@ -62,6 +62,39 @@ def _call_replicate(model: str, body: dict, timeout: int = 300, retries: int = 3
     raise last or RuntimeError("Replicate: запрос не удался")
 
 
+def _call_xai_image(prompt: str, aspect_ratio: str = "3:4", retries: int = 3) -> bytes:
+    """Grok (xAI) image API — не Replicate. Возвращает байты PNG.
+
+    POST https://api.x.ai/v1/images/generations, OpenAI-совместимый. aspect_ratio
+    из набора xAI (4:5 нет → ближайший портрет 3:4, потом _fit обрежет до 1080x1350).
+    """
+    if not config.XAI_API_KEY:
+        raise SystemExit("Не задан XAI_API_KEY в .env. Добавь строку XAI_API_KEY=xai-... и повтори.")
+    url = "https://api.x.ai/v1/images/generations"
+    headers = {"Authorization": f"Bearer {config.XAI_API_KEY}", "Content-Type": "application/json"}
+    body = {"model": "grok-imagine-image-quality", "prompt": prompt, "n": 1,
+            "response_format": "url", "aspect_ratio": aspect_ratio, "resolution": "2k"}
+    last: Exception | None = None
+    for i in range(retries):
+        try:
+            r = requests.post(url, headers=headers, json=body, timeout=300)
+            if r.status_code >= 400:
+                last = RuntimeError(f"xAI → HTTP {r.status_code}: {r.text[:300]}")
+                time.sleep(2 * (i + 1))
+                continue
+            data = r.json()["data"][0]
+            if data.get("url"):
+                img = requests.get(data["url"], timeout=120)
+                img.raise_for_status()
+                return img.content
+            import base64
+            return base64.b64decode(data["b64_json"])
+        except requests.RequestException as e:
+            last = e
+            time.sleep(2 * (i + 1))
+    raise last or RuntimeError("xAI: запрос не удался")
+
+
 def _output_url(resp: dict) -> str:
     out = resp.get("output")
     if isinstance(out, list):
@@ -92,9 +125,31 @@ def generate_scene(
         raise ValueError(f"ratio {ratio!r} не из {list(RATIOS)}")
     mdl = model or (MODEL_HQ if hq else config.IMAGE_MODEL)
     full_prompt = f"{sanitize(prompt)}. {_NO_TEXT}. vertical {ratio} composition"
-    body = {"prompt": full_prompt, "aspect_ratio": ratio, "output_format": "png"}
-    if "flux-1.1-pro" in mdl:
-        body |= {"raw": False, "safety_tolerance": 5}
+    if "grok" in mdl:
+        # Grok (xAI) — отдельный API, не Replicate. 4:5 → ближайший портрет 3:4.
+        ar = {"4:5": "3:4", "9:16": "9:16", "1:1": "1:1"}[ratio]
+        content = _call_xai_image(f"{sanitize(prompt)}. no text, no logo", ar)
+        im = _fit(Image.open(BytesIO(content)).convert("RGB"), ratio)
+        SCENES_DIR.mkdir(parents=True, exist_ok=True)
+        out = SCENES_DIR / (out_name or "scene.png")
+        im.save(out)
+        return out
+    if "gpt-image" in mdl:
+        # gpt-image-1 поддерживает только 1:1/3:2/2:3 → портретные кадры мапим на 2:3
+        ar = {"4:5": "2:3", "9:16": "2:3", "1:1": "1:1"}[ratio]
+        if not config.OPENAI_API_KEY:
+            raise SystemExit("gpt-image-1 требует OPENAI_API_KEY (.env). Не задан.")
+        body = {"prompt": full_prompt, "aspect_ratio": ar, "openai_api_key": config.OPENAI_API_KEY,
+                "quality": "high", "output_format": "png", "number_of_images": 1}
+    elif "nano-banana" in mdl:
+        # nano-banana (Gemini Flash Image): длинный негатив _NO_TEXT детерминированно
+        # ловит safety-фильтр (E005) — даём короткий негатив; aspect_ratio поддерживается
+        body = {"prompt": f"{sanitize(prompt)}. no text, no logo",
+                "aspect_ratio": ratio, "output_format": "png"}
+    else:
+        body = {"prompt": full_prompt, "aspect_ratio": ratio, "output_format": "png"}
+        if "flux-1.1-pro" in mdl:
+            body |= {"raw": False, "safety_tolerance": 5}
 
     resp = _call_replicate(mdl, body)
     img_url = _output_url(resp)

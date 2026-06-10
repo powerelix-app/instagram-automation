@@ -11,6 +11,9 @@ DATA_DIR = ROOT / "data"
 OUTPUT_DIR = ROOT / "output"
 
 load_dotenv(ROOT / ".env")
+# OPENAI_API_KEY пользователь держит в соседнем проекте wb-design — подхватываем оттуда
+# как фолбэк (не дублируем секрет в этот .env). Нужен для openai/gpt-image-1 на Replicate.
+load_dotenv(ROOT.parent / "wb-design" / ".env", override=False)
 
 
 # ── Instagram ──
@@ -31,3 +34,8 @@ CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "claude-opus-4-8")
 # ── Replicate (генерация сцен, фаза D) ──
 REPLICATE_API_TOKEN = os.getenv("REPLICATE_API_TOKEN", "")
 IMAGE_MODEL = os.getenv("IMAGE_MODEL", "black-forest-labs/flux-dev")  # дефолт-«test», дёшево
+
+# ── OpenAI (gpt-image-1 через Replicate требует ключ юзера как input) ──
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+# ── xAI / Grok (grok-2-image) — пока не задан, добавить XAI_API_KEY в .env ──
+XAI_API_KEY = os.getenv("XAI_API_KEY", "")
