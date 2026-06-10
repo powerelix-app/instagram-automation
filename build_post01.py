@@ -4,7 +4,7 @@
 Эмодзи на картинках НЕ используем (шрифты их не рисуют) — только в подписи.
 """
 import os
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 
 from ig_automation.brand_overlay import (
     W, H, M, _font, _canvas, _cover, _scrim, brand_mark, _spaced, _gradient, _hex,
@@ -116,6 +116,39 @@ def product_slide(path, pid, heading, benefit, disclaimer=None):
     return path
 
 
+def product_photo_slide(path, pid, scene, heading, benefit, disclaimer=None):
+    a = _load_assets()[str(pid)]
+    img = _scrim(_cover(Image.open(scene)), top=470, bottom=320)
+    d = ImageDraw.Draw(img)
+    _mark(img, d, light=True)
+    y = 250
+    fh = _font(MONT_BLACK, 64)
+    for ln in _wrap(d, heading, fh, W - 2 * M):
+        d.text((M, y), ln, font=fh, fill=WHITE)
+        y += 72
+    d.rectangle([M, y + 8, M + 110, y + 16], fill=ACCENT)
+    y += 32
+    fb = _font(INTER_MED, 38)
+    for ln in _wrap(d, benefit, fb, W - 2 * M):
+        d.text((M, y), ln, font=fb, fill=WHITE)
+        y += 50
+    prod = _cutout(ARCHIVE / a["image"])
+    ph = int(H * 0.44)
+    pw = int(prod.width * ph / prod.height)
+    prod = prod.resize((pw, ph), Image.LANCZOS)
+    px, py = (W - pw) // 2, H - ph - 105
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).ellipse([px + pw * 0.15, py + ph - 28, px + pw * 0.85, py + ph + 42],
+                               fill=(0, 0, 0, 95))
+    sh = sh.filter(ImageFilter.GaussianBlur(22))
+    img.paste(sh, (0, 0), sh)
+    img.paste(prod, (px, py), prod)
+    if disclaimer:
+        d.text((M, H - 50), disclaimer, font=_font(INTER_MED, 23), fill=(228, 228, 228))
+    img.save(path)
+    return path
+
+
 def cover(path, scene, hook, sub, tag):
     img = _scrim(_cover(Image.open(scene)), top=140, bottom=620)
     d = ImageDraw.Draw(img)
@@ -166,6 +199,12 @@ s6 = s6p if os.path.exists(s6p) else generate_scene(
     "macro nature photo, fresh green leaves with water droplets, soft daylight, "
     "mint green palette, clean minimal, fresh and airy",
     out_name="post01_s6.png")
+s6bp = "output/scenes/post01_s6b.png"
+s6b = s6bp if os.path.exists(s6bp) else generate_scene(
+    "vibrant fresh scene, lush green leaves and splashing water droplets, bright "
+    "energetic daylight, emerald and mint palette, clean, lots of freshness, "
+    "premium product backdrop",
+    out_name="post01_s6b.png")
 
 # ── слайды ──
 cover(f"{OUT}/01.png", s1, "Устаёшь не от лени",
@@ -192,10 +231,9 @@ text_slide(f"{OUT}/05.png", "Что реально помогает:", bullets=[
     "Движение каждый день",
     "Больше зелени в тарелке",
 ])
-product_slide(f"{OUT}/06.png", 1, "Хлорофилл — концентрат зелени",
-              "Поддерживает свежесть, бодрость и иммунитет каждый день — "
-              "зелёная перезагрузка для тех, кому не хватает ресурса.",
-              disclaimer="БАД. Не является лекарственным средством. Есть противопоказания.")
+product_photo_slide(f"{OUT}/06.png", 1, s6b, "Хлорофилл — концентрат зелени",
+                    "Зелёная перезагрузка: свежесть, бодрость и иммунитет каждый день.",
+                    disclaimer="БАД. Не является лекарственным средством. Есть противопоказания.")
 text_slide(f"{OUT}/07.png", "Хочешь больше энергии?",
            note="Хлорофилл POWERELIX — по ссылке в профиле. "
                 "А какой из 5 сигналов про тебя? Пиши в комментариях.",
