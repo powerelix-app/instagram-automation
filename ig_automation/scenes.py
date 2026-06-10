@@ -7,6 +7,7 @@
 """
 from __future__ import annotations
 
+import base64
 import re
 import time
 from io import BytesIO
@@ -93,6 +94,57 @@ def _call_xai_image(prompt: str, aspect_ratio: str = "3:4", retries: int = 3) ->
             last = e
             time.sleep(2 * (i + 1))
     raise last or RuntimeError("xAI: запрос не удался")
+
+
+def _data_url(path: str | Path, max_w: int = 1024) -> str:
+    """Локальная картинка → base64 data URL (для image.url в xAI edits)."""
+    im = Image.open(path).convert("RGB")
+    if im.width > max_w:
+        im = im.resize((max_w, round(im.height * max_w / im.width)), Image.LANCZOS)
+    buf = BytesIO()
+    im.save(buf, format="JPEG", quality=92)
+    return "data:image/jpeg;base64," + base64.b64encode(buf.getvalue()).decode()
+
+
+def _xai_bytes(data: dict) -> bytes:
+    """data[0] из ответа xAI → байты картинки (url или b64_json)."""
+    if data.get("url"):
+        img = requests.get(data["url"], timeout=120)
+        img.raise_for_status()
+        return img.content
+    return base64.b64decode(data["b64_json"])
+
+
+def _call_xai_edit(prompt: str, refs: list[str | Path], aspect_ratio: str = "3:4",
+                   retries: int = 3) -> bytes:
+    """Grok image-EDIT с одним/несколькими референс-изображениями (character/product).
+
+    POST /v1/images/edits: image (один) или images[] (несколько) как base64 data URL.
+    Используется для консистентности персонажа (тот же портрет) + врезки нашей банки.
+    """
+    if not config.XAI_API_KEY:
+        raise SystemExit("Не задан XAI_API_KEY в .env.")
+    url = "https://api.x.ai/v1/images/edits"
+    headers = {"Authorization": f"Bearer {config.XAI_API_KEY}", "Content-Type": "application/json"}
+    body = {"model": "grok-imagine-image-quality", "prompt": prompt, "n": 1,
+            "response_format": "url", "aspect_ratio": aspect_ratio, "resolution": "2k"}
+    if len(refs) == 1:
+        body["image"] = {"url": _data_url(refs[0])}
+    else:
+        body["images"] = [{"url": _data_url(r)} for r in refs]
+    last: Exception | None = None
+    for i in range(retries):
+        try:
+            r = requests.post(url, headers=headers, json=body, timeout=300)
+            if r.status_code >= 400:
+                last = RuntimeError(f"xAI edits → HTTP {r.status_code}: {r.text[:300]}")
+                time.sleep(2 * (i + 1))
+                continue
+            return _xai_bytes(r.json()["data"][0])
+        except requests.RequestException as e:
+            last = e
+            time.sleep(2 * (i + 1))
+    raise last or RuntimeError("xAI edits: запрос не удался")
 
 
 def _output_url(resp: dict) -> str:

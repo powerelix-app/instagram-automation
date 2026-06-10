@@ -216,26 +216,60 @@ def photo_slide(path, scene, heading, body):
     return path
 
 
-# ── сцены (переиспользуем, если уже сгенерены) ──
-s1p, s6p = "output/scenes/post01_s1.png", "output/scenes/post01_s6.png"
-s1 = s1p if os.path.exists(s1p) else generate_scene(
-    "candid documentary lifestyle photo, tired person around 30 sitting on a sofa "
-    "at home in the evening, warm dim lamp light, exhausted expression, muted warm "
-    "tones, cinematic editorial, shallow depth of field, no product",
-    out_name="post01_s1.png")
-s6 = s6p if os.path.exists(s6p) else generate_scene(
-    "macro nature photo, fresh green leaves with water droplets, soft daylight, "
-    "mint green palette, clean minimal, fresh and airy",
-    out_name="post01_s6.png")
-# слайд 6 — сочная Grok-сцена (изумруд + мята + всплеск воды, чистый подиум под банку)
-s6gp = "output/scenes/grok_g6.png"
-s6b = s6gp if os.path.exists(s6gp) else generate_scene(
-    "premium emerald and dark green gradient backdrop, a smooth flat solid wet black "
-    "stone podium in the lower center, fresh vibrant mint leaves and a dynamic water "
-    "splash around it, glistening droplets, glossy reflections, dramatic rim light, "
-    "richly saturated juicy green, clear empty space on the podium for a product bottle, "
-    "commercial advertising quality",
-    model="grok-imagine-image-quality", out_name="grok_g6.png")
+def hero_product_slide(path, scene, heading, benefit, disclaimer=None):
+    """Текст поверх hero-фото (девушка с банкой). Банка уже в кадре — композит не нужен.
+    Текст слева-сверху, где фон чище; затемнение усилено вверху."""
+    img = _greendim(_cover(Image.open(scene)), base=40, top=420, bottom=140)
+    d = ImageDraw.Draw(img)
+    _mark(img, d, light=True)
+    y = 230
+    fh = _font(MONT_BLACK, 60)
+    for ln in _wrap(d, heading, fh, W - 2 * M):
+        d.text((M, y), ln, font=fh, fill=WHITE)
+        y += 68
+    d.rectangle([M, y + 8, M + 110, y + 16], fill=ACCENT)
+    y += 32
+    fb = _font(INTER_MED, 36)
+    for ln in _wrap(d, benefit, fb, int(W * 0.62)):
+        d.text((M, y), ln, font=fb, fill=WHITE)
+        y += 48
+    if disclaimer:
+        d.rectangle([0, H - 64, W, H], fill=(6, 16, 11))
+        d.text((M, H - 50), disclaimer, font=_font(INTER_MED, 23), fill=(210, 214, 210))
+    img.save(path)
+    return path
+
+
+# ── AI-модель бренда: тот же портрет (assets/brand/ai_model.png) на S1 и S6 ──
+GIRL_REF, BOTTLE_REF = "assets/brand/ai_model.png", "output/scenes/bottle_ref.jpg"
+
+
+def _grok_edit(out_name, refs, prompt, ratio="4:5"):
+    """Кэш-обёртка над xAI edits: если файл есть — берём его, иначе генерим."""
+    p = f"output/scenes/{out_name}"
+    if os.path.exists(p):
+        return p
+    from io import BytesIO
+    from ig_automation.scenes import _call_xai_edit, _fit
+    c = _call_xai_edit(prompt + ". no extra text, no watermark", refs, "3:4")
+    _fit(Image.open(BytesIO(c)).convert("RGB"), ratio).save(p)
+    return p
+
+
+# слайд 1 — та же девушка, уставшая (вечер, диван)
+s1 = _grok_edit("grok_s1_girl.png", [GIRL_REF],
+    "Keep the exact same woman face and identity from the reference. Full lifestyle photo: "
+    "she sits tired and exhausted on a sofa at home in the evening, head resting on her hand, "
+    "low energy weary mood, warm dim lamp light, muted warm tones, cinematic editorial, "
+    "shallow depth of field")
+# слайд 6 — та же девушка держит НАШУ банку (мультиреференс: лицо + банка)
+s6b = _grok_edit("grok_s6_girl.png", [GIRL_REF, BOTTLE_REF],
+    "Keep the exact same woman face and identity from the FIRST reference image. She holds "
+    "in her hand the exact POWERELIX chlorophyll bottle from the SECOND reference image, "
+    "presenting it toward the camera, happy healthy and energetic. Vibrant deep emerald green "
+    "scene, fresh mint leaves and a dynamic clean water splash, glistening droplets, glossy, "
+    "richly saturated juicy green, bright cinematic studio light, premium commercial photo. "
+    "Keep the bottle shape and its green label exactly as in the second reference")
 
 # ── слайды ──
 cover(f"{OUT}/01.png", s1, "Устаёшь не от лени",
@@ -262,9 +296,9 @@ text_slide(f"{OUT}/05.png", "Что реально помогает:", bullets=[
     "Движение каждый день",
     "Больше зелени в тарелке",
 ])
-product_photo_slide(f"{OUT}/06.png", 1, s6b, "Хлорофилл — концентрат зелени",
-                    "Зелёная перезагрузка: свежесть, бодрость и иммунитет каждый день.",
-                    disclaimer="БАД. Не является лекарственным средством. Есть противопоказания.")
+hero_product_slide(f"{OUT}/06.png", s6b, "Хлорофилл — концентрат зелени",
+                   "Зелёная перезагрузка: свежесть, бодрость и иммунитет каждый день.",
+                   disclaimer="БАД. Не является лекарственным средством. Есть противопоказания.")
 text_slide(f"{OUT}/07.png", "Хочешь больше энергии?",
            note="Хлорофилл POWERELIX — по ссылке в профиле. "
                 "А какой из 5 сигналов про тебя? Пиши в комментариях.",
