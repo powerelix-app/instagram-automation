@@ -256,20 +256,25 @@ def _grok_edit(out_name, refs, prompt, ratio="4:5"):
     return p
 
 
+# ультра-реализм: фактура кожи сохраняется и в сценах (edits любит «сглаживать»)
+_REAL = (" ultra realistic skin with visible pores and texture, fine flyaway hair strands, "
+         "subtle natural imperfections, no skin smoothing, no retouching, hyperrealistic "
+         "photograph, subtle film grain")
 # слайд 1 — та же девушка, уставшая (вечер, диван)
 s1 = _grok_edit("grok_s1_girl.png", [GIRL_REF],
-    "Keep the exact same woman face and identity from the reference. Full lifestyle photo: "
-    "she sits tired and exhausted on a sofa at home in the evening, head resting on her hand, "
-    "low energy weary mood, warm dim lamp light, muted warm tones, cinematic editorial, "
-    "shallow depth of field")
+    "Keep the exact same woman face and identity from the reference (auburn wavy hair, "
+    "freckles). Full lifestyle photo: she sits tired and exhausted on a sofa at home in the "
+    "evening, head resting on her hand, low energy weary mood, warm dim lamp light, muted "
+    "warm tones, cinematic editorial, shallow depth of field" + _REAL)
 # слайд 6 — та же девушка держит НАШУ банку (мультиреференс: лицо + банка)
 s6b = _grok_edit("grok_s6_girl.png", [GIRL_REF, BOTTLE_REF],
-    "Keep the exact same woman face and identity from the FIRST reference image. She holds "
-    "in her hand the exact POWERELIX chlorophyll bottle from the SECOND reference image, "
-    "presenting it toward the camera, happy healthy and energetic. Vibrant deep emerald green "
-    "scene, fresh mint leaves and a dynamic clean water splash, glistening droplets, glossy, "
-    "richly saturated juicy green, bright cinematic studio light, premium commercial photo. "
-    "Keep the bottle shape and its green label exactly as in the second reference")
+    "Keep the exact same woman face and identity from the FIRST reference image (auburn wavy "
+    "hair, freckles). She holds in her hand the exact POWERELIX chlorophyll bottle from the "
+    "SECOND reference image, presenting it toward the camera, happy healthy and energetic. "
+    "Vibrant deep emerald green scene, fresh mint leaves and a dynamic clean water splash, "
+    "glistening droplets, glossy, richly saturated juicy green, bright cinematic studio light, "
+    "premium commercial photo. Keep the bottle shape and its green label exactly as in the "
+    "second reference" + _REAL)
 
 # ── слайды ──
 cover(f"{OUT}/01.png", s1, "Устаёшь не от лени",
