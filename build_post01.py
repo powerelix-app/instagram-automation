@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw
 
 from ig_automation.brand_overlay import (
     W, H, M, _font, _canvas, _cover, _scrim, brand_mark, _spaced, _gradient, _hex,
+    _cutout, ARCHIVE, _load_assets,
     MONT_BLACK, INTER_SB, INTER_MED, INTER_XB, WHITE, INK, GREY, SLOGAN,
 )
 from ig_automation.scenes import generate_scene
@@ -76,6 +77,41 @@ def text_slide(path, heading, bullets=None, note=None, big=None, cta=None):
         for ln in clines:
             d.text((M, yy), ln, font=fc, fill=INK)
             yy += 42
+    img.save(path)
+    return path
+
+
+def product_slide(path, pid, heading, benefit, disclaimer=None):
+    a = _load_assets()[str(pid)]
+    img = _canvas()
+    d = ImageDraw.Draw(img)
+    _mark(img, d)
+    y = 250
+    fh = _font(MONT_BLACK, 66)
+    for ln in _wrap(d, heading, fh, W - 2 * M):
+        d.text((M, y), ln, font=fh, fill=INK)
+        y += 74
+    d.rectangle([M, y + 8, M + 110, y + 16], fill=ACCENT)
+    y += 34
+    fb = _font(INTER_MED, 40)
+    for ln in _wrap(d, benefit, fb, W - 2 * M):
+        d.text((M, y), ln, font=fb, fill=INK)
+        y += 52
+    # банка по центру снизу (вырез, мягкая тень)
+    prod = _cutout(ARCHIVE / a["image"])
+    ph = int(H * 0.46)
+    pw = int(prod.width * ph / prod.height)
+    prod = prod.resize((pw, ph), Image.LANCZOS)
+    px, py = (W - pw) // 2, H - ph - 120
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).ellipse([px + pw * 0.15, py + ph - 30, px + pw * 0.85, py + ph + 40],
+                               fill=(0, 0, 0, 70))
+    from PIL import ImageFilter
+    img.paste(sh.filter(ImageFilter.GaussianBlur(20)), (0, 0),
+              sh.filter(ImageFilter.GaussianBlur(20)))
+    img.paste(prod, (px, py), prod)
+    if disclaimer:
+        d.text((M, H - 56), disclaimer, font=_font(INTER_MED, 24), fill=GREY)
     img.save(path)
     return path
 
@@ -156,12 +192,14 @@ text_slide(f"{OUT}/05.png", "Что реально помогает:", bullets=[
     "Движение каждый день",
     "Больше зелени в тарелке",
 ])
-photo_slide(f"{OUT}/06.png", s6, "Зелень — природный источник энергии",
-            "Один из самых концентрированных — хлорофилл: поддерживает свежесть, "
-            "бодрость и иммунитет.")
-text_slide(f"{OUT}/07.png", "Какой из 5 сигналов про тебя?",
-           note="Пиши в комментариях. Сохрани, чтобы не потерять.",
-           cta="ПОДПИСЫВАЙСЯ — РАЗБИРАЕМ ЗДОРОВЬЕ ПО-ПРОСТОМУ")
+product_slide(f"{OUT}/06.png", 1, "Хлорофилл — концентрат зелени",
+              "Поддерживает свежесть, бодрость и иммунитет каждый день — "
+              "зелёная перезагрузка для тех, кому не хватает ресурса.",
+              disclaimer="БАД. Не является лекарственным средством. Есть противопоказания.")
+text_slide(f"{OUT}/07.png", "Хочешь больше энергии?",
+           note="Хлорофилл POWERELIX — по ссылке в профиле. "
+                "А какой из 5 сигналов про тебя? Пиши в комментариях.",
+           cta="Сохрани · Подписывайся — разбираем здоровье по-простому")
 
 # превью-контактка
 prev = Image.new("RGB", (W // 3 * 4 + 50, H // 3 * 2 + 30), (255, 255, 255))
