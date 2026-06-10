@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Разведка{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-1">🔍 Разведка трендов</h1>
+<p class="text-slate-500 mb-5 text-sm">Собираем вирусные чужие Reels по теме, Claude разбирает хук → идея в банк.</p>
+
+<form action="/recon/scrape" method="post" class="bg-white border rounded-xl p-4 mb-6 flex flex-wrap gap-3 items-end">
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Тема / хэштег</label>
+    <input name="topic" required placeholder="иммунитет" class="px-3 py-2 border rounded w-56">
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Сколько собрать</label>
+    <input name="limit" type="number" value="30" min="5" max="100" class="px-3 py-2 border rounded w-28">
+  </div>
+  <button class="bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2">Собрать</button>
+  <span class="text-xs text-slate-400">сбор идёт синхронно, 10–60 сек</span>
+</form>
+
+{% if not reels %}
+<div class="text-slate-400 text-sm">Пока пусто. Введи тему и собери ролики.</div>
+{% endif %}
+
+<div class="space-y-3">
+  {% for r in reels %}
+  <div class="bg-white border rounded-xl p-3 flex gap-3">
+    {% if r.thumb %}<img src="{{ r.thumb }}" class="w-24 h-32 object-cover rounded shrink-0">{% else %}<div class="w-24 h-32 bg-slate-100 rounded shrink-0 flex items-center justify-center text-2xl">🎞️</div>{% endif %}
+    <div class="flex-1 min-w-0">
+      <div class="flex items-center gap-2 text-sm flex-wrap">
+        <span class="font-semibold">@{{ r.username }}</span>
+        <span class="text-slate-500">▶ {{ "{:,}".format(r.play_count).replace(",", " ") }}</span>
+        <span class="text-slate-400">❤ {{ r.likes }} · 💬 {{ r.comments }}</span>
+        <span class="text-xs bg-slate-100 px-2 py-0.5 rounded">#{{ r.topic }}</span>
+        {% if r.url %}<a href="{{ r.url }}" target="_blank" class="text-blue-600 text-xs hover:underline">открыть ↗</a>{% endif %}
+      </div>
+      <div class="text-sm text-slate-600 mt-1 line-clamp-2">{{ r.caption }}</div>
+
+      <div class="mt-2 flex gap-2">
+        {% if not r.analyzed %}
+        <form action="/recon/{{ r.id }}/analyze" method="post"><button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1">🧠 Разобрать хук</button></form>
+        {% else %}
+        <form action="/recon/{{ r.id }}/analyze" method="post"><button class="text-xs border rounded px-3 py-1 hover:bg-slate-50">↻ Разобрать заново</button></form>
+        <form action="/recon/{{ r.id }}/to-idea" method="post"><button class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1">💡 В банк идей</button></form>
+        {% endif %}
+      </div>
+
+      {% if r.analysis %}
+      <div class="mt-2 bg-violet-50 border border-violet-100 rounded p-2 text-xs text-slate-700 space-y-1">
+        <div><b>Хук:</b> {{ r.analysis.hook }}</div>
+        <div><b>Удержание:</b> {{ r.analysis.retention_device }}</div>
+        <div><b>Триггер:</b> {{ r.analysis.trigger }}</div>
+        <div><b>Почему зашло:</b> {{ r.analysis.why_viral }}</div>
+        <div class="text-emerald-800"><b>Идея под нас:</b> {{ r.analysis.adapted_idea }}</div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

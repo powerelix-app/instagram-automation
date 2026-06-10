@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}План #{{ plan.id }}{% endblock %}
+{% block content %}
+<a href="/plan" class="text-blue-600 text-sm hover:underline">← К планам</a>
+<h1 class="text-2xl font-semibold mt-2 mb-1">🗓️ {{ plan.period or "План #" ~ plan.id }}</h1>
+<p class="text-slate-600 text-sm mb-3">{{ plan.strategy_summary }}</p>
+
+{% if plan.rubrics_legend %}
+<div class="text-xs text-slate-500 mb-4">{% for r in plan.rubrics_legend %}<span class="inline-block bg-slate-100 rounded px-2 py-0.5 mr-1 mb-1">{{ r }}</span>{% endfor %}</div>
+{% endif %}
+
+<form action="/plan/{{ plan.id }}/materialize" method="post" class="mb-5">
+  <button class="bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2 text-sm">📝 Посты → черновики</button>
+  <span class="text-xs text-slate-400 ml-2">создано: {{ plan.materialized }}</span>
+</form>
+
+<div class="space-y-2">
+  {% for p in plan.posts %}
+  <div class="bg-white border rounded-xl p-3">
+    <div class="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
+      <span class="bg-slate-100 rounded px-2 py-0.5">{{ p.date }} · {{ p.weekday }}</span>
+      <span class="bg-blue-50 text-blue-700 rounded px-2 py-0.5">{{ p.format }}</span>
+      <span class="bg-amber-50 text-amber-700 rounded px-2 py-0.5">{{ p.rubric }}</span>
+      {% if p.product and p.product != "—" %}<span class="bg-emerald-50 text-emerald-700 rounded px-2 py-0.5">{{ p.product }}</span>{% endif %}
+    </div>
+    <div class="font-semibold text-sm mt-1">{{ p.hook }}</div>
+    <div class="text-sm text-slate-600 mt-1 line-clamp-3">{{ p.caption }}</div>
+    <div class="text-xs text-slate-400 mt-1">🎨 {{ p.visual_idea }}</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

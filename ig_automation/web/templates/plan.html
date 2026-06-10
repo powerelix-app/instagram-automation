@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Контент-план{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-1">🗓️ Контент-план</h1>
+<p class="text-slate-500 mb-5 text-sm">Claude генерит план с балансом рубрик и юр-правилами БАД (переиспользуем рабочий генератор).</p>
+
+<form action="/plan/generate" method="post" class="bg-white border rounded-xl p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Постов</label>
+    <input name="n_posts" type="number" value="10" min="3" max="40" class="px-3 py-2 border rounded w-full">
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Дата старта</label>
+    <input name="start_date" type="date" required class="px-3 py-2 border rounded w-full">
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Частота</label>
+    <input name="cadence" value="5 публикаций в неделю (пн-пт)" class="px-3 py-2 border rounded w-full">
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Фокус (опц.)</label>
+    <input name="focus" placeholder="напр. линейка похудения" class="px-3 py-2 border rounded w-full">
+  </div>
+  <div class="sm:col-span-2">
+    <button class="bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2">Сгенерировать план</button>
+    <span class="text-xs text-slate-400 ml-2">генерация через Claude, ~20–40 сек</span>
+  </div>
+</form>
+
+{% if not plans %}<div class="text-slate-400 text-sm">Планов пока нет.</div>{% endif %}
+<div class="space-y-2">
+  {% for p in plans %}
+  <a href="/plan/{{ p.id }}" class="block bg-white border rounded-xl p-4 hover:border-blue-300">
+    <div class="flex items-center justify-between flex-wrap gap-2">
+      <div class="font-semibold">{{ p.period or "План #" ~ p.id }}</div>
+      <div class="text-xs text-slate-500">{{ p.n_posts }} постов · черновиков: {{ p.materialized }}</div>
+    </div>
+    <div class="text-sm text-slate-600 mt-1 line-clamp-2">{{ p.strategy_summary }}</div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

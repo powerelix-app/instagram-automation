@@ -65,6 +65,9 @@ def create_app(enable_scheduler: bool = True) -> FastAPI:
 
     os.makedirs(STATIC_DIR, exist_ok=True)
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+    # Превью собранных Reels (data/media) — для UI Разведки.
+    config.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    app.mount("/media", StaticFiles(directory=str(config.MEDIA_DIR)), name="media")
 
     @app.exception_handler(HTTPException)
     async def on_http_exc(request: Request, exc: HTTPException):
