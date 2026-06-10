@@ -4,6 +4,7 @@
 Эмодзи на картинках НЕ используем (шрифты их не рисуют) — только в подписи.
 """
 import os
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter
 from rembg import remove
 
@@ -129,9 +130,23 @@ def product_slide(path, pid, heading, benefit, disclaimer=None):
     return path
 
 
+DGREEN = (6, 16, 11)  # тёмно-изумрудный для затемнения (не чёрный — фон остаётся сочным)
+
+
+def _greendim(img, base=48, top=120, bottom=360):
+    """Лёгкое тёмно-изумрудное затемнение: фон живой, текст вверху читается."""
+    ys = np.arange(H)[:, None].astype(float)
+    da = (base
+          + np.where(ys < top, (top - ys) / top * 90, 0)
+          + np.where(ys > H - bottom, (ys - (H - bottom)) / bottom * 150, 0))
+    da = np.clip(da, 0, 232).astype("uint8")
+    ovL = Image.fromarray(np.repeat(da, W, axis=1).reshape(H, W))
+    return Image.composite(Image.new("RGB", (W, H), DGREEN), img.convert("RGB"), ovL)
+
+
 def product_photo_slide(path, pid, scene, heading, benefit, disclaimer=None):
     a = _load_assets()[str(pid)]
-    img = _scrim(_cover(Image.open(scene)), top=470, bottom=320)
+    img = _greendim(_cover(Image.open(scene)))
     d = ImageDraw.Draw(img)
     _mark(img, d, light=True)
     y = 250
@@ -212,12 +227,15 @@ s6 = s6p if os.path.exists(s6p) else generate_scene(
     "macro nature photo, fresh green leaves with water droplets, soft daylight, "
     "mint green palette, clean minimal, fresh and airy",
     out_name="post01_s6.png")
-s6bp = "output/scenes/post01_s6b.png"
-s6b = s6bp if os.path.exists(s6bp) else generate_scene(
-    "vibrant fresh scene, lush green leaves and splashing water droplets, bright "
-    "energetic daylight, emerald and mint palette, clean, lots of freshness, "
-    "premium product backdrop",
-    out_name="post01_s6b.png")
+# слайд 6 — сочная Grok-сцена (изумруд + мята + всплеск воды, чистый подиум под банку)
+s6gp = "output/scenes/grok_g6.png"
+s6b = s6gp if os.path.exists(s6gp) else generate_scene(
+    "premium emerald and dark green gradient backdrop, a smooth flat solid wet black "
+    "stone podium in the lower center, fresh vibrant mint leaves and a dynamic water "
+    "splash around it, glistening droplets, glossy reflections, dramatic rim light, "
+    "richly saturated juicy green, clear empty space on the podium for a product bottle, "
+    "commercial advertising quality",
+    model="grok-imagine-image-quality", out_name="grok_g6.png")
 
 # ── слайды ──
 cover(f"{OUT}/01.png", s1, "Устаёшь не от лени",
