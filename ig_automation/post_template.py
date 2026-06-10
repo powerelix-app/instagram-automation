@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 from .config import ROOT
 
@@ -37,11 +37,25 @@ def _whiten_to(img: Image.Image, color=CREAM) -> Image.Image:
 
 
 def _cutout(path: str | Path) -> Image.Image:
-    """Вырез объекта с белого фона → RGBA по bbox."""
+    """Вырез объекта с белого фона → RGBA по bbox.
+
+    Прозрачным делаем ТОЛЬКО фон, связанный с краями (заливка от углов): так
+    светлая тень убирается, а белое ВНУТРИ объекта (этикетка, блики) остаётся —
+    иначе на цветном фоне сквозь буквы проступает фон («смазанный» текст).
+    """
     a = np.array(Image.open(path).convert("RGB"))
-    white = (a[:, :, 0] > 236) & (a[:, :, 1] > 236) & (a[:, :, 2] > 236)
-    alpha = np.where(white, 0, 255).astype("uint8")
-    img = Image.fromarray(np.dstack([a, alpha]), "RGBA")
+    light = (((a[:, :, 0] > 210) & (a[:, :, 1] > 210) & (a[:, :, 2] > 210))
+             * 255).astype("uint8")
+    m = Image.fromarray(light, "L")
+    h, w = light.shape
+    for seed in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)):
+        if m.getpixel(seed) == 255:
+            ImageDraw.floodfill(m, seed, 128, thresh=0)
+    bg = np.array(m) == 128
+    alpha = np.where(bg, 0, 255).astype("uint8")
+    img = Image.fromarray(np.dstack([a, alpha]).astype("uint8"), "RGBA")
+    soft = img.getchannel("A").filter(ImageFilter.GaussianBlur(0.6))
+    img.putalpha(soft)
     return img.crop(img.getbbox())
 
 
