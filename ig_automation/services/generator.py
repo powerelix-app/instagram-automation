@@ -35,9 +35,13 @@ def _visual_prompt(post: Post) -> str:
     return ". ".join(parts)
 
 
-def generate_post_assets(post_id: int, ratio: str = "4:5") -> Optional[int]:
+# Соотношение сторон по формату: вертикальное видео 9:16, лента 4:5.
+_FORMAT_RATIO = {"reels": "9:16", "stories": "9:16", "carousel": "4:5", "photo": "4:5"}
+
+
+def generate_post_assets(post_id: int, ratio: Optional[str] = None) -> Optional[int]:
     """Генерит визуал с лицом бренда, кладёт в data/media, пишет PostAsset.
-    Возвращает id ассета."""
+    ratio=None → выбирается по формату поста. Возвращает id ассета."""
     if not config.XAI_API_KEY:
         raise RuntimeError("Не задан XAI_API_KEY в .env (нужен для генерации визуала Grok)")
     with session_scope() as s:
@@ -45,6 +49,7 @@ def generate_post_assets(post_id: int, ratio: str = "4:5") -> Optional[int]:
         if not post:
             return None
         prompt = _visual_prompt(post)
+        ratio = ratio or _FORMAT_RATIO.get(post.format, "4:5")
         ord_ = s.query(PostAsset).filter(PostAsset.post_id == post_id).count()
         post.status = "generating"
 
