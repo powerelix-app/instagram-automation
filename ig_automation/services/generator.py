@@ -9,6 +9,7 @@ import anthropic
 from pydantic import BaseModel, Field
 
 from .. import config, scenes
+from . import brand
 from ..db.base import session_scope
 from ..db.models import Post, PostAsset
 
@@ -23,14 +24,20 @@ _BRAND_STYLE = (
 
 # ── Визуал ──
 
-def _visual_prompt(post: Post) -> str:
+def _visual_prompt(visual_idea: str, hook: str, product: str, with_product_ref: bool) -> str:
     parts: List[str] = []
-    if post.visual_idea:
-        parts.append(post.visual_idea)
-    elif post.hook:
-        parts.append(post.hook)
-    if post.product and post.product not in ("", "—"):
-        parts.append(f"в кадре уместно показать продукт: {post.product}")
+    if visual_idea:
+        parts.append(visual_idea)
+    elif hook:
+        parts.append(hook)
+    if product and product not in ("", "—"):
+        if with_product_ref:
+            parts.append(
+                f"в кадре — РЕАЛЬНАЯ банка продукта «{product}» как на референсе, "
+                "этикетка читаема и не искажена, модель держит её в руках или рядом"
+            )
+        else:
+            parts.append(f"в кадре уместно показать продукт: {product}")
     parts.append(_BRAND_STYLE)
     return ". ".join(parts)
 
@@ -48,13 +55,22 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None) -> Optional[
         post = s.get(Post, post_id)
         if not post:
             return None
-        prompt = _visual_prompt(post)
+        product, hook, visual_idea = post.product, post.hook, post.visual_idea
         ratio = ratio or _FORMAT_RATIO.get(post.format, "4:5")
         ord_ = s.query(PostAsset).filter(PostAsset.post_id == post_id).count()
         post.status = "generating"
 
+    # Референсы: лицо бренда + (если есть) реальная банка этого товара.
+    refs = [brand.model_ref()]
+    prod_ref = brand.product_ref(product)
+    if prod_ref:
+        refs.append(prod_ref)
+    prompt = _visual_prompt(visual_idea, hook, product, with_product_ref=bool(prod_ref))
+
     try:
-        scene_path = scenes.generate_branded(prompt, ratio=ratio, out_name=f"post_{post_id}_{ord_}.png")
+        scene_path = scenes.generate_branded(
+            prompt, refs=refs, ratio=ratio, out_name=f"post_{post_id}_{ord_}.png"
+        )
         dest = config.MEDIA_DIR / f"post_{post_id}_{ord_}.png"
         shutil.copy(scene_path, dest)
     except Exception:

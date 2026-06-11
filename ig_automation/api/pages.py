@@ -5,13 +5,15 @@ from typing import Any, Dict
 
 import logging
 
-from fastapi import APIRouter, Depends, Form, Request
+from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .. import config
 from ..db.base import session_scope
 from ..db.models import ContentPlan, Idea, Post, TrendReel
+from ..products import product_names
+from ..services import brand as brand_svc
 from ..services import ideas as ideas_svc
 from ..services import generator, planner, recon, tokens
 from .auth import auth_disabled, require_user
@@ -181,6 +183,41 @@ def ideas_to_post(request: Request, idea_id: int, _: bool = Depends(require_user
     if post_id:
         return RedirectResponse(f"/post/{post_id}", status_code=303)
     return RedirectResponse("/ideas?msg=Идея не найдена", status_code=303)
+
+
+# ── Бренд-ассеты (банки/логотип/лицо модели) ──
+
+@router.get("/brand", response_class=HTMLResponse)
+def brand_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(
+        request, "brand.html",
+        _ctx(request, assets=brand_svc.list_assets(), products=product_names(), msg=msg),
+    )
+
+
+@router.post("/brand/upload")
+async def brand_upload(
+    request: Request,
+    kind: str = Form(...),
+    product: str = Form(""),
+    label: str = Form(""),
+    file: UploadFile = File(...),
+    _: bool = Depends(require_user),
+):
+    try:
+        data = await file.read()
+        brand_svc.add_asset(kind, data, file.filename or "asset.png", product=product, label=label)
+        msg = "Ассет добавлен"
+    except Exception as e:
+        log.warning("brand upload failed: %s", e)
+        msg = f"Ошибка загрузки: {e}"
+    return RedirectResponse(f"/brand?msg={msg}", status_code=303)
+
+
+@router.post("/brand/{asset_id}/delete")
+def brand_delete(request: Request, asset_id: int, _: bool = Depends(require_user)):
+    brand_svc.delete_asset(asset_id)
+    return RedirectResponse("/brand?msg=Удалено", status_code=303)
 
 
 # ── Фаза 4: Посты и генерация ──

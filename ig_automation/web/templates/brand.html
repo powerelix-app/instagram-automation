@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Бренд{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-1">🎨 Бренд-ассеты</h1>
+<p class="text-slate-500 mb-5 text-sm">
+  Загрузи <b>лицо модели</b>, <b>логотип</b> и <b>банки товаров</b> — генерация будет использовать
+  твои реальные продукты (Grok держит настоящую банку с читаемой этикеткой), а не абстрактный POWERELIX.
+</p>
+
+<form action="/brand/upload" method="post" enctype="multipart/form-data"
+      class="bg-white border rounded-xl p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3 items-end">
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Что загружаем</label>
+    <select name="kind" class="px-3 py-2 border rounded w-full">
+      <option value="product">🫙 Банка товара</option>
+      <option value="model">👩 Лицо модели</option>
+      <option value="logo">🔶 Логотип</option>
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Товар (для банки)</label>
+    <select name="product" class="px-3 py-2 border rounded w-full">
+      <option value="">— выбери товар —</option>
+      {% for p in products %}<option value="{{ p }}">{{ p }}</option>{% endfor %}
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Подпись (опц.)</label>
+    <input name="label" placeholder="напр. фронт банки" class="px-3 py-2 border rounded w-full">
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Файл (PNG/JPG/WEBP)</label>
+    <input type="file" name="file" accept="image/*" required class="px-3 py-2 border rounded w-full text-sm">
+  </div>
+  <div class="sm:col-span-2">
+    <button class="bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2">Загрузить</button>
+    <span class="text-xs text-slate-400 ml-2">для банки лучше фронт упаковки на белом фоне</span>
+  </div>
+</form>
+
+{% macro grid(items, empty) %}
+  {% if not items %}<div class="text-slate-400 text-sm mb-4">{{ empty }}</div>{% endif %}
+  <div class="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-6 gap-3 mb-6">
+    {% for a in items %}
+    <div class="bg-white border rounded-xl overflow-hidden">
+      <div class="aspect-square bg-slate-100"><img src="{{ a.path }}" class="w-full h-full object-cover"></div>
+      <div class="p-1.5">
+        <div class="text-[11px] font-medium truncate">{{ a.product or a.label or "—" }}</div>
+        <form action="/brand/{{ a.id }}/delete" method="post" onsubmit="return confirm('Удалить ассет?')">
+          <button class="text-[11px] text-red-500 hover:underline">удалить</button>
+        </form>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% endmacro %}
+
+<h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-2">🫙 Банки товаров</h2>
+{{ grid(assets | selectattr('kind', 'equalto', 'product') | list, "Банок пока нет — без них в кадре будет абстрактный продукт.") }}
+
+<h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-2">👩 Лицо модели</h2>
+{{ grid(assets | selectattr('kind', 'equalto', 'model') | list, "Своё лицо не загружено — используется дефолтное (assets/brand/ai_model.png).") }}
+
+<h2 class="text-sm font-bold uppercase tracking-wider text-slate-400 mb-2">🔶 Логотип</h2>
+{{ grid(assets | selectattr('kind', 'equalto', 'logo') | list, "Логотип не загружен.") }}
+{% endblock %}

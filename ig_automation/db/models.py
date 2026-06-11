@@ -122,6 +122,18 @@ class PostAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class BrandAsset(Base):
+    """Бренд-ассеты для генерации: лицо AI-модели, логотип, банки товаров."""
+    __tablename__ = "brand_assets"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16), default="product")  # model|logo|product
+    product: Mapped[str] = mapped_column(String(128), default="")  # для kind=product
+    label: Mapped[str] = mapped_column(String(128), default="")
+    path: Mapped[str] = mapped_column(String(512), default="")  # /media/brand/...
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
 class PostMetric(Base):
     """Снимок метрик опубликованного поста (insights)."""
     __tablename__ = "post_metrics"
