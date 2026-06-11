@@ -26,12 +26,13 @@ RED = (255, 99, 92)
 GREY = (200, 205, 200)
 
 # (имя_стопкадра, верхняя_метка, главный_текст, плохое, хорошее) — None пропускается
+# кадры — НАТИВНЫЕ 9:16 (без растяжения из 4:5)
 BEATS = [
-    ("emo_neutral",  None,        "Пьёшь витамины,\nа толку ноль?", None, "3 ошибки ↓"),
-    ("emo_calm",     "ОШИБКА 1",  "Магний",            "утром",            "лучше вечером"),
-    ("emo_neutral",  "ОШИБКА 2",  "Витамин D",         "запиваешь водой",  "только с жирной пищей"),
-    ("emo_energetic","ОШИБКА 3",  "Глотаешь всё разом","в одной горсти",   "разнеси по времени"),
-    ("grok_s6_girl", None,        "Сохрани,\nчтобы не забыть", None, "POWERELIX · здоровье по-простому"),
+    ("reels_hook_916",      None,        "Пьёшь витамины,\nа толку ноль?", None, "3 ошибки ↓"),
+    ("reels_neutral_916",   "ОШИБКА 1",  "Магний",            "утром",            "лучше вечером"),
+    ("reels_neutral_916",   "ОШИБКА 2",  "Витамин D",         "запиваешь водой",  "только с жирной пищей"),
+    ("reels_energetic_916", "ОШИБКА 3",  "Глотаешь всё разом","в одной горсти",   "разнеси по времени"),
+    ("reels_cta_916",       None,        "Сохрани,\nчтобы не забыть", None, "POWERELIX · здоровье по-простому"),
 ]
 DUR = [2.6, 2.7, 2.7, 2.7, 3.2]
 SRC = "output/scenes"
@@ -105,40 +106,34 @@ def run(cmd):
 
 
 def build_motion():
+    """Слайдшоу из стоп-кадров через concat-demuxer (хард-каты под бит).
+
+    ВАЖНО: zoompan с `-loop 1` экспоненциально множит кадры (раздувает файл до
+    сотен МБ / минут) — поэтому НЕ используем. Кадры уже нативные 9:16, режем встык.
+    """
     print("motion: компоную стоп-кадры…")
     stills = [compose(b, i) for i, b in enumerate(BEATS)]
-    seg_files = []
-    for i, (still, dur) in enumerate(zip(stills, DUR)):
-        seg = f"{OUT}/seg_{i}.mp4"
-        frames = int(dur * 30)
-        # медленный zoom-in (Ken Burns)
-        vf = (f"scale=1350:2400,zoompan=z='min(zoom+0.0006,1.12)':d={frames}"
-              f":x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps=30,format=yuv420p")
-        run(["ffmpeg", "-y", "-loop", "1", "-t", str(dur), "-i", still,
-             "-vf", vf, *ENC, "-r", "30", seg])
-        seg_files.append(seg)
-    # склейка с быстрым кроссфейдом через concat (хард-каты под бит — норм для Reels)
-    lst = f"{OUT}/_concat.txt"
+    lst = f"{OUT}/_imgs.txt"
     with open(lst, "w") as f:
-        for s in seg_files:
-            f.write(f"file '{os.path.basename(s)}'\n")
+        for still, dur in zip(stills, DUR):
+            f.write(f"file '{os.path.basename(still)}'\nduration {dur}\n")
+        f.write(f"file '{os.path.basename(stills[-1])}'\n")  # повтор последнего (quirk demuxer'а)
     out = f"{OUT}/reels01_motion.mp4"
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", lst,
+         "-vf", f"scale={W}:{H}:force_original_aspect_ratio=increase,crop={W}:{H},fps=30,format=yuv420p",
          *ENC, "-movflags", "+faststart", out])
-    for s in seg_files:
-        os.remove(s)
     print("OK", out)
     return out
 
 
 # биты для AI-видео: (стартовый кадр, промт движения, длительность)
 AI_CLIPS = [
-    ("emo_neutral", "she looks at the camera with a slight questioning concerned expression, "
-                    "subtle head tilt, natural micro-movements, gentle slow camera push-in", 4),
-    ("emo_energetic", "she shakes her head slightly no, then gives a confident reassuring nod, "
-                      "light hand gesture, natural lively motion", 4),
-    ("grok_s6_girl", "she smiles warmly holding the chlorophyll bottle, gentle natural motion, "
-                     "subtle sparkle on water droplets, slow camera push-in", 5),
+    ("reels_hook_916", "she looks at the camera with a slight questioning concerned expression, "
+                       "subtle head tilt, natural micro-movements, gentle slow camera push-in", 4),
+    ("reels_energetic_916", "she shakes her head slightly no, then gives a confident reassuring nod, "
+                            "light hand gesture, natural lively motion", 4),
+    ("reels_cta_916", "she smiles warmly holding the chlorophyll bottle, gentle natural motion, "
+                      "subtle sparkle on water droplets, slow camera push-in", 5),
 ]
 AI_TEXT = [  # текст-оверлей на каждый клип (главное, плохое, хорошее, tag)
     (None, "Пьёшь витамины, а толку ноль?", None, "3 ошибки ↓", None),
