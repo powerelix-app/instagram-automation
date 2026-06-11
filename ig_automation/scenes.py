@@ -195,6 +195,43 @@ def _call_xai_video(prompt: str, image: str | Path | None = None,
     raise RuntimeError("xAI video: таймаут ожидания рендера")
 
 
+def _call_replicate_video(prompt: str, image: str | Path, duration: int = 5,
+                          aspect_ratio: str = "9:16", resolution: str = "720p",
+                          model: str = "xai/grok-imagine-video-1.5",
+                          poll_tries: int = 90, poll_every: int = 6) -> bytes:
+    """Grok Imagine video через Replicate (image→video). Возвращает байты mp4.
+
+    Используем, когда официальный xAI-баланс пуст, а на Replicate есть кредиты.
+    aspect_ratio по умолчанию = формат входной картинки (наши 9:16 → без растяжения).
+    """
+    body = {"image": _data_url(image), "prompt": prompt, "duration": duration,
+            "aspect_ratio": aspect_ratio, "resolution": resolution}
+    url = f"https://api.replicate.com/v1/models/{model}/predictions"
+    h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}", "Content-Type": "application/json"}
+    r = requests.post(url, headers=h, json={"input": body}, timeout=120)
+    if r.status_code == 402:
+        raise SystemExit("Replicate: недостаточно баланса (HTTP 402).")
+    if r.status_code >= 400:
+        raise RuntimeError(f"{model} → HTTP {r.status_code}: {r.text[:300]}")
+    pred = r.json()
+    get_url = pred.get("urls", {}).get("get")
+    for _ in range(poll_tries):
+        st = pred.get("status")
+        if st == "succeeded":
+            out = pred.get("output")
+            if isinstance(out, list):
+                out = out[0] if out else None
+            if not out:
+                raise RuntimeError("Replicate video: пустой output")
+            mp4 = requests.get(out, timeout=180); mp4.raise_for_status()
+            return mp4.content
+        if st in ("failed", "canceled"):
+            raise RuntimeError(f"Replicate video {st}: {str(pred.get('error'))[:200]}")
+        time.sleep(poll_every)
+        pred = requests.get(get_url, headers=h, timeout=60).json()
+    raise RuntimeError("Replicate video: таймаут ожидания рендера")
+
+
 def _output_url(resp: dict) -> str:
     out = resp.get("output")
     if isinstance(out, list):
