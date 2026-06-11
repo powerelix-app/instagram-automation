@@ -40,11 +40,17 @@ def init(db_path: Optional[str] = None) -> None:
 
 def _migrate(engine) -> None:
     """Лёгкие идемпотентные миграции (create_all не добавляет новые колонки)."""
-    adds = {"trend_reels": [
-        ("thumbnail_url", "VARCHAR DEFAULT ''"),
-        ("relevant", "BOOLEAN DEFAULT 1"),
-        ("relevance_reason", "VARCHAR DEFAULT ''"),
-    ]}
+    adds = {
+        "trend_reels": [
+            ("thumbnail_url", "VARCHAR DEFAULT ''"),
+            ("relevant", "BOOLEAN DEFAULT 1"),
+            ("relevance_reason", "VARCHAR DEFAULT ''"),
+        ],
+        "deals": [
+            ("last_touch_at", "DATETIME"),
+            ("next_followup_at", "DATETIME"),
+        ],
+    }
     with engine.begin() as conn:
         for table, cols in adds.items():
             existing = {r[1] for r in conn.exec_driver_sql(f"PRAGMA table_info({table})").fetchall()}

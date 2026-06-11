@@ -354,7 +354,8 @@ def analytics_page(request: Request, _: bool = Depends(require_user)):
 def bloggers_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
     return templates.TemplateResponse(
         request, "bloggers.html",
-        _ctx(request, bloggers=bloggers_svc.list_bloggers(), status_labels=bloggers_svc.STATUS_LABELS, msg=msg),
+        _ctx(request, bloggers=bloggers_svc.list_bloggers(), status_labels=bloggers_svc.STATUS_LABELS,
+             followups=bloggers_svc.needs_followup(), msg=msg),
     )
 
 
@@ -373,7 +374,8 @@ def blogger_detail(request: Request, bid: int, msg: str = "", _: bool = Depends(
     return templates.TemplateResponse(
         request, "blogger_detail.html",
         _ctx(request, b=data["b"], deals=data["deals"], stages=bloggers_svc.STAGES,
-             status_labels=bloggers_svc.STATUS_LABELS, msg=msg),
+             status_labels=bloggers_svc.STATUS_LABELS,
+             msg_templates=bloggers_svc.templates_for(data["b"]), msg=msg),
     )
 
 
@@ -418,6 +420,35 @@ async def deal_update(request: Request, deal_id: int, _: bool = Depends(require_
 @router.get("/pipeline", response_class=HTMLResponse)
 def pipeline_page(request: Request, _: bool = Depends(require_user)):
     return templates.TemplateResponse(request, "pipeline.html", _ctx(request, cols=bloggers_svc.pipeline()))
+
+
+@router.post("/deal/{deal_id}/touch")
+def deal_touch(request: Request, deal_id: int, bid: int = Form(...), days: int = Form(4), _: bool = Depends(require_user)):
+    bloggers_svc.log_touch(deal_id, followup_days=days)
+    return RedirectResponse(f"/blogger/{bid}?msg={quote('Касание записано, напоминание через %d дн.' % days)}", status_code=303)
+
+
+# ── Шаблоны сообщений ──
+
+@router.get("/templates", response_class=HTMLResponse)
+def templates_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(
+        request, "templates.html",
+        _ctx(request, items=bloggers_svc.list_templates(), cat_labels=bloggers_svc.CAT_LABELS, msg=msg),
+    )
+
+
+@router.post("/templates/add")
+def templates_add(request: Request, name: str = Form(...), channel: str = Form("any"),
+                  category: str = Form("first_touch"), body: str = Form(...), _: bool = Depends(require_user)):
+    bloggers_svc.add_template(name, channel, category, body)
+    return RedirectResponse("/templates?msg=Шаблон добавлен", status_code=303)
+
+
+@router.post("/templates/{tid}/delete")
+def templates_delete(request: Request, tid: int, _: bool = Depends(require_user)):
+    bloggers_svc.delete_template(tid)
+    return RedirectResponse("/templates?msg=Удалён", status_code=303)
 
 
 @router.post("/post/{post_id}/schedule")

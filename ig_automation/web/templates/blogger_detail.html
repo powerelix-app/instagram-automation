@@ -28,6 +28,24 @@
   </div>
 </div>
 
+{% if msg_templates %}
+<div class="bg-white border rounded-xl p-4 mb-5">
+  <div class="flex items-center justify-between mb-2">
+    <span class="font-semibold text-sm">✉️ Сообщения (подставлены данные блогера)</span>
+    <a href="/templates" class="text-xs text-blue-600 hover:underline">управлять шаблонами</a>
+  </div>
+  {% for t in msg_templates %}
+  <details class="border-t py-2">
+    <summary class="cursor-pointer text-sm">{{ t.name }} <span class="text-xs text-slate-400">· {{ t.cat_label }}</span></summary>
+    <textarea readonly rows="4" id="tpl{{ t.id }}" class="w-full mt-2 px-2 py-1 border rounded text-xs bg-slate-50">{{ t.rendered }}</textarea>
+    <button onclick="navigator.clipboard.writeText(document.getElementById('tpl{{ t.id }}').value); this.textContent='✓ скопировано'" class="text-xs bg-slate-700 text-white rounded px-3 py-1 mt-1">📋 Копировать</button>
+  </details>
+  {% endfor %}
+</div>
+{% else %}
+<div class="text-xs text-slate-400 mb-5">Нет шаблонов сообщений. <a href="/templates" class="text-blue-600 hover:underline">Создать →</a></div>
+{% endif %}
+
 <div class="flex items-center justify-between mb-2">
   <h2 class="text-lg font-semibold">Сделки</h2>
   <form action="/blogger/{{ b.id }}/add-deal" method="post" class="flex gap-2 items-center">
@@ -46,6 +64,15 @@
       {% if d.product %}<span class="bg-emerald-50 text-emerald-700 rounded px-2 py-0.5 text-xs">{{ d.product }}</span>{% endif %}
       <span class="bg-slate-100 rounded px-2 py-0.5 text-xs">{{ d.collab_type }}</span>
       {% if d.outcome != 'open' %}<span class="bg-amber-50 text-amber-700 rounded px-2 py-0.5 text-xs">{{ d.outcome }}</span>{% endif %}
+    </div>
+    {% if d.platform == 'instagram' %}<div class="text-xs text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 mb-2">🚫 Instagram: реклама запрещена в РФ (72-ФЗ, штраф 100–500к). Выбери VK / Telegram / Дзен / Rutube.</div>{% endif %}
+    <div class="flex items-center gap-2 text-xs mb-2 flex-wrap">
+      <form action="/deal/{{ d.id }}/touch" method="post" class="flex items-center gap-1">
+        <input type="hidden" name="bid" value="{{ b.id }}"><input type="hidden" name="days" value="4">
+        <button class="bg-blue-600 text-white rounded px-2 py-1">✓ записать касание (+4 дн напом.)</button>
+      </form>
+      {% if d.next_followup_at %}<span class="text-slate-500">⏰ след. касание: {{ d.next_followup_at }} UTC</span>{% endif %}
+      {% if not d.erid and d.stage in ['content','review','published'] %}<span class="text-amber-700">📌 нет erid (маркировка)</span>{% endif %}
     </div>
     {# воронка #}
     <form action="/deal/{{ d.id }}/stage" method="post" class="flex gap-1 items-center mb-2 flex-wrap">

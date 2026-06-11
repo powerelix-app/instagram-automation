@@ -3,9 +3,23 @@
 {% block content %}
 <div class="flex items-center justify-between mb-1 flex-wrap gap-2">
   <h1 class="text-2xl font-semibold">📣 Блогеры (UGC-CRM)</h1>
-  <a href="/pipeline" class="text-sm text-blue-600 hover:underline">📋 Воронка сделок →</a>
+  <div class="flex gap-3 text-sm">
+    <a href="/templates" class="text-blue-600 hover:underline">✉️ Шаблоны</a>
+    <a href="/pipeline" class="text-blue-600 hover:underline">📋 Воронка →</a>
+  </div>
 </div>
-<p class="text-slate-500 mb-5 text-sm">База UGC-блогеров (конкуренты-БАДы, нутрициологи, фитнес, ЗОЖ) — сделки, промокоды, атрибуция, маркировка.</p>
+<p class="text-slate-500 mb-4 text-sm">База UGC-блогеров (конкуренты-БАДы, нутрициологи, фитнес, ЗОЖ) — сделки, промокоды, атрибуция, маркировка.</p>
+
+{% if followups %}
+<div class="bg-amber-50 border border-amber-200 rounded-xl p-3 mb-5">
+  <div class="font-semibold text-sm text-amber-900 mb-2">⏰ Требуют касания ({{ followups|length }})</div>
+  <div class="space-y-1">
+    {% for f in followups %}
+    <a href="/blogger/{{ f.blogger.id }}" class="block text-sm text-amber-800 hover:underline">{{ f.blogger.name or f.blogger.handle }} — сделка #{{ f.deal.id }} ({{ f.deal.stage_label }})</a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
 
 <form action="/bloggers/add" method="post" class="bg-white border rounded-xl p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
   <input name="name" placeholder="Имя" class="px-3 py-2 border rounded">

@@ -166,6 +166,19 @@ class Deal(Base):
     attributed_orders: Mapped[int] = mapped_column(Integer, default=0)
     attributed_revenue: Mapped[int] = mapped_column(Integer, default=0)
     notes: Mapped[str] = mapped_column(Text, default="")
+    last_touch_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    next_followup_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class MessageTemplate(Base):
+    """Шаблон сообщения блогеру (аутрич/бриф/напоминание) с плейсхолдерами."""
+    __tablename__ = "message_templates"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), default="")
+    channel: Mapped[str] = mapped_column(String(16), default="any")  # telegram|email|dm|any
+    category: Mapped[str] = mapped_column(String(24), default="first_touch")  # first_touch|followup|brief
+    body: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
