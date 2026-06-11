@@ -113,7 +113,7 @@ def refresh_token() -> dict[str, Any]:
     положить в .env (IG_ACCESS_TOKEN) и обновить IG_TOKEN_EXPIRES_AT.
     """
     r = requests.get(
-        "https://graph.instagram.com/refresh_access_token",
+        f"{config.IG_HOST}/refresh_access_token",
         params={"grant_type": "ig_refresh_token", "access_token": config.IG_ACCESS_TOKEN},
         timeout=30,
     )

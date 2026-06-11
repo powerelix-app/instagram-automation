@@ -22,7 +22,10 @@ IG_APP_SECRET = os.getenv("IG_APP_SECRET", "")
 IG_USER_ID = os.getenv("IG_USER_ID", "")
 IG_ACCESS_TOKEN = os.getenv("IG_ACCESS_TOKEN", "")
 IG_TOKEN_EXPIRES_AT = os.getenv("IG_TOKEN_EXPIRES_AT", "")
-IG_API_BASE = "https://graph.instagram.com/v23.0"
+# Хост Instagram Graph API. С РФ-VPS graph.instagram.com заблокирован РКН —
+# на проде CF_IG_HOST = URL Cloudflare-релея (как tg-relay для Telegram).
+IG_HOST = os.getenv("CF_IG_HOST", "https://graph.instagram.com").rstrip("/")
+IG_API_BASE = IG_HOST + "/v23.0"
 
 # ── Apify ──
 APIFY_TOKEN = os.getenv("APIFY_TOKEN", "")

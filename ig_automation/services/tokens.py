@@ -76,7 +76,7 @@ def account_info() -> Dict[str, Any]:
                 "fields": "id,username,account_type,media_count,followers_count,name",
                 "access_token": token,
             },
-            timeout=30,
+            timeout=8,
         )
         r.raise_for_status()
         data = r.json()
@@ -98,7 +98,7 @@ def ensure_fresh(threshold_days: int = 7) -> Dict[str, Any]:
         return {"refreshed": False, "days_left": dl}
     try:
         r = requests.get(
-            "https://graph.instagram.com/refresh_access_token",
+            f"{config.IG_HOST}/refresh_access_token",
             params={"grant_type": "ig_refresh_token", "access_token": current_token()},
             timeout=30,
         )
