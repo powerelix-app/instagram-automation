@@ -4,6 +4,7 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import logging
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -79,21 +80,31 @@ def status(request: Request, _: bool = Depends(require_user)):
 # ── Фаза 2: Разведка ──
 
 @router.get("/recon", response_class=HTMLResponse)
-def recon_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+def recon_page(request: Request, topic: str = "", msg: str = "", _: bool = Depends(require_user)):
+    topics = recon.list_topics()
+    # "" → последняя тема; "__all__" → все темы вперемешку
+    if topic == "__all__":
+        sel, reels = "__all__", recon.list_reels(None)
+    else:
+        sel = topic or (topics[0]["topic"] if topics else "")
+        reels = recon.list_reels(sel or None)
     return templates.TemplateResponse(
-        request, "recon.html", _ctx(request, reels=recon.list_reels(), msg=msg)
+        request, "recon.html",
+        _ctx(request, reels=reels, topics=topics, sel_topic=sel, msg=msg),
     )
 
 
 @router.post("/recon/scrape")
 def recon_scrape(request: Request, topic: str = Form(...), limit: int = Form(30), _: bool = Depends(require_user)):
+    t = topic.strip()
     try:
-        added = recon.scrape_topic(topic.strip(), limit=min(limit, 100))
-        msg = f"Собрано новых: {added}" if added else "Новых роликов не найдено (актор пуст?)"
+        added = recon.scrape_topic(t, limit=min(limit, 100))
+        msg = f"Собрано новых: {added}" if added else "Новых роликов не найдено (попробуй точнее: омега 3, витамин д, креатин…)"
     except Exception as e:  # сеть/Apify/токен — не роняем страницу
         log.warning("recon scrape failed: %s", e)
         msg = f"Ошибка сбора: {e}"
-    return RedirectResponse(f"/recon?msg={msg}", status_code=303)
+    # показываем именно собранную тему
+    return RedirectResponse(f"/recon?topic={quote(t)}&msg={quote(msg)}", status_code=303)
 
 
 @router.post("/recon/{reel_id}/analyze")

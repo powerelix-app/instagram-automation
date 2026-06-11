@@ -8,6 +8,7 @@ from typing import List, Optional
 import anthropic
 import requests
 from pydantic import BaseModel, Field
+from sqlalchemy import func
 
 from .. import apify, config
 from ..db.base import session_scope
@@ -166,10 +167,26 @@ def to_idea(reel_id: int) -> Optional[int]:
         return idea.id
 
 
-def list_reels() -> List[dict]:
-    """Список собранных роликов (с пометкой, разобран ли) для UI, по убыванию просмотров."""
+def list_topics() -> List[dict]:
+    """Темы (запросы) со счётчиком, по свежести последнего сбора."""
     with session_scope() as s:
-        reels = s.query(TrendReel).order_by(TrendReel.play_count.desc()).all()
+        rows = (
+            s.query(TrendReel.topic, func.count(TrendReel.id))
+            .group_by(TrendReel.topic)
+            .order_by(func.max(TrendReel.scraped_at).desc())
+            .all()
+        )
+        return [{"topic": t, "count": c} for t, c in rows if t]
+
+
+def list_reels(topic: Optional[str] = None) -> List[dict]:
+    """Список роликов (с пометкой, разобран ли) для UI, по убыванию просмотров.
+    topic задан → только эта тема (иначе всё подряд, перемешано по темам)."""
+    with session_scope() as s:
+        q = s.query(TrendReel)
+        if topic:
+            q = q.filter(TrendReel.topic == topic)
+        reels = q.order_by(TrendReel.play_count.desc()).all()
         analyzed_ids = {a.trend_reel_id for a in s.query(HookAnalysis.trend_reel_id).all()}
         out = []
         for r in reels:

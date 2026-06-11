@@ -14,11 +14,23 @@
     <input name="limit" type="number" value="30" min="5" max="100" class="px-3 py-2 border rounded w-28">
   </div>
   <button class="bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2">Собрать</button>
-  <span class="text-xs text-slate-400">сбор идёт синхронно, 10–60 сек</span>
+  <span class="text-xs text-slate-400">точнее тема — релевантнее: омега 3, витамин д, креатин, коллаген</span>
 </form>
 
+{% if topics %}
+<div class="flex items-center gap-2 flex-wrap mb-4 text-sm">
+  <span class="text-slate-400">Тема:</span>
+  {% for t in topics %}
+  <a href="/recon?topic={{ t.topic | urlencode }}"
+     class="px-2.5 py-1 rounded-full {% if sel_topic == t.topic %}bg-blue-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">#{{ t.topic }} <span class="opacity-60">{{ t.count }}</span></a>
+  {% endfor %}
+  <a href="/recon?topic=__all__"
+     class="px-2.5 py-1 rounded-full {% if sel_topic == '__all__' %}bg-slate-800 text-white{% else %}bg-slate-100 text-slate-500 hover:bg-slate-200{% endif %}">все вперемешку</a>
+</div>
+{% endif %}
+
 {% if not reels %}
-<div class="text-slate-400 text-sm">Пока пусто. Введи тему и собери ролики.</div>
+<div class="text-slate-400 text-sm">{% if sel_topic and sel_topic != '__all__' %}Нет роликов по теме «{{ sel_topic }}». Собери — кнопка выше.{% else %}Пока пусто. Введи тему и собери ролики.{% endif %}</div>
 {% endif %}
 
 <div class="space-y-3">
