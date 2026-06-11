@@ -264,8 +264,10 @@ _REAL = (" ultra realistic skin with visible pores and texture, fine flyaway hai
 s1 = _grok_edit("grok_s1_girl.png", [GIRL_REF],
     "Keep the exact same woman face and identity from the reference (auburn wavy hair, "
     "freckles). Full lifestyle photo: she sits tired and exhausted on a sofa at home in the "
-    "evening, head resting on her hand, low energy weary mood, warm dim lamp light, muted "
-    "warm tones, cinematic editorial, shallow depth of field" + _REAL)
+    "evening, leaning her head back against the sofa cushion, eyes half-closed, both hands "
+    "resting loosely in her lap, relaxed natural weary posture, anatomically correct hands "
+    "and arms, low energy mood, warm dim lamp light, muted warm tones, cinematic editorial, "
+    "shallow depth of field" + _REAL)
 # слайд 6 — та же девушка держит НАШУ банку (мультиреференс: лицо + банка)
 s6b = _grok_edit("grok_s6_girl.png", [GIRL_REF, BOTTLE_REF],
     "Keep the exact same woman face and identity from the FIRST reference image (auburn wavy "

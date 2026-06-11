@@ -165,6 +165,29 @@ def _fit(im: Image.Image, ratio: str) -> Image.Image:
     return im.crop((x, y, x + w, y + h))
 
 
+BRAND_FACE = config.ROOT / "assets" / "brand" / "ai_model.png"
+_AR = {"4:5": "3:4", "9:16": "9:16", "1:1": "1:1"}
+
+
+def generate_branded(
+    prompt: str,
+    refs: list[str | Path] | None = None,
+    ratio: str = "4:5",
+    out_name: str | None = None,
+) -> Path:
+    """Grok image-edit с референсом постоянного лица бренда → тот же персонаж,
+    сцена меняется промптом. refs=None → только лицо (assets/brand/ai_model.png)."""
+    if ratio not in RATIOS:
+        raise ValueError(f"ratio {ratio!r} не из {list(RATIOS)}")
+    refs = refs or [BRAND_FACE]
+    content = _call_xai_edit(f"{sanitize(prompt)}. no text, no logo", refs, _AR[ratio])
+    im = _fit(Image.open(BytesIO(content)).convert("RGB"), ratio)
+    SCENES_DIR.mkdir(parents=True, exist_ok=True)
+    out = SCENES_DIR / (out_name or "branded.png")
+    im.save(out)
+    return out
+
+
 def generate_scene(
     prompt: str,
     ratio: str = "4:5",
