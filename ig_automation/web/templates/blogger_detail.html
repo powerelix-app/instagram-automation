@@ -95,9 +95,41 @@
       <input name="post_url" value="{{ d.post_url }}" placeholder="ссылка на пост" class="px-2 py-1 border rounded">
       <input name="attributed_orders" type="number" value="{{ d.attributed_orders }}" placeholder="заказов" class="px-2 py-1 border rounded">
       <input name="attributed_revenue" type="number" value="{{ d.attributed_revenue }}" placeholder="выручка ₽" class="px-2 py-1 border rounded">
+      <input type="hidden" name="_rights" value="1">
+      <label class="flex items-center gap-1 self-center"><input type="checkbox" name="rights_repost" {% if d.rights_repost %}checked{% endif %}> репост у нас</label>
+      <label class="flex items-center gap-1 self-center"><input type="checkbox" name="rights_ads" {% if d.rights_ads %}checked{% endif %}> реклама (whitelist)</label>
+      <input name="rights_term" value="{{ d.rights_term }}" placeholder="срок прав (6 мес)" class="px-2 py-1 border rounded">
       <button class="bg-slate-700 text-white rounded px-3 py-1 col-span-2 sm:col-span-1">Сохранить</button>
       <span class="text-slate-400 self-center">📌 erid обязателен для рекламы</span>
     </form>
+    {# deliverables — что блогер должен выложить #}
+    <div class="mt-2 border-t pt-2">
+      <div class="text-xs font-semibold text-slate-500 mb-1">Что выложить</div>
+      {% for x in d.deliverables %}
+      <div class="flex items-center gap-2 text-xs mb-1 flex-wrap">
+        <span class="bg-slate-100 rounded px-2 py-0.5">{{ x.format }}{% if x.platform %} · {{ x.platform }}{% endif %}</span>
+        {% if x.due %}<span class="text-slate-400">до {{ x.due }}</span>{% endif %}
+        <form action="/deliverable/{{ x.id }}/status" method="post" class="flex gap-1 items-center">
+          <input type="hidden" name="bid" value="{{ b.id }}">
+          <select name="status" onchange="this.form.submit()" class="border rounded px-1 py-0.5">
+            <option value="requested" {% if x.status=='requested' %}selected{% endif %}>запрошено</option>
+            <option value="received" {% if x.status=='received' %}selected{% endif %}>получено</option>
+            <option value="approved" {% if x.status=='approved' %}selected{% endif %}>одобрено</option>
+            <option value="published" {% if x.status=='published' %}selected{% endif %}>опубликовано</option>
+          </select>
+        </form>
+        {% if x.url %}<a href="{{ x.url }}" target="_blank" class="text-blue-600">↗</a>{% endif %}
+        <form action="/deliverable/{{ x.id }}/delete" method="post"><input type="hidden" name="bid" value="{{ b.id }}"><button class="text-red-400">×</button></form>
+      </div>
+      {% endfor %}
+      <form action="/deal/{{ d.id }}/deliverable" method="post" class="flex gap-1 items-center text-xs mt-1 flex-wrap">
+        <input type="hidden" name="bid" value="{{ b.id }}">
+        <select name="format" class="border rounded px-1 py-0.5"><option value="reel">Reel</option><option value="story">Story</option><option value="post">Пост</option><option value="video">Видео</option></select>
+        <input name="platform" placeholder="площадка" class="px-2 py-0.5 border rounded w-24">
+        <input name="due" placeholder="срок (до 15.06)" class="px-2 py-0.5 border rounded w-28">
+        <button class="bg-emerald-600 text-white rounded px-2 py-0.5">+ deliverable</button>
+      </form>
+    </div>
     <div class="mt-2 flex gap-2">
       <form action="/deal/{{ d.id }}/outcome" method="post"><input type="hidden" name="bid" value="{{ b.id }}"><input type="hidden" name="outcome" value="won"><button class="text-xs text-emerald-600 hover:underline">✓ выиграна</button></form>
       <form action="/deal/{{ d.id }}/outcome" method="post"><input type="hidden" name="bid" value="{{ b.id }}"><input type="hidden" name="outcome" value="lost"><button class="text-xs text-red-500 hover:underline">✗ слита</button></form>

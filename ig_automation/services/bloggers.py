@@ -1,11 +1,12 @@
 """Движок Б — UGC-CRM: блогеры + сделки + воронка. Не зависит от генерации/Grok."""
 from __future__ import annotations
 
+import re
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from ..db.base import session_scope
-from ..db.models import Blogger, Deal, MessageTemplate
+from ..db.models import Blogger, Deal, Deliverable, MessageTemplate
 
 # Воронка работы с блогером (порядок = стадии).
 STAGES: List[tuple] = [
@@ -47,10 +48,15 @@ def get_blogger(bid: int) -> Optional[dict]:
         if not b:
             return None
         deals = s.query(Deal).filter(Deal.blogger_id == bid).order_by(Deal.id.desc()).all()
-        return {
-            "b": b,
-            "deals": [_deal_dict(d) for d in deals],
-        }
+        deal_dicts = []
+        for d in deals:
+            dd = _deal_dict(d)
+            dd["deliverables"] = [
+                _deliv_dict(x) for x in
+                s.query(Deliverable).filter(Deliverable.deal_id == d.id).order_by(Deliverable.id).all()
+            ]
+            deal_dicts.append(dd)
+        return {"b": b, "deals": deal_dicts}
 
 
 def set_status(bid: int, status: str) -> None:
@@ -80,7 +86,13 @@ def _deal_dict(d: Deal) -> dict:
         "offer_value": d.offer_value, "tracking": d.tracking, "post_url": d.post_url,
         "attributed_orders": d.attributed_orders, "attributed_revenue": d.attributed_revenue,
         "notes": d.notes, "last_touch_at": d.last_touch_at, "next_followup_at": d.next_followup_at,
+        "rights_repost": d.rights_repost, "rights_ads": d.rights_ads, "rights_term": d.rights_term,
     }
+
+
+def _deliv_dict(x: Deliverable) -> dict:
+    return {"id": x.id, "format": x.format, "platform": x.platform, "due": x.due,
+            "status": x.status, "url": x.url}
 
 
 def add_deal(blogger_id: int, product: str = "", collab_type: str = "gift", platform: str = "") -> int:
@@ -118,10 +130,16 @@ def update_deal(deal_id: int, **f) -> None:
         for k in _DEAL_FIELDS:
             if k in f:
                 setattr(d, k, (f[k] or "").strip())
-        if "attributed_orders" in f:
-            d.attributed_orders = int(f["attributed_orders"] or 0)
-        if "attributed_revenue" in f:
-            d.attributed_revenue = int(f["attributed_revenue"] or 0)
+        for k in ("attributed_orders", "attributed_revenue"):
+            if k in f:
+                try:
+                    setattr(d, k, int(f[k] or 0))
+                except (ValueError, TypeError):
+                    pass
+        if "_rights" in f:  # форма прав на UGC (чекбоксы absent=off)
+            d.rights_repost = bool(f.get("rights_repost"))
+            d.rights_ads = bool(f.get("rights_ads"))
+            d.rights_term = (f.get("rights_term") or "").strip()
 
 
 CAT_LABELS = {"first_touch": "Первое касание", "followup": "Напоминание", "brief": "Бриф"}
@@ -207,3 +225,71 @@ def pipeline() -> List[dict]:
             ]
             cols.append({"key": key, "label": label, "cards": items})
         return cols
+
+
+# ── Deliverables (что блогер должен выложить) ──
+
+_DELIV_STATUS = ("requested", "received", "approved", "published")
+
+
+def add_deliverable(deal_id: int, format: str = "reel", platform: str = "", due: str = "") -> int:
+    with session_scope() as s:
+        x = Deliverable(deal_id=deal_id, format=format, platform=platform.strip(), due=due.strip())
+        s.add(x)
+        s.flush()
+        return x.id
+
+
+def set_deliverable(did: int, status: str = "", url: str = "") -> None:
+    with session_scope() as s:
+        x = s.get(Deliverable, did)
+        if not x:
+            return
+        if status in _DELIV_STATUS:
+            x.status = status
+        if url:
+            x.url = url.strip()
+
+
+def delete_deliverable(did: int) -> None:
+    with session_scope() as s:
+        x = s.get(Deliverable, did)
+        if x:
+            s.delete(x)
+
+
+# ── Импорт выручки из WB (по промокодам) + сводка ROI ──
+
+def wb_import(text: str) -> dict:
+    """Парсит строки «промокод заказы выручка» и проставляет атрибуцию по совпадению promo_code."""
+    updated, notfound = 0, []
+    with session_scope() as s:
+        for line in (text or "").splitlines():
+            parts = [p for p in re.split(r"[\s,;\t]+", line.strip()) if p]
+            if len(parts) < 2:
+                continue
+            code = parts[0]
+            try:
+                orders = int(parts[1])
+                revenue = int(parts[2]) if len(parts) > 2 else 0
+            except ValueError:
+                continue
+            deals = s.query(Deal).filter(Deal.promo_code == code).all()
+            if not deals:
+                notfound.append(code)
+                continue
+            for d in deals:
+                d.attributed_orders, d.attributed_revenue = orders, revenue
+                updated += 1
+    return {"updated": updated, "notfound": notfound}
+
+
+def crm_summary() -> dict:
+    with session_scope() as s:
+        deals = s.query(Deal).all()
+        return {
+            "deals": len(deals),
+            "orders": sum(d.attributed_orders for d in deals),
+            "revenue": sum(d.attributed_revenue for d in deals),
+            "bloggers": s.query(Blogger).count(),
+        }

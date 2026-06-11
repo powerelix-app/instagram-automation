@@ -49,6 +49,9 @@ def _migrate(engine) -> None:
         "deals": [
             ("last_touch_at", "DATETIME"),
             ("next_followup_at", "DATETIME"),
+            ("rights_repost", "BOOLEAN DEFAULT 0"),
+            ("rights_ads", "BOOLEAN DEFAULT 0"),
+            ("rights_term", "VARCHAR DEFAULT ''"),
         ],
     }
     with engine.begin() as conn:

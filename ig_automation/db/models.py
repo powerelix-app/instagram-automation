@@ -168,6 +168,23 @@ class Deal(Base):
     notes: Mapped[str] = mapped_column(Text, default="")
     last_touch_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     next_followup_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # права на UGC-контент блогера
+    rights_repost: Mapped[bool] = mapped_column(Boolean, default=False)  # репост у нас
+    rights_ads: Mapped[bool] = mapped_column(Boolean, default=False)  # реклама от лица блогера (whitelisting)
+    rights_term: Mapped[str] = mapped_column(String(32), default="")  # срок лицензии
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Deliverable(Base):
+    """Что блогер должен выложить по сделке (deliverable) + статус."""
+    __tablename__ = "deliverables"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    deal_id: Mapped[int] = mapped_column(ForeignKey("deals.id"))
+    format: Mapped[str] = mapped_column(String(16), default="reel")  # reel|story|post|video
+    platform: Mapped[str] = mapped_column(String(16), default="")
+    due: Mapped[str] = mapped_column(String(32), default="")  # срок (свободный текст, напр. «до 15.06»)
+    status: Mapped[str] = mapped_column(String(16), default="requested")  # requested|received|approved|published
+    url: Mapped[str] = mapped_column(String(512), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

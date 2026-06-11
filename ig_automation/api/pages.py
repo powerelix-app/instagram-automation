@@ -355,7 +355,7 @@ def bloggers_page(request: Request, msg: str = "", _: bool = Depends(require_use
     return templates.TemplateResponse(
         request, "bloggers.html",
         _ctx(request, bloggers=bloggers_svc.list_bloggers(), status_labels=bloggers_svc.STATUS_LABELS,
-             followups=bloggers_svc.needs_followup(), msg=msg),
+             followups=bloggers_svc.needs_followup(), summary=bloggers_svc.crm_summary(), msg=msg),
     )
 
 
@@ -449,6 +449,44 @@ def templates_add(request: Request, name: str = Form(...), channel: str = Form("
 def templates_delete(request: Request, tid: int, _: bool = Depends(require_user)):
     bloggers_svc.delete_template(tid)
     return RedirectResponse("/templates?msg=Удалён", status_code=303)
+
+
+# ── Deliverables + импорт выручки WB (B3) ──
+
+@router.post("/deal/{deal_id}/deliverable")
+def deal_add_deliverable(request: Request, deal_id: int, bid: int = Form(...), format: str = Form("reel"),
+                         platform: str = Form(""), due: str = Form(""), _: bool = Depends(require_user)):
+    bloggers_svc.add_deliverable(deal_id, format=format, platform=platform, due=due)
+    return RedirectResponse(f"/blogger/{bid}?msg={quote('Deliverable добавлен')}", status_code=303)
+
+
+@router.post("/deliverable/{did}/status")
+def deliverable_status(request: Request, did: int, bid: int = Form(...), status: str = Form(""),
+                       url: str = Form(""), _: bool = Depends(require_user)):
+    bloggers_svc.set_deliverable(did, status=status, url=url)
+    return RedirectResponse(f"/blogger/{bid}?msg={quote('Статус обновлён')}", status_code=303)
+
+
+@router.post("/deliverable/{did}/delete")
+def deliverable_delete(request: Request, did: int, bid: int = Form(...), _: bool = Depends(require_user)):
+    bloggers_svc.delete_deliverable(did)
+    return RedirectResponse(f"/blogger/{bid}", status_code=303)
+
+
+@router.get("/wb-import", response_class=HTMLResponse)
+def wb_import_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(
+        request, "wb_import.html", _ctx(request, summary=bloggers_svc.crm_summary(), msg=msg)
+    )
+
+
+@router.post("/wb-import")
+def wb_import_do(request: Request, text: str = Form(""), _: bool = Depends(require_user)):
+    res = bloggers_svc.wb_import(text)
+    msg = f"Обновлено сделок: {res['updated']}"
+    if res["notfound"]:
+        msg += "; коды без сделок: " + ", ".join(res["notfound"][:10])
+    return RedirectResponse(f"/wb-import?msg={quote(msg)}", status_code=303)
 
 
 @router.post("/post/{post_id}/schedule")

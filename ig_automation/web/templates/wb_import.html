@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Выручка и ROI{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-1 flex-wrap gap-2">
+  <h1 class="text-2xl font-semibold">💰 Выручка и ROI</h1>
+  <a href="/bloggers" class="text-sm text-blue-600 hover:underline">← Блогеры</a>
+</div>
+<p class="text-slate-500 mb-5 text-sm">Импорт выручки из отчётов WB по промокодам блогеров → атрибуция в сделки.</p>
+
+<div class="grid grid-cols-4 gap-3 mb-6">
+  <div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold">{{ summary.bloggers }}</div><div class="text-sm text-slate-500">блогеров</div></div>
+  <div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold">{{ summary.deals }}</div><div class="text-sm text-slate-500">сделок</div></div>
+  <div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-emerald-600">{{ summary.orders }}</div><div class="text-sm text-slate-500">заказов привлечено</div></div>
+  <div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-emerald-600">{{ "{:,}".format(summary.revenue).replace(",", " ") }} ₽</div><div class="text-sm text-slate-500">выручка</div></div>
+</div>
+
+<form action="/wb-import" method="post" class="bg-white border rounded-xl p-4">
+  <div class="font-semibold text-sm mb-2">Импорт по промокодам</div>
+  <p class="text-xs text-slate-500 mb-2">Вставь строки в формате <code>промокод заказы выручка</code> (через пробел/запятую), по строке на промокод. Сделки с этим промокодом получат атрибуцию.</p>
+  <textarea name="text" rows="6" placeholder="ANYA15 7 9800&#10;FITMAX 3 4100&#10;ZOZHGURU 12 16500" class="w-full px-3 py-2 border rounded text-sm font-mono"></textarea>
+  <button class="mt-2 bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2">Импортировать</button>
+</form>
+{% endblock %}
