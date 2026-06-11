@@ -84,6 +84,27 @@ def media_permalink(media_id: str, token: str) -> str:
         return ""
 
 
+def get_media_insights(media_id: str, token: str) -> dict[str, int]:
+    """Метрики опубликованного медиа (reach/saved/likes/comments/shares).
+    Набор метрик зависит от типа поста — берём безопасный и парсим что вернулось."""
+    out: dict[str, int] = {}
+    try:
+        r = requests.get(
+            f"{config.IG_API_BASE}/{media_id}/insights",
+            params={"metric": "reach,saved,likes,comments,shares", "access_token": token},
+            timeout=30,
+        )
+        if r.status_code >= 400:
+            return out
+        for item in r.json().get("data", []):
+            vals = item.get("values") or []
+            v = vals[0].get("value") if vals else (item.get("total_value") or {}).get("value")
+            out[item.get("name")] = int(v or 0)
+    except (requests.RequestException, ValueError):
+        pass
+    return out
+
+
 def refresh_token() -> dict[str, Any]:
     """Продлевает долгоживущий токен ещё на 60 дней.
 

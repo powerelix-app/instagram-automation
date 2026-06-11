@@ -18,7 +18,7 @@ from ..db.models import ContentPlan, Idea, Post, TrendReel
 from ..products import product_names
 from ..services import brand as brand_svc
 from ..services import ideas as ideas_svc
-from ..services import compliance, generator, planner, publisher, recon, tokens
+from ..services import compliance, generator, insights, planner, publisher, recon, tokens
 from .auth import auth_disabled, require_user
 
 log = logging.getLogger(__name__)
@@ -329,6 +329,11 @@ def post_publish(request: Request, post_id: int, _: bool = Depends(require_user)
     else:
         msg = "Ошибка публикации: " + res.get("error", "")
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
+@router.get("/analytics", response_class=HTMLResponse)
+def analytics_page(request: Request, _: bool = Depends(require_user)):
+    return templates.TemplateResponse(request, "analytics.html", _ctx(request, data=insights.overview()))
 
 
 @router.post("/post/{post_id}/schedule")

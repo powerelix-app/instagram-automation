@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Аналитика{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-1">📊 Аналитика</h1>
+<p class="text-slate-500 mb-5 text-sm">Метрики опубликованных постов (IG insights). Обновляются планировщиком раз в 6 ч.</p>
+
+<div class="grid grid-cols-3 gap-3 mb-6">
+  <div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold">{{ data.total_published }}</div><div class="text-sm text-slate-500">опубликовано всего</div></div>
+  <div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-emerald-600">{{ data.real_published }}</div><div class="text-sm text-slate-500">реально в IG</div></div>
+  <div class="bg-white border rounded-xl p-4"><div class="text-2xl font-bold text-sky-600">{{ data.simulated }}</div><div class="text-sm text-slate-500">🧪 симуляция</div></div>
+</div>
+
+{% if data.real_published == 0 %}
+<div class="bg-sky-50 border border-sky-200 text-sky-800 rounded-lg px-4 py-3 text-sm mb-6">
+  Реальных публикаций пока нет — метрики появятся, когда выключишь симуляцию (<code>CF_SIMULATE_PUBLISH=0</code>) и опубликуешь по-настоящему.
+</div>
+{% endif %}
+
+{% if data.by_rubric %}
+<div class="bg-white border rounded-xl p-4 mb-6">
+  <div class="font-semibold text-sm mb-2">Средний охват по рубрикам</div>
+  <table class="w-full text-sm">
+    <tr class="text-slate-400 text-xs"><td class="py-1">Рубрика</td><td>Постов</td><td>Ср. охват</td></tr>
+    {% for r in data.by_rubric %}
+    <tr class="border-t"><td class="py-1">{{ r.rubric }}</td><td>{{ r.posts }}</td><td class="font-medium">{{ r.avg_reach }}</td></tr>
+    {% endfor %}
+  </table>
+</div>
+{% endif %}
+
+{% if not data.rows %}<div class="text-slate-400 text-sm">Опубликованных постов пока нет.</div>{% endif %}
+<div class="space-y-2">
+  {% for p in data.rows %}
+  <a href="/post/{{ p.id }}" class="block bg-white border rounded-xl p-3 hover:border-blue-300">
+    <div class="flex items-center gap-2 text-xs flex-wrap mb-1">
+      {% if p.simulated %}<span class="bg-sky-100 text-sky-700 rounded px-2 py-0.5">🧪 симуляция</span>{% else %}<span class="bg-emerald-100 text-emerald-700 rounded px-2 py-0.5">в IG</span>{% endif %}
+      <span class="text-slate-400">{{ p.format }}{% if p.rubric %} · {{ p.rubric }}{% endif %}</span>
+      {% if p.permalink %}<a href="{{ p.permalink }}" target="_blank" class="text-blue-600 hover:underline">↗</a>{% endif %}
+    </div>
+    <div class="font-medium text-sm">{{ p.hook }}</div>
+    {% if not p.simulated %}
+    <div class="text-xs text-slate-500 mt-1 flex gap-3 flex-wrap">
+      <span>👁 охват {{ p.reach }}</span><span>❤ {{ p.likes }}</span><span>💬 {{ p.comments }}</span>
+      <span>🔖 {{ p.saves }}</span><span>↗ {{ p.shares }}</span>
+    </div>
+    {% endif %}
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}
