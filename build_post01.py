@@ -31,11 +31,6 @@ ACCENT = _hex("#00C29B")  # хлорофилл (мятно-зелёный)
 OUT = "output/post01"
 os.makedirs(OUT, exist_ok=True)
 
-# настоящий лок-ап POWERELIX: тёмный текст для кремовых слайдов, белый — для фото-слайдов
-_LOGO_DARK = Image.open("assets/brand/logo_powerelix.png").convert("RGBA")
-_LOGO_DARK = _LOGO_DARK.crop(_LOGO_DARK.getbbox())
-_LOGO_LIGHT = Image.open("assets/brand/logo_reels.png").convert("RGBA")  # белый текст
-
 
 def _wrap(d, text, font, maxw):
     lines, cur = [], ""
@@ -51,12 +46,10 @@ def _wrap(d, text, font, maxw):
     return lines
 
 
-def _mark(img, d, light=False, h=66):
-    """Настоящий лок-ап POWERELIX в шапке. light=True → белая версия (тёмный фон)."""
-    lg = _LOGO_LIGHT if light else _LOGO_DARK
-    w = int(lg.width * h / lg.height)
-    r = lg.resize((w, h), Image.LANCZOS)
-    img.paste(r, (M, 50), r)
+def _mark(img, d, light=False):
+    """Wordmark POWERELIX (Montserrat Black, без значка) — фирменное начертание.
+    Белый на тёмных слайдах, чёрный на кремовых."""
+    _spaced(d, (M, 60), "POWERELIX", _font(MONT_BLACK, 52), WHITE if light else INK, 3)
 
 
 def text_slide(path, heading, bullets=None, note=None, big=None, cta=None):
