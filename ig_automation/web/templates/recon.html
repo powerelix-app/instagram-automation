@@ -35,6 +35,17 @@
       </div>
       <div class="text-sm text-slate-600 mt-1 line-clamp-2">{{ r.caption }}</div>
 
+      {% if r.video_url %}
+      <details class="mt-2">
+        <summary class="cursor-pointer text-blue-600 text-xs select-none">▶ Смотреть видео</summary>
+        <video controls preload="none" class="mt-2 rounded w-full max-w-[260px] max-h-96 bg-black"
+               {% if r.thumb %}poster="{{ r.thumb }}"{% endif %}>
+          <source src="{{ r.video_url }}" type="video/mp4">
+          Браузер не поддерживает видео — <a href="{{ r.url }}" target="_blank" class="underline">открой в Instagram</a>.
+        </video>
+      </details>
+      {% endif %}
+
       <div class="mt-2 flex gap-2">
         {% if not r.analyzed %}
         <form action="/recon/{{ r.id }}/analyze" method="post"><button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1">🧠 Разобрать хук</button></form>
