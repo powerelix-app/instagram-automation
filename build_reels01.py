@@ -25,6 +25,15 @@ TEAL = (22, 224, 166)
 RED = (255, 99, 92)
 GREY = (200, 205, 200)
 
+# настоящий лок-ап бренда: прозрачный фон, белый текст, зелёный значок (для тёмного фона)
+_LOGO = Image.open("assets/brand/logo_reels.png").convert("RGBA")
+
+
+def paste_logo(img, x=M, y=60, h=120):
+    w = int(_LOGO.width * h / _LOGO.height)
+    lg = _LOGO.resize((w, h), Image.LANCZOS)
+    img.paste(lg, (x, y), lg)
+
 # (имя_стопкадра, верхняя_метка, главный_текст, плохое, хорошее) — None пропускается
 # кадры — НАТИВНЫЕ 9:16 (без растяжения из 4:5)
 BEATS = [
@@ -75,8 +84,7 @@ def compose(beat, idx):
     img = _scrim(_cover(base))
     d = ImageDraw.Draw(img)
     # бренд-марк сверху
-    mk = brand_mark(48); img.paste(mk, (M, 70), mk)
-    _spaced(d, (M + mk.width + 18, 80), "POWERELIX", _font(INTER_XB, 32), WHITE, 3)
+    paste_logo(img)
     # нижний блок текста
     y = H - 720
     if tag:
@@ -103,6 +111,52 @@ def compose(beat, idx):
 
 def run(cmd):
     subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# ── озвучка (OpenAI TTS) + подгон под длину видео ──
+VO_TEXT = ("Пьёшь витамины, а толку ноль? Три ошибки. "
+           "Магний пей вечером, а не утром. "
+           "Витамин D — только с жирной едой. "
+           "И не глотай всё разом. "
+           "Сохрани, чтобы не забыть.")
+VO_VOICE = "nova"  # женский тёплый; альт: shimmer/alloy/onyx
+
+
+def make_voiceover(path=f"{OUT}/voiceover.mp3"):
+    """Русская озвучка сценария через OpenAI TTS (кэш — повторно не генерим)."""
+    if os.path.exists(path):
+        return path
+    import requests
+    from ig_automation import config
+    h = {"Authorization": f"Bearer {config.OPENAI_API_KEY}", "Content-Type": "application/json"}
+    body = {"model": "gpt-4o-mini-tts", "voice": VO_VOICE, "input": VO_TEXT, "response_format": "mp3"}
+    r = requests.post("https://api.openai.com/v1/audio/speech", headers=h, json=body, timeout=120)
+    r.raise_for_status()
+    open(path, "wb").write(r.content)
+    return path
+
+
+def _dur(f):
+    out = subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
+                          "-of", "default=noprint_wrappers=1:nokey=1", f],
+                         capture_output=True, text=True)
+    return float(out.stdout.strip())
+
+
+def add_audio(video):
+    """Подмешать озвучку, растянув/сжав её РОВНО под длину видео (atempo) —
+    без стоп-кадра и без обрыва голоса."""
+    vo = make_voiceover()
+    vd, ad = _dur(video), _dur(vo)
+    # >1 = ускорить (озвучка длиннее видео); вниз не уводим ниже 0.92, чтобы речь не
+    # тянулась — лишний хвост видео обрежется по -shortest
+    tempo = min(max(ad / vd, 0.92), 2.0)
+    out = video.replace(".mp4", "_snd.mp4")
+    run(["ffmpeg", "-y", "-i", video, "-i", vo, "-filter:a", f"atempo={tempo:.4f}",
+         "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
+         "-shortest", "-movflags", "+faststart", out])
+    print(f"OK {out} (video {vd:.1f}s, vo×{tempo:.2f})")
+    return out
 
 
 def build_motion():
@@ -163,8 +217,7 @@ def build_aivideo():
         shade = Image.fromarray(np.repeat(a, W, axis=1).reshape(H, W))
         ov.paste(Image.new("RGBA", (W, H), (4, 12, 8, 255)), (0, 0), shade)
         d = ImageDraw.Draw(ov)
-        mk = brand_mark(48); ov.paste(mk, (M, 70), mk)
-        _spaced(d, (M + mk.width + 18, 80), "POWERELIX", _font(INTER_XB, 32), WHITE, 3)
+        paste_logo(ov)
         y = H - 640
         if tag:
             _spaced(d, (M, y), tag, _font(INTER_XB, 40), TEAL, 4); y += 86
@@ -198,6 +251,6 @@ def build_aivideo():
 if __name__ == "__main__":
     mode = sys.argv[1] if len(sys.argv) > 1 else "both"
     if mode in ("motion", "both"):
-        build_motion()
+        add_audio(build_motion())
     if mode in ("aivideo", "both"):
-        build_aivideo()
+        add_audio(build_aivideo())
