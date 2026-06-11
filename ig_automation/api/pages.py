@@ -4,7 +4,9 @@ from __future__ import annotations
 from typing import Any, Dict
 
 import logging
+from datetime import datetime
 from urllib.parse import quote
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -16,10 +18,11 @@ from ..db.models import ContentPlan, Idea, Post, TrendReel
 from ..products import product_names
 from ..services import brand as brand_svc
 from ..services import ideas as ideas_svc
-from ..services import compliance, generator, planner, recon, tokens
+from ..services import compliance, generator, planner, publisher, recon, tokens
 from .auth import auth_disabled, require_user
 
 log = logging.getLogger(__name__)
+_MSK = ZoneInfo("Europe/Moscow")
 
 router = APIRouter()
 templates = Jinja2Templates(directory="ig_automation/web/templates")
@@ -311,3 +314,30 @@ def post_add_disclaimer(request: Request, post_id: int, _: bool = Depends(requir
 def post_unapprove(request: Request, post_id: int, _: bool = Depends(require_user)):
     generator.back_to_review(post_id)
     return RedirectResponse(f"/post/{post_id}?msg={quote('Возвращён в ревью')}", status_code=303)
+
+
+@router.post("/post/{post_id}/publish")
+def post_publish(request: Request, post_id: int, _: bool = Depends(require_user)):
+    res = publisher.publish(post_id)
+    if res.get("ok"):
+        if res.get("simulated"):
+            msg = "🧪 Опубликовано (симуляция — в IG не ушло)"
+        elif res.get("already"):
+            msg = "Уже было опубликовано"
+        else:
+            msg = "✅ Опубликовано в Instagram"
+    else:
+        msg = "Ошибка публикации: " + res.get("error", "")
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/post/{post_id}/schedule")
+def post_schedule(request: Request, post_id: int, when: str = Form(...), _: bool = Depends(require_user)):
+    try:
+        naive = datetime.fromisoformat(when)  # из <input type=datetime-local>, трактуем как МСК
+        utc_naive = naive.replace(tzinfo=_MSK).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
+        ok = publisher.schedule(post_id, utc_naive)
+        msg = "📅 Запланировано (по МСК)" if ok else "Сначала одобри пост"
+    except Exception as e:
+        msg = f"Неверная дата: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)

@@ -211,5 +211,7 @@ def get_post(post_id: int) -> Optional[dict]:
             "id": p.id, "rubric": p.rubric, "product": p.product, "format": p.format,
             "hook": p.hook, "caption": p.caption, "hashtags": p.hashtags or [],
             "visual_idea": p.visual_idea, "cta": p.cta, "status": p.status,
+            "scheduled_at": p.scheduled_at, "ig_media_id": p.ig_media_id,
+            "permalink": p.permalink, "error": p.error,
             "assets": [{"path": a.path, "model": a.model} for a in assets],
         }

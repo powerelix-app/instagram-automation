@@ -51,3 +51,6 @@ ADMIN_PASSWORD = os.getenv("CF_ADMIN_PASSWORD", "")
 # Пока не пройден App Review Meta — публикация в IG идёт в режиме симуляции
 # (пишем в БД «как бы опубликовано», без вызова Graph API). Выключить = "0".
 SIMULATE_PUBLISH = os.getenv("CF_SIMULATE_PUBLISH", "1") not in ("0", "false", "False")
+# Публичный базовый URL сервиса — Graph API требует публичную ссылку на картинку
+# (image_url). На проде = поддомен контент-завода.
+PUBLIC_BASE = os.getenv("CF_PUBLIC_BASE", "https://content.bandabogachey.online").rstrip("/")

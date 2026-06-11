@@ -21,6 +21,16 @@ def _refresh_ig_token() -> None:
         log.warning("refresh_ig_token job failed: %s", e)
 
 
+def _publish_due() -> None:
+    try:
+        from .services import publisher
+        n = publisher.publish_due()
+        if n:
+            log.info("publish_due: опубликовано запланированных: %d", n)
+    except Exception as e:
+        log.warning("publish_due job failed: %s", e)
+
+
 def _record_tick(event) -> None:
     try:
         tokens.set_state(
@@ -34,7 +44,8 @@ def _record_tick(event) -> None:
 def start_scheduler() -> BackgroundScheduler:
     sched = BackgroundScheduler(timezone="UTC")
     sched.add_job(_refresh_ig_token, "interval", hours=24, id="refresh_ig_token")
+    sched.add_job(_publish_due, "interval", minutes=1, id="publish_due")
     sched.add_listener(_record_tick, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
     sched.start()
-    log.info("scheduler started: refresh_ig_token каждые 24ч")
+    log.info("scheduler started: refresh_ig_token 24ч, publish_due 1мин")
     return sched

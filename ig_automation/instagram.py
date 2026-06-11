@@ -39,6 +39,51 @@ def get_media(limit: int = 25) -> list[dict[str, Any]]:
     return r.json().get("data", [])
 
 
+def create_image_container(image_url: str, caption: str, token: str, ig_user_id: str) -> str:
+    """Шаг 1 публикации фото: создать media-контейнер. Возвращает creation_id."""
+    r = requests.post(
+        f"{config.IG_API_BASE}/{ig_user_id}/media",
+        data={"image_url": image_url, "caption": caption, "access_token": token},
+        timeout=60,
+    )
+    r.raise_for_status()
+    return r.json()["id"]
+
+
+def container_status(creation_id: str, token: str) -> str:
+    """Статус контейнера: IN_PROGRESS | FINISHED | ERROR | PUBLISHED."""
+    r = requests.get(
+        f"{config.IG_API_BASE}/{creation_id}",
+        params={"fields": "status_code", "access_token": token},
+        timeout=30,
+    )
+    r.raise_for_status()
+    return r.json().get("status_code", "")
+
+
+def publish_container(creation_id: str, token: str, ig_user_id: str) -> dict[str, Any]:
+    """Шаг 2: опубликовать готовый контейнер. Возвращает {'id': media_id}."""
+    r = requests.post(
+        f"{config.IG_API_BASE}/{ig_user_id}/media_publish",
+        data={"creation_id": creation_id, "access_token": token},
+        timeout=60,
+    )
+    r.raise_for_status()
+    return r.json()
+
+
+def media_permalink(media_id: str, token: str) -> str:
+    try:
+        r = requests.get(
+            f"{config.IG_API_BASE}/{media_id}",
+            params={"fields": "permalink", "access_token": token}, timeout=30,
+        )
+        r.raise_for_status()
+        return r.json().get("permalink", "")
+    except requests.RequestException:
+        return ""
+
+
 def refresh_token() -> dict[str, Any]:
     """Продлевает долгоживущий токен ещё на 60 дней.
 
