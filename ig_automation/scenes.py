@@ -147,6 +147,54 @@ def _call_xai_edit(prompt: str, refs: list[str | Path], aspect_ratio: str = "3:4
     raise last or RuntimeError("xAI edits: запрос не удался")
 
 
+def _call_xai_video(prompt: str, image: str | Path | None = None,
+                    refs: list[str | Path] | None = None, duration: int = 6,
+                    aspect_ratio: str = "9:16", resolution: str = "720p",
+                    poll_tries: int = 60, poll_every: int = 8) -> bytes:
+    """Grok image→video (xAI). Возвращает байты mp4.
+
+    POST /v1/videos/generations (async) → request_id → poll GET /v1/videos/{id}.
+    image=стартовый кадр (data URL), refs=reference_images (например, лицо бренда).
+    upload_url НЕ обязателен — xAI хостит результат и отдаёт ссылку.
+    """
+    if not config.XAI_API_KEY:
+        raise SystemExit("Не задан XAI_API_KEY в .env.")
+    h = {"Authorization": f"Bearer {config.XAI_API_KEY}", "Content-Type": "application/json"}
+    body = {"model": "grok-imagine-video", "prompt": prompt, "duration": duration,
+            "aspect_ratio": aspect_ratio, "resolution": resolution}
+    if image:
+        body["image"] = {"url": _data_url(image)}
+    if refs:
+        body["reference_images"] = [{"url": _data_url(r)} for r in refs]
+    # старт-запрос с ретраем на транзиентные сетевые/SSL-обрывы
+    rid = None
+    last: Exception | None = None
+    for i in range(4):
+        try:
+            r = requests.post("https://api.x.ai/v1/videos/generations", headers=h, json=body, timeout=120)
+            if r.status_code >= 400:
+                raise RuntimeError(f"xAI video → HTTP {r.status_code}: {r.text[:300]}")
+            rid = r.json()["request_id"]
+            break
+        except requests.RequestException as e:
+            last = e
+            time.sleep(3 * (i + 1))
+    if rid is None:
+        raise last or RuntimeError("xAI video: старт-запрос не удался")
+    for _ in range(poll_tries):
+        s = requests.get(f"https://api.x.ai/v1/videos/{rid}", headers={"Authorization": h["Authorization"]}, timeout=60)
+        d = s.json()
+        if d.get("status") == "done":
+            vurl = (d.get("video") or {}).get("url")
+            mp4 = requests.get(vurl, timeout=180)
+            mp4.raise_for_status()
+            return mp4.content
+        if d.get("status") in ("failed", "error"):
+            raise RuntimeError(f"xAI video failed: {str(d)[:300]}")
+        time.sleep(poll_every)
+    raise RuntimeError("xAI video: таймаут ожидания рендера")
+
+
 def _output_url(resp: dict) -> str:
     out = resp.get("output")
     if isinstance(out, list):
