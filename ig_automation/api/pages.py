@@ -16,7 +16,7 @@ from ..db.models import ContentPlan, Idea, Post, TrendReel
 from ..products import product_names
 from ..services import brand as brand_svc
 from ..services import ideas as ideas_svc
-from ..services import generator, planner, recon, tokens
+from ..services import compliance, generator, planner, recon, tokens
 from .auth import auth_disabled, require_user
 
 log = logging.getLogger(__name__)
@@ -263,7 +263,8 @@ def post_detail(request: Request, post_id: int, msg: str = "", _: bool = Depends
     post = generator.get_post(post_id)
     if not post:
         return RedirectResponse("/posts?msg=Пост не найден", status_code=303)
-    return templates.TemplateResponse(request, "post_detail.html", _ctx(request, post=post, msg=msg))
+    chk = generator.check_compliance(post_id)
+    return templates.TemplateResponse(request, "post_detail.html", _ctx(request, post=post, chk=chk, msg=msg))
 
 
 @router.post("/post/{post_id}/gen-visual")
@@ -286,3 +287,27 @@ def post_gen_text(request: Request, post_id: int, _: bool = Depends(require_user
         log.warning("gen text failed: %s", e)
         msg = f"Ошибка генерации текста: {e}"
     return RedirectResponse(f"/post/{post_id}?msg={msg}", status_code=303)
+
+
+@router.post("/post/{post_id}/approve")
+def post_approve(request: Request, post_id: int, override: str = Form(""), _: bool = Depends(require_user)):
+    res = generator.approve_post(post_id, override=bool(override))
+    if res.get("ok"):
+        msg = "✅ Пост одобрен" + (" (с оверрайдом — на твою ответственность!)" if override else "")
+    elif res.get("blocked"):
+        msg = "🚫 Заблокировано БАД-линтом: " + compliance.summary(res)
+    else:
+        msg = res.get("error", "ошибка")
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/post/{post_id}/add-disclaimer")
+def post_add_disclaimer(request: Request, post_id: int, _: bool = Depends(require_user)):
+    generator.add_disclaimer(post_id)
+    return RedirectResponse(f"/post/{post_id}?msg={quote('Дисклеймер БАД добавлен в подпись')}", status_code=303)
+
+
+@router.post("/post/{post_id}/unapprove")
+def post_unapprove(request: Request, post_id: int, _: bool = Depends(require_user)):
+    generator.back_to_review(post_id)
+    return RedirectResponse(f"/post/{post_id}?msg={quote('Возвращён в ревью')}", status_code=303)

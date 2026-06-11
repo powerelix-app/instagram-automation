@@ -9,7 +9,7 @@ import anthropic
 from pydantic import BaseModel, Field
 
 from .. import config, scenes
-from . import brand
+from . import brand, compliance
 from ..db.base import session_scope
 from ..db.models import Post, PostAsset
 
@@ -131,6 +131,53 @@ def generate_post_text(post_id: int) -> Optional[int]:
         post.hashtags = out.hashtags
         post.cta = out.cta
         return post_id
+
+
+# ── Аппрув + БАД-комплаенс (Фаза 5) ──
+
+def check_compliance(post_id: int) -> Optional[dict]:
+    with session_scope() as s:
+        p = s.get(Post, post_id)
+        if not p:
+            return None
+        return compliance.check(p.hook, p.caption, p.visual_idea, p.cta, p.product)
+
+
+def approve_post(post_id: int, override: bool = False) -> dict:
+    """Проверяет комплаенс и одобряет. При нарушениях без override — блок."""
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return {"ok": False, "error": "пост не найден"}
+        chk = compliance.check(post.hook, post.caption, post.visual_idea, post.cta, post.product)
+        post.disclaimer_ok = chk["disclaimer_ok"]
+        post.compliance_notes = compliance.summary(chk)
+        if chk["blocked"] and not override:
+            return {"ok": False, "blocked": True, **chk}
+        post.status = "approved"
+        if chk["blocked"] and override:
+            post.compliance_notes = "ОВЕРРАЙД: " + post.compliance_notes
+        return {"ok": True, **chk}
+
+
+def add_disclaimer(post_id: int) -> bool:
+    """Дописывает стандартный дисклеймер БАД в конец подписи (если его нет)."""
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return False
+        if "не является лекарственным средством" not in (post.caption or "").lower():
+            post.caption = ((post.caption or "").rstrip() + "\n\n" + compliance.DISCLAIMER).strip()
+        return True
+
+
+def back_to_review(post_id: int) -> bool:
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return False
+        post.status = "review"
+        return True
 
 
 # ── для UI ──

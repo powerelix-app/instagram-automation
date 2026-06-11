@@ -53,5 +53,43 @@
   </div>
 </div>
 
-<div class="text-xs text-slate-400 mt-4">Публикация и аппрув — в следующих фазах (5-6).</div>
+<div class="bg-white border rounded-xl p-4 mt-5">
+  <div class="font-semibold text-sm mb-2">✅ Аппрув + БАД-комплаенс</div>
+  {% if chk %}
+    {% if chk.violations %}
+    <div class="text-sm text-red-700 bg-red-50 border border-red-200 rounded p-2 mb-2">
+      🚫 Стоп-слова рекламы БАД: <b>{{ chk.violations | join(', ') }}</b> — нельзя «лечит / гарантирует / диагноз / от болезни». Перегенерируй текст или поправь формулировку.
+    </div>
+    {% endif %}
+    {% if not chk.disclaimer_ok %}
+    <div class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-2 flex items-center justify-between gap-2 flex-wrap">
+      <span>⚠️ Нет дисклеймера «не является лекарственным средством» — для продуктового поста обязателен.</span>
+      <form action="/post/{{ post.id }}/add-disclaimer" method="post"><button class="text-xs bg-amber-600 hover:bg-amber-500 text-white rounded px-3 py-1 whitespace-nowrap">➕ Вставить дисклеймер</button></form>
+    </div>
+    {% endif %}
+    {% if not chk.blocked %}
+    <div class="text-sm text-emerald-700 mb-2">✅ Чисто — нарушений нет, можно публиковать.</div>
+    {% endif %}
+
+    <div class="flex gap-3 items-center flex-wrap">
+      {% if post.status != 'approved' %}
+        {% if chk.blocked %}
+        <form action="/post/{{ post.id }}/approve" method="post">
+          <input type="hidden" name="override" value="1">
+          <button class="text-sm bg-slate-700 hover:bg-slate-600 text-white rounded px-4 py-2"
+                  onclick="return confirm('Одобрить ВОПРЕКИ нарушениям? Это риск штрафа за рекламу БАД (до 500к ₽).')">Одобрить всё равно (override)</button>
+        </form>
+        {% else %}
+        <form action="/post/{{ post.id }}/approve" method="post">
+          <button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2">✅ Одобрить</button>
+        </form>
+        {% endif %}
+      {% else %}
+        <span class="text-sm text-emerald-700 font-medium">Одобрен ✅</span>
+        <form action="/post/{{ post.id }}/unapprove" method="post"><button class="text-xs text-slate-500 hover:underline">вернуть в ревью</button></form>
+      {% endif %}
+    </div>
+  {% endif %}
+  <div class="text-xs text-slate-400 mt-3">Публикация в Instagram — Фаза 6 (Graph API + планировщик).</div>
+</div>
 {% endblock %}
