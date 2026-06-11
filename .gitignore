@@ -4,7 +4,9 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
-output/*
-!output/.gitkeep
+# output/ — симлинк в Google Drive (dev-data/instagram-automation-output);
+# без слеша, чтобы игнорировать и симлинк, и обычную папку. На новом Маке пересоздать:
+#   ln -s "$HOME/Library/CloudStorage/GoogleDrive-powerelix.work@gmail.com/Мой диск/dev-data/instagram-automation-output" output
+output
 data/content_factory.db
 data/media/
