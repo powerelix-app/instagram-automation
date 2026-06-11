@@ -17,12 +17,25 @@
   <span class="text-xs text-slate-400">точнее тема — релевантнее: омега 3, витамин д, креатин, коллаген</span>
 </form>
 
+<form action="/recon/scrape-account" method="post" class="bg-white border rounded-xl p-4 mb-6 flex flex-wrap gap-3 items-end">
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">📷 Топ-Reels аккаунта <span class="text-emerald-600">(надёжнее ключей)</span></label>
+    <input name="username" required placeholder="@nutrition_blog" class="px-3 py-2 border rounded w-56">
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Сколько</label>
+    <input name="limit" type="number" value="30" min="5" max="50" class="px-3 py-2 border rounded w-28">
+  </div>
+  <button class="bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2">Собрать аккаунт</button>
+  <span class="text-xs text-slate-400">конкуренты-БАДы, нутрициологи, фитнес — их лучшие ролики по просмотрам</span>
+</form>
+
 {% if topics %}
 <div class="flex items-center gap-2 flex-wrap mb-4 text-sm">
   <span class="text-slate-400">Тема:</span>
   {% for t in topics %}
   <a href="/recon?topic={{ t.topic | urlencode }}"
-     class="px-2.5 py-1 rounded-full {% if sel_topic == t.topic %}bg-blue-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">#{{ t.topic }} <span class="opacity-60">{{ t.count }}</span></a>
+     class="px-2.5 py-1 rounded-full {% if sel_topic == t.topic %}bg-blue-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">{% if t.topic.startswith('@') %}{{ t.topic }}{% else %}#{{ t.topic }}{% endif %} <span class="opacity-60">{{ t.count }}</span></a>
   {% endfor %}
   <a href="/recon?topic=__all__"
      class="px-2.5 py-1 rounded-full {% if sel_topic == '__all__' %}bg-slate-800 text-white{% else %}bg-slate-100 text-slate-500 hover:bg-slate-200{% endif %}">все вперемешку</a>

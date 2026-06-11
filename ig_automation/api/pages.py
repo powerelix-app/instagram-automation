@@ -113,6 +113,18 @@ def recon_scrape(request: Request, topic: str = Form(...), limit: int = Form(30)
     return RedirectResponse(f"/recon?topic={quote(t)}&msg={quote(msg)}", status_code=303)
 
 
+@router.post("/recon/scrape-account")
+def recon_scrape_account(request: Request, username: str = Form(...), limit: int = Form(30), _: bool = Depends(require_user)):
+    handle = "@" + username.lstrip("@").strip().strip("/").split("/")[-1]
+    try:
+        added = recon.scrape_account(username, limit=min(limit, 50))
+        msg = f"{handle}: собрано {added}" if added else f"{handle}: 0 (приватный аккаунт или нет Reels?)"
+    except Exception as e:
+        log.warning("recon scrape-account failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/recon?topic={quote(handle)}&msg={quote(msg)}", status_code=303)
+
+
 @router.post("/recon/{reel_id}/analyze")
 def recon_analyze(request: Request, reel_id: int, _: bool = Depends(require_user)):
     try:

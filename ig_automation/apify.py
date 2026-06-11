@@ -144,6 +144,24 @@ def search_reels(topic: str, limit: int = 30, newer_than: str = "30 days") -> li
     return reels
 
 
+def account_reels(username: str, limit: int = 30) -> list[dict[str, Any]]:
+    """Топ-Reels конкретного аккаунта (по убыванию просмотров). Источник гарантированно
+    нишевый, если аккаунт нишевый — в отличие от мусорной выдачи по ключевому слову."""
+    user = username.lstrip("@").strip("/").split("/")[-1]
+    url = f"https://www.instagram.com/{user}/"
+    try:
+        posts = _run_actor(ACTOR, {
+            "directUrls": [url], "resultsType": "posts",
+            "resultsLimit": limit, "addParentData": False,
+        })
+    except (requests.RequestException, RuntimeError) as e:
+        log.warning("apify account_reels failed for %r: %s", user, e)
+        return []
+    reels = [r for r in (_normalize_reel(i) for i in posts) if r]
+    reels.sort(key=lambda r: r["play_count"], reverse=True)
+    return reels
+
+
 def scrape_profile(username: str, posts_limit: int = 30) -> dict[str, Any]:
     """Возвращает профиль (bio, подписчики) + последние посты с метриками."""
     user = username.lstrip("@").strip("/").split("/")[-1]

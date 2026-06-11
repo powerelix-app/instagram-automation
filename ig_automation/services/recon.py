@@ -87,13 +87,8 @@ def _score_relevance(reels: List[dict]) -> List[tuple]:
         return [(True, "")] * len(reels)
 
 
-def scrape_topic(topic: str, limit: int = 30) -> int:
-    """Собирает Reels по теме в trend_reels (дедуп по url) + AI-оценка релевантности.
-    Возвращает кол-во новых."""
-    reels = apify.search_reels(topic, limit=limit)
-    if not reels:
-        log.warning("scrape_topic %r: 0 роликов (актор пуст или сломался)", topic)
-        return 0
+def _store_reels(reels: List[dict], topic: str) -> int:
+    """AI-оценка релевантности пачки + дедуп по url + запись. Возвращает кол-во новых."""
     scores = _score_relevance(reels)
     added = 0
     with session_scope() as s:
@@ -102,27 +97,39 @@ def scrape_topic(topic: str, limit: int = 30) -> int:
             if url and s.query(TrendReel).filter(TrendReel.url == url).first():
                 continue
             s.add(TrendReel(
-                source_actor=apify.ACTOR,
-                url=url,
-                username=r["username"],
-                play_count=r["play_count"],
-                likes=r["likes"],
-                comments=r["comments"],
-                caption=r["caption"],
-                hashtags=r["hashtags"],
-                video_url=r["video_url"],
+                source_actor=apify.ACTOR, url=url, username=r["username"],
+                play_count=r["play_count"], likes=r["likes"], comments=r["comments"],
+                caption=r["caption"], hashtags=r["hashtags"], video_url=r["video_url"],
                 local_media_path=_download_thumb(r["thumbnail_url"]),
-                thumbnail_url=r["thumbnail_url"],
-                music_info=str(r["music_info"])[:512],
-                transcript=str(r["transcript"]),
-                topic=topic,
-                relevant=rel,
-                relevance_reason=(reason or "")[:255],
+                thumbnail_url=r["thumbnail_url"], music_info=str(r["music_info"])[:512],
+                transcript=str(r["transcript"]), topic=topic,
+                relevant=rel, relevance_reason=(reason or "")[:255],
             ))
             added += 1
-    rel_n = sum(1 for rel, _ in scores)
-    log.info("scrape_topic %r: +%d новых из %d (релевантных %d)", topic, added, len(reels), rel_n)
+    log.info("store %r: +%d из %d (релевантных %d)", topic, added, len(reels),
+             sum(1 for rel, _ in scores))
     return added
+
+
+def scrape_topic(topic: str, limit: int = 30) -> int:
+    """Сбор по ключевому слову (выдача часто глобально-вирусная — AI-фильтр чистит)."""
+    reels = apify.search_reels(topic, limit=limit)
+    if not reels:
+        log.warning("scrape_topic %r: 0 роликов", topic)
+        return 0
+    return _store_reels(reels, topic)
+
+
+def scrape_account(handle: str, limit: int = 30) -> int:
+    """Сбор топ-Reels нишевого аккаунта (релевантность по построению). topic = @handle."""
+    h = handle.lstrip("@").strip().strip("/").split("/")[-1]
+    if not h:
+        return 0
+    reels = apify.account_reels(h, limit=limit)
+    if not reels:
+        log.warning("scrape_account %r: 0 роликов", h)
+        return 0
+    return _store_reels(reels, "@" + h)
 
 
 # ── Разбор хука (Claude) ──
