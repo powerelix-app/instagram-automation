@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}{{ b.name or b.handle }}{% endblock %}
+{% block content %}
+<a href="/bloggers" class="text-blue-600 text-sm hover:underline">← К блогерам</a>
+
+<div class="bg-white border rounded-xl p-4 mt-2 mb-5">
+  <div class="flex items-center gap-2 flex-wrap mb-2">
+    <h1 class="text-xl font-semibold">{{ b.name or b.handle or "Блогер" }}</h1>
+    {% if b.handle %}<a href="{{ b.url or '#' }}" target="_blank" class="text-slate-400 text-sm">{{ b.handle }} ↗</a>{% endif %}
+    <span class="text-xs bg-slate-100 rounded px-2 py-0.5">{{ b.platform }}</span>
+  </div>
+  <div class="text-sm text-slate-600 flex gap-3 flex-wrap mb-3">
+    {% if b.niche %}<span>🎯 {{ b.niche }}</span>{% endif %}
+    {% if b.followers %}<span>👥 {{ b.followers }}</span>{% endif %}
+    {% if b.er %}<span>ER {{ b.er }}</span>{% endif %}
+    {% if b.city %}<span>📍 {{ b.city }}</span>{% endif %}
+    {% if b.contact %}<span>✉️ {{ b.contact }}</span>{% endif %}
+    {% if b.usual_rate %}<span>💰 {{ b.usual_rate }}</span>{% endif %}
+  </div>
+  {% if b.notes %}<div class="text-sm text-slate-500 mb-3">{{ b.notes }}</div>{% endif %}
+  <div class="flex gap-2 items-center flex-wrap">
+    <form action="/blogger/{{ b.id }}/status" method="post" class="flex gap-1 items-center">
+      <select name="status" onchange="this.form.submit()" class="text-xs border rounded px-2 py-1">
+        {% for k, lbl in status_labels.items() %}<option value="{{ k }}" {% if b.status == k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+      </select>
+    </form>
+    <form action="/blogger/{{ b.id }}/delete" method="post" onsubmit="return confirm('Удалить блогера и его сделки?')"><button class="text-xs text-red-500 hover:underline">удалить</button></form>
+  </div>
+</div>
+
+<div class="flex items-center justify-between mb-2">
+  <h2 class="text-lg font-semibold">Сделки</h2>
+  <form action="/blogger/{{ b.id }}/add-deal" method="post" class="flex gap-2 items-center">
+    <input name="product" placeholder="Товар/SKU" class="px-2 py-1 border rounded text-sm w-32">
+    <select name="collab_type" class="px-2 py-1 border rounded text-sm"><option value="gift">Бартер</option><option value="paid">Оплата</option><option value="cpa">CPA</option></select>
+    <button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1">+ Сделка</button>
+  </form>
+</div>
+
+{% if not deals %}<div class="text-slate-400 text-sm">Сделок нет. Создай первую.</div>{% endif %}
+<div class="space-y-3">
+  {% for d in deals %}
+  <div class="bg-white border rounded-xl p-3">
+    <div class="flex items-center gap-2 flex-wrap text-sm mb-2">
+      <span class="font-semibold">Сделка #{{ d.id }}</span>
+      {% if d.product %}<span class="bg-emerald-50 text-emerald-700 rounded px-2 py-0.5 text-xs">{{ d.product }}</span>{% endif %}
+      <span class="bg-slate-100 rounded px-2 py-0.5 text-xs">{{ d.collab_type }}</span>
+      {% if d.outcome != 'open' %}<span class="bg-amber-50 text-amber-700 rounded px-2 py-0.5 text-xs">{{ d.outcome }}</span>{% endif %}
+    </div>
+    {# воронка #}
+    <form action="/deal/{{ d.id }}/stage" method="post" class="flex gap-1 items-center mb-2 flex-wrap">
+      <input type="hidden" name="bid" value="{{ b.id }}">
+      <span class="text-xs text-slate-400">стадия:</span>
+      <select name="stage" onchange="this.form.submit()" class="text-xs border rounded px-2 py-1">
+        {% for k, lbl in stages %}<option value="{{ k }}" {% if d.stage == k %}selected{% endif %}>{{ lbl }}</option>{% endfor %}
+      </select>
+    </form>
+    {# атрибуция + комплаенс #}
+    <form action="/deal/{{ d.id }}/update" method="post" class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+      <input type="hidden" name="blogger_id" value="{{ b.id }}">
+      <input name="promo_code" value="{{ d.promo_code }}" placeholder="промокод" class="px-2 py-1 border rounded">
+      <input name="replacement_article" value="{{ d.replacement_article }}" placeholder="подмен. артикул WB" class="px-2 py-1 border rounded">
+      <input name="utm" value="{{ d.utm }}" placeholder="UTM" class="px-2 py-1 border rounded">
+      <input name="erid" value="{{ d.erid }}" placeholder="erid (маркировка)" class="px-2 py-1 border rounded">
+      <input name="platform" value="{{ d.platform }}" placeholder="площадка" class="px-2 py-1 border rounded">
+      <input name="offer_value" value="{{ d.offer_value }}" placeholder="оплата" class="px-2 py-1 border rounded">
+      <input name="tracking" value="{{ d.tracking }}" placeholder="трек товара" class="px-2 py-1 border rounded">
+      <input name="post_url" value="{{ d.post_url }}" placeholder="ссылка на пост" class="px-2 py-1 border rounded">
+      <input name="attributed_orders" type="number" value="{{ d.attributed_orders }}" placeholder="заказов" class="px-2 py-1 border rounded">
+      <input name="attributed_revenue" type="number" value="{{ d.attributed_revenue }}" placeholder="выручка ₽" class="px-2 py-1 border rounded">
+      <button class="bg-slate-700 text-white rounded px-3 py-1 col-span-2 sm:col-span-1">Сохранить</button>
+      <span class="text-slate-400 self-center">📌 erid обязателен для рекламы</span>
+    </form>
+    <div class="mt-2 flex gap-2">
+      <form action="/deal/{{ d.id }}/outcome" method="post"><input type="hidden" name="bid" value="{{ b.id }}"><input type="hidden" name="outcome" value="won"><button class="text-xs text-emerald-600 hover:underline">✓ выиграна</button></form>
+      <form action="/deal/{{ d.id }}/outcome" method="post"><input type="hidden" name="bid" value="{{ b.id }}"><input type="hidden" name="outcome" value="lost"><button class="text-xs text-red-500 hover:underline">✗ слита</button></form>
+      <form action="/deal/{{ d.id }}/outcome" method="post"><input type="hidden" name="bid" value="{{ b.id }}"><input type="hidden" name="outcome" value="open"><button class="text-xs text-slate-400 hover:underline">↺ открыта</button></form>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

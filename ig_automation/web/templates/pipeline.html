@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Воронка{% endblock %}
+{% block content %}
+<div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+  <h1 class="text-2xl font-semibold">📋 Воронка сделок</h1>
+  <a href="/bloggers" class="text-sm text-blue-600 hover:underline">← Блогеры</a>
+</div>
+<p class="text-slate-500 mb-4 text-sm">Открытые сделки по стадиям. Кликни сделку — откроется карточка блогера.</p>
+
+<div class="flex gap-3 overflow-x-auto pb-4">
+  {% for c in cols %}
+  <div class="bg-slate-100 rounded-xl p-2 min-w-[180px] w-[180px] shrink-0">
+    <div class="text-xs font-bold text-slate-500 px-1 mb-2">{{ c.label }} <span class="text-slate-400">{{ c.cards|length }}</span></div>
+    <div class="space-y-2">
+      {% for it in c.cards %}
+      <a href="/blogger/{{ it.blogger.id }}" class="block bg-white border rounded-lg p-2 hover:border-blue-300">
+        <div class="text-xs font-medium truncate">{{ it.blogger.name or it.blogger.handle or "—" }}</div>
+        {% if it.deal.product %}<div class="text-[10px] text-emerald-700 truncate">{{ it.deal.product }}</div>{% endif %}
+        <div class="text-[10px] text-slate-400">{{ it.deal.collab_type }}{% if it.deal.promo_code %} · {{ it.deal.promo_code }}{% endif %}</div>
+      </a>
+      {% endfor %}
+      {% if not c.cards %}<div class="text-[10px] text-slate-300 px-1">—</div>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

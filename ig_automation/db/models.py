@@ -124,6 +124,51 @@ class PostAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class Blogger(Base):
+    """UGC-блогер для охвата (движок Б). Источник нишевого контента/рекламы."""
+    __tablename__ = "bloggers"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), default="")
+    handle: Mapped[str] = mapped_column(String(128), default="")  # @ник
+    platform: Mapped[str] = mapped_column(String(16), default="instagram")  # vk|telegram|instagram|youtube|tiktok
+    url: Mapped[str] = mapped_column(String(512), default="")
+    niche: Mapped[str] = mapped_column(String(128), default="")  # нутрициолог/фитнес/ЗОЖ/мамы
+    followers: Mapped[int] = mapped_column(Integer, default=0)
+    er: Mapped[str] = mapped_column(String(16), default="")  # вовлечённость, как строка (напр. «3.2%»)
+    city: Mapped[str] = mapped_column(String(64), default="")
+    audience: Mapped[str] = mapped_column(String(255), default="")  # пол/возраст/гео
+    contact: Mapped[str] = mapped_column(String(255), default="")  # TG/почта
+    collab_type: Mapped[str] = mapped_column(String(16), default="gift")  # gift|paid|cpa
+    usual_rate: Mapped[str] = mapped_column(String(64), default="")
+    status: Mapped[str] = mapped_column(String(16), default="lead")  # lead|active|ambassador|blacklist
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class Deal(Base):
+    """Сделка/коллаборация с блогером + воронка + атрибуция + комплаенс."""
+    __tablename__ = "deals"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    blogger_id: Mapped[int] = mapped_column(ForeignKey("bloggers.id"))
+    product: Mapped[str] = mapped_column(String(128), default="")  # SKU/nmId
+    # воронка: lead→qualify→contacted→negotiating→agreed→shipped→content→review→published→paid→repeat
+    stage: Mapped[str] = mapped_column(String(16), default="lead")
+    outcome: Mapped[str] = mapped_column(String(16), default="open")  # open|won|lost|no_reply|not_fit
+    collab_type: Mapped[str] = mapped_column(String(16), default="gift")
+    platform: Mapped[str] = mapped_column(String(16), default="")  # площадка размещения
+    promo_code: Mapped[str] = mapped_column(String(32), default="")
+    replacement_article: Mapped[str] = mapped_column(String(32), default="")  # подменный артикул WB
+    utm: Mapped[str] = mapped_column(String(128), default="")
+    erid: Mapped[str] = mapped_column(String(64), default="")  # маркировка рекламы
+    offer_value: Mapped[str] = mapped_column(String(64), default="")  # оплата/ценность
+    tracking: Mapped[str] = mapped_column(String(64), default="")  # трек отправления товара
+    post_url: Mapped[str] = mapped_column(String(512), default="")
+    attributed_orders: Mapped[int] = mapped_column(Integer, default=0)
+    attributed_revenue: Mapped[int] = mapped_column(Integer, default=0)
+    notes: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
 class BrandAsset(Base):
     """Бренд-ассеты для генерации: лицо AI-модели, логотип, банки товаров."""
     __tablename__ = "brand_assets"

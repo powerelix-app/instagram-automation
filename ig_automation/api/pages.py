@@ -18,6 +18,7 @@ from ..db.models import ContentPlan, Idea, Post, TrendReel
 from ..products import product_names
 from ..services import brand as brand_svc
 from ..services import ideas as ideas_svc
+from ..services import bloggers as bloggers_svc
 from ..services import compliance, generator, insights, planner, publisher, recon, tokens
 from .auth import auth_disabled, require_user
 
@@ -345,6 +346,78 @@ def post_publish(request: Request, post_id: int, _: bool = Depends(require_user)
 @router.get("/analytics", response_class=HTMLResponse)
 def analytics_page(request: Request, _: bool = Depends(require_user)):
     return templates.TemplateResponse(request, "analytics.html", _ctx(request, data=insights.overview()))
+
+
+# ── Движок Б: UGC-CRM блогеров ──
+
+@router.get("/bloggers", response_class=HTMLResponse)
+def bloggers_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(
+        request, "bloggers.html",
+        _ctx(request, bloggers=bloggers_svc.list_bloggers(), status_labels=bloggers_svc.STATUS_LABELS, msg=msg),
+    )
+
+
+@router.post("/bloggers/add")
+async def bloggers_add(request: Request, _: bool = Depends(require_user)):
+    form = await request.form()
+    bid = bloggers_svc.add_blogger(**{k: form[k] for k in form})
+    return RedirectResponse(f"/blogger/{bid}", status_code=303)
+
+
+@router.get("/blogger/{bid}", response_class=HTMLResponse)
+def blogger_detail(request: Request, bid: int, msg: str = "", _: bool = Depends(require_user)):
+    data = bloggers_svc.get_blogger(bid)
+    if not data:
+        return RedirectResponse("/bloggers?msg=Блогер не найден", status_code=303)
+    return templates.TemplateResponse(
+        request, "blogger_detail.html",
+        _ctx(request, b=data["b"], deals=data["deals"], stages=bloggers_svc.STAGES,
+             status_labels=bloggers_svc.STATUS_LABELS, msg=msg),
+    )
+
+
+@router.post("/blogger/{bid}/status")
+def blogger_status(request: Request, bid: int, status: str = Form(...), _: bool = Depends(require_user)):
+    bloggers_svc.set_status(bid, status)
+    return RedirectResponse(f"/blogger/{bid}?msg={quote('Статус обновлён')}", status_code=303)
+
+
+@router.post("/blogger/{bid}/delete")
+def blogger_delete(request: Request, bid: int, _: bool = Depends(require_user)):
+    bloggers_svc.delete_blogger(bid)
+    return RedirectResponse("/bloggers?msg=Блогер удалён", status_code=303)
+
+
+@router.post("/blogger/{bid}/add-deal")
+def blogger_add_deal(request: Request, bid: int, product: str = Form(""), collab_type: str = Form("gift"),
+                     platform: str = Form(""), _: bool = Depends(require_user)):
+    bloggers_svc.add_deal(bid, product=product, collab_type=collab_type, platform=platform)
+    return RedirectResponse(f"/blogger/{bid}?msg={quote('Сделка создана')}", status_code=303)
+
+
+@router.post("/deal/{deal_id}/stage")
+def deal_stage(request: Request, deal_id: int, bid: int = Form(...), stage: str = Form(...), _: bool = Depends(require_user)):
+    bloggers_svc.set_deal_stage(deal_id, stage)
+    return RedirectResponse(f"/blogger/{bid}?msg={quote('Стадия обновлена')}", status_code=303)
+
+
+@router.post("/deal/{deal_id}/outcome")
+def deal_outcome(request: Request, deal_id: int, bid: int = Form(...), outcome: str = Form(...), _: bool = Depends(require_user)):
+    bloggers_svc.set_deal_outcome(deal_id, outcome)
+    return RedirectResponse(f"/blogger/{bid}?msg={quote('Исход обновлён')}", status_code=303)
+
+
+@router.post("/deal/{deal_id}/update")
+async def deal_update(request: Request, deal_id: int, _: bool = Depends(require_user)):
+    form = await request.form()
+    bloggers_svc.update_deal(deal_id, **{k: form[k] for k in form})
+    return RedirectResponse(f"/blogger/{form.get('blogger_id', '')}?msg={quote('Сделка обновлена')}", status_code=303)
+
+
+@router.get("/pipeline", response_class=HTMLResponse)
+def pipeline_page(request: Request, _: bool = Depends(require_user)):
+    return templates.TemplateResponse(request, "pipeline.html", _ctx(request, cols=bloggers_svc.pipeline()))
 
 
 @router.post("/post/{post_id}/schedule")
