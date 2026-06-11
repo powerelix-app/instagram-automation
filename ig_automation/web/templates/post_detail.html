@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Пост #{{ post.id }}{% endblock %}
+{% block content %}
+<a href="/posts" class="text-blue-600 text-sm hover:underline">← К постам</a>
+<div class="flex items-center gap-2 mt-2 mb-4 flex-wrap">
+  <h1 class="text-2xl font-semibold">📝 Пост #{{ post.id }}</h1>
+  <span class="text-xs rounded px-2 py-0.5 {% if post.status == 'review' %}bg-blue-100 text-blue-700{% elif post.status == 'approved' %}bg-emerald-100 text-emerald-700{% elif post.status == 'failed' %}bg-red-100 text-red-700{% elif post.status == 'generating' %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-600{% endif %}">{{ post.status }}</span>
+  <span class="text-xs text-slate-400">{{ post.format }}{% if post.rubric %} · {{ post.rubric }}{% endif %}{% if post.product and post.product != '—' %} · {{ post.product }}{% endif %}</span>
+</div>
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+  <!-- Визуал -->
+  <div>
+    <div class="bg-white border rounded-xl p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-semibold text-sm">🎨 Визуал</span>
+        <form action="/post/{{ post.id }}/gen-visual" method="post">
+          <button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1">
+            {% if post.assets %}↻ Перегенерировать{% else %}Сгенерировать{% endif %}
+          </button>
+        </form>
+      </div>
+      {% if post.assets %}
+        {% for a in post.assets %}
+        <img src="{{ a.path }}" class="w-full rounded mb-2 border">
+        {% endfor %}
+      {% else %}
+        <div class="aspect-[4/5] bg-slate-100 rounded flex items-center justify-center text-slate-300 text-sm">визуал ещё не сгенерирован</div>
+      {% endif %}
+      <div class="text-xs text-slate-400 mt-1">🎬 {{ post.visual_idea or "—" }}</div>
+      <div class="text-[11px] text-slate-400 mt-1">генерация с постоянным лицом бренда (Grok), ~15-30 сек</div>
+    </div>
+  </div>
+
+  <!-- Текст -->
+  <div>
+    <div class="bg-white border rounded-xl p-3">
+      <div class="flex items-center justify-between mb-2">
+        <span class="font-semibold text-sm">✍️ Текст</span>
+        <form action="/post/{{ post.id }}/gen-text" method="post">
+          <button class="text-xs bg-blue-600 hover:bg-blue-500 text-white rounded px-3 py-1">
+            {% if post.caption %}↻ Перегенерировать{% else %}Сгенерировать{% endif %}
+          </button>
+        </form>
+      </div>
+      <div class="text-sm">
+        <div class="font-semibold mb-1">{{ post.hook or "(без хука)" }}</div>
+        {% if post.caption %}<div class="text-slate-700 whitespace-pre-line">{{ post.caption }}</div>{% else %}<div class="text-slate-400">подпись ещё не сгенерирована</div>{% endif %}
+        {% if post.hashtags %}<div class="text-blue-600 text-xs mt-2">{% for h in post.hashtags %}#{{ h }} {% endfor %}</div>{% endif %}
+        {% if post.cta %}<div class="text-xs text-slate-500 mt-2">➡️ {{ post.cta }}</div>{% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="text-xs text-slate-400 mt-4">Публикация и аппрув — в следующих фазах (5-6).</div>
+{% endblock %}

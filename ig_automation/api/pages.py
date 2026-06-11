@@ -13,7 +13,7 @@ from .. import config
 from ..db.base import session_scope
 from ..db.models import ContentPlan, Idea, Post, TrendReel
 from ..services import ideas as ideas_svc
-from ..services import planner, recon, tokens
+from ..services import generator, planner, recon, tokens
 from .auth import auth_disabled, require_user
 
 log = logging.getLogger(__name__)
@@ -178,5 +178,45 @@ def ideas_add(
 @router.post("/ideas/{idea_id}/to-post")
 def ideas_to_post(request: Request, idea_id: int, _: bool = Depends(require_user)):
     post_id = ideas_svc.to_post(idea_id)
-    msg = "Черновик поста создан (управление — в Фазе 4)" if post_id else "Идея не найдена"
-    return RedirectResponse(f"/ideas?msg={msg}", status_code=303)
+    if post_id:
+        return RedirectResponse(f"/post/{post_id}", status_code=303)
+    return RedirectResponse("/ideas?msg=Идея не найдена", status_code=303)
+
+
+# ── Фаза 4: Посты и генерация ──
+
+@router.get("/posts", response_class=HTMLResponse)
+def posts_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(
+        request, "posts.html", _ctx(request, posts=generator.list_posts(), msg=msg)
+    )
+
+
+@router.get("/post/{post_id}", response_class=HTMLResponse)
+def post_detail(request: Request, post_id: int, msg: str = "", _: bool = Depends(require_user)):
+    post = generator.get_post(post_id)
+    if not post:
+        return RedirectResponse("/posts?msg=Пост не найден", status_code=303)
+    return templates.TemplateResponse(request, "post_detail.html", _ctx(request, post=post, msg=msg))
+
+
+@router.post("/post/{post_id}/gen-visual")
+def post_gen_visual(request: Request, post_id: int, _: bool = Depends(require_user)):
+    try:
+        generator.generate_post_assets(post_id)
+        msg = "Визуал сгенерирован"
+    except Exception as e:
+        log.warning("gen visual failed: %s", e)
+        msg = f"Ошибка генерации визуала: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={msg}", status_code=303)
+
+
+@router.post("/post/{post_id}/gen-text")
+def post_gen_text(request: Request, post_id: int, _: bool = Depends(require_user)):
+    try:
+        generator.generate_post_text(post_id)
+        msg = "Текст сгенерирован"
+    except Exception as e:
+        log.warning("gen text failed: %s", e)
+        msg = f"Ошибка генерации текста: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={msg}", status_code=303)
