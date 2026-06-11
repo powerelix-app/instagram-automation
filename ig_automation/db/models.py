@@ -40,6 +40,8 @@ class TrendReel(Base):
     music_info: Mapped[str] = mapped_column(String(512), default="")
     transcript: Mapped[str] = mapped_column(Text, default="")
     topic: Mapped[str] = mapped_column(String(128), default="")
+    relevant: Mapped[bool] = mapped_column(Boolean, default=True)
+    relevance_reason: Mapped[str] = mapped_column(String(255), default="")
     scraped_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

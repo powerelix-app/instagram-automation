@@ -44,15 +44,60 @@ def _download_thumb(url: str) -> str:
         return ""
 
 
+class _RelItem(BaseModel):
+    index: int
+    relevant: bool
+    reason: str = Field(default="", description="кратко почему (рус.)")
+
+
+class _RelOut(BaseModel):
+    items: List[_RelItem]
+
+
+_REL_SYSTEM = """Бренд POWERELIX — БАДы, витамины, спортивное питание, ЗОЖ. Тебе дают список
+вирусных Reels (автор, текст, хэштеги). Для КАЖДОГО реши, релевантен ли он как источник
+идей/хуков для контента ЭТОГО бренда: тема здоровья, нутрициологии, витаминов/добавок,
+спорта/фитнеса, энергии, иммунитета, сна, ЖКТ, красоты-изнутри, самочувствия, питания.
+Отсекай (relevant=false) чисто развлекательный вирусняк без связи со здоровьем: relatable-юмор,
+танцы, отношения, быт, дети-приколы, мода, мемы. Пограничные про здоровье/тело/энергию —
+оставляй (relevant=true). Верни по элементу на каждый индекс."""
+
+
+def _score_relevance(reels: List[dict]) -> List[tuple]:
+    """Один батч-запрос к Claude: relevant + причина для каждого ролика.
+    Возвращает [(bool, reason)] выровненный по reels. Любой сбой → все релевантны."""
+    if not config.ANTHROPIC_API_KEY or not reels:
+        return [(True, "")] * len(reels)
+    lines = []
+    for i, r in enumerate(reels):
+        tags = " ".join(r.get("hashtags") or [])[:200]
+        cap = (r.get("caption") or "").replace("\n", " ")[:200]
+        lines.append(f"[{i}] @{r.get('username', '')} | {cap} | теги: {tags}")
+    try:
+        client = anthropic.Anthropic()
+        resp = client.messages.parse(
+            model=config.CLAUDE_MODEL, max_tokens=4000, system=_REL_SYSTEM,
+            messages=[{"role": "user", "content": "Ролики:\n" + "\n".join(lines)}],
+            output_format=_RelOut,
+        )
+        verdict = {it.index: (it.relevant, it.reason) for it in resp.parsed_output.items}
+        return [verdict.get(i, (True, "")) for i in range(len(reels))]
+    except Exception as e:
+        log.warning("relevance scoring failed, keeping all: %s", e)
+        return [(True, "")] * len(reels)
+
+
 def scrape_topic(topic: str, limit: int = 30) -> int:
-    """Собирает Reels по теме в trend_reels (дедуп по url). Возвращает кол-во новых."""
+    """Собирает Reels по теме в trend_reels (дедуп по url) + AI-оценка релевантности.
+    Возвращает кол-во новых."""
     reels = apify.search_reels(topic, limit=limit)
     if not reels:
         log.warning("scrape_topic %r: 0 роликов (актор пуст или сломался)", topic)
         return 0
+    scores = _score_relevance(reels)
     added = 0
     with session_scope() as s:
-        for r in reels:
+        for r, (rel, reason) in zip(reels, scores):
             url = r.get("url") or ""
             if url and s.query(TrendReel).filter(TrendReel.url == url).first():
                 continue
@@ -71,9 +116,12 @@ def scrape_topic(topic: str, limit: int = 30) -> int:
                 music_info=str(r["music_info"])[:512],
                 transcript=str(r["transcript"]),
                 topic=topic,
+                relevant=rel,
+                relevance_reason=(reason or "")[:255],
             ))
             added += 1
-    log.info("scrape_topic %r: +%d новых из %d", topic, added, len(reels))
+    rel_n = sum(1 for rel, _ in scores)
+    log.info("scrape_topic %r: +%d новых из %d (релевантных %d)", topic, added, len(reels), rel_n)
     return added
 
 
@@ -179,13 +227,23 @@ def list_topics() -> List[dict]:
         return [{"topic": t, "count": c} for t, c in rows if t]
 
 
-def list_reels(topic: Optional[str] = None) -> List[dict]:
-    """Список роликов (с пометкой, разобран ли) для UI, по убыванию просмотров.
-    topic задан → только эта тема (иначе всё подряд, перемешано по темам)."""
+def count_irrelevant(topic: Optional[str] = None) -> int:
+    with session_scope() as s:
+        q = s.query(TrendReel).filter(TrendReel.relevant.is_(False))
+        if topic:
+            q = q.filter(TrendReel.topic == topic)
+        return q.count()
+
+
+def list_reels(topic: Optional[str] = None, include_irrelevant: bool = False) -> List[dict]:
+    """Список роликов для UI, по убыванию просмотров. По умолчанию — только
+    релевантные нише (AI-фильтр); include_irrelevant=True показывает и отсеянные."""
     with session_scope() as s:
         q = s.query(TrendReel)
         if topic:
             q = q.filter(TrendReel.topic == topic)
+        if not include_irrelevant:
+            q = q.filter(TrendReel.relevant.is_(True))
         reels = q.order_by(TrendReel.play_count.desc()).all()
         analyzed_ids = {a.trend_reel_id for a in s.query(HookAnalysis.trend_reel_id).all()}
         out = []
@@ -203,5 +261,6 @@ def list_reels(topic: Optional[str] = None) -> List[dict]:
                 "thumb": r.local_media_path or r.thumbnail_url,
                 "video_url": r.video_url, "topic": r.topic,
                 "analyzed": r.id in analyzed_ids, "analysis": an,
+                "relevant": r.relevant, "reason": r.relevance_reason,
             })
         return out

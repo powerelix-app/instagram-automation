@@ -29,13 +29,20 @@
 </div>
 {% endif %}
 
+{% if irrelevant_count and not show_all %}
+<div class="text-xs text-slate-400 mb-3">🤖 AI-фильтр спрятал {{ irrelevant_count }} нерелевантных ролика(ов).
+  <a href="/recon?topic={{ sel_topic | urlencode }}&show=all" class="text-blue-600 hover:underline">показать всё</a></div>
+{% elif show_all %}
+<div class="text-xs text-slate-400 mb-3"><a href="/recon?topic={{ sel_topic | urlencode }}" class="text-blue-600 hover:underline">← скрыть нерелевантные</a></div>
+{% endif %}
+
 {% if not reels %}
-<div class="text-slate-400 text-sm">{% if sel_topic and sel_topic != '__all__' %}Нет роликов по теме «{{ sel_topic }}». Собери — кнопка выше.{% else %}Пока пусто. Введи тему и собери ролики.{% endif %}</div>
+<div class="text-slate-400 text-sm">{% if sel_topic and sel_topic != '__all__' %}Нет релевантных роликов по теме «{{ sel_topic }}». Собери — кнопка выше.{% else %}Пока пусто. Введи тему и собери ролики.{% endif %}</div>
 {% endif %}
 
 <div class="space-y-3">
   {% for r in reels %}
-  <div class="bg-white border rounded-xl p-3 flex gap-3">
+  <div class="bg-white border rounded-xl p-3 flex gap-3 {% if not r.relevant %}opacity-60 border-dashed{% endif %}">
     {% if r.thumb %}<img src="{{ r.thumb }}" class="w-24 h-32 object-cover rounded shrink-0">{% else %}<div class="w-24 h-32 bg-slate-100 rounded shrink-0 flex items-center justify-center text-2xl">🎞️</div>{% endif %}
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2 text-sm flex-wrap">
@@ -43,6 +50,7 @@
         <span class="text-slate-500">▶ {{ "{:,}".format(r.play_count).replace(",", " ") }}</span>
         <span class="text-slate-400">❤ {{ r.likes }} · 💬 {{ r.comments }}</span>
         <span class="text-xs bg-slate-100 px-2 py-0.5 rounded">#{{ r.topic }}</span>
+        {% if not r.relevant %}<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded" title="{{ r.reason }}">🚫 не по теме</span>{% endif %}
         {% if r.url %}<a href="{{ r.url }}" target="_blank" class="text-blue-600 text-xs hover:underline">открыть ↗</a>{% endif %}
       </div>
       <div class="text-sm text-slate-600 mt-1 line-clamp-2">{{ r.caption }}</div>
