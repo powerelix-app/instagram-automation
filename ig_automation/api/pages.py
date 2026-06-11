@@ -281,6 +281,17 @@ def post_gen_visual(request: Request, post_id: int, _: bool = Depends(require_us
     return RedirectResponse(f"/post/{post_id}?msg={msg}", status_code=303)
 
 
+@router.post("/post/{post_id}/gen-carousel")
+def post_gen_carousel(request: Request, post_id: int, slides: int = Form(4), _: bool = Depends(require_user)):
+    try:
+        n = generator.generate_carousel(post_id, slides=slides)
+        msg = f"Карусель: сгенерировано слайдов {n}" if n else "Не удалось сгенерировать"
+    except Exception as e:
+        log.warning("gen carousel failed: %s", e)
+        msg = f"Ошибка генерации карусели: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
 @router.post("/post/{post_id}/gen-text")
 def post_gen_text(request: Request, post_id: int, _: bool = Depends(require_user)):
     try:

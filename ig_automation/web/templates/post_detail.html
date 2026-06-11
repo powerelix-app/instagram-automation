@@ -20,6 +20,11 @@
           </button>
         </form>
       </div>
+      {% if post.format == 'carousel' %}
+      <form action="/post/{{ post.id }}/gen-carousel" method="post" class="mb-2">
+        <button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1 w-full">🖼️ Сгенерировать карусель (4 слайда, ~1-2 мин)</button>
+      </form>
+      {% endif %}
       {% if post.assets %}
         {% for a in post.assets %}
         <img src="{{ a.path }}" class="w-full rounded mb-2 border">

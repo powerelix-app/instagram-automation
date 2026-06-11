@@ -77,6 +77,20 @@ def model_ref() -> Path:
     return DEFAULT_MODEL
 
 
+def logo_ref() -> Optional[Path]:
+    """Путь к последнему загруженному логотипу (для оверлея на сгенерированный визуал)."""
+    with session_scope() as s:
+        a = (
+            s.query(BrandAsset).filter(BrandAsset.kind == "logo")
+            .order_by(BrandAsset.id.desc()).first()
+        )
+        if a:
+            p = _abs(a.path)
+            if p.exists():
+                return p
+    return None
+
+
 def product_ref(product_name: str) -> Optional[Path]:
     """Банка товара по подстроке (asset.product входит в название из поста, или наоборот)."""
     if not product_name or product_name.strip() in ("", "—"):

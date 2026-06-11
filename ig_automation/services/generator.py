@@ -46,9 +46,29 @@ def _visual_prompt(visual_idea: str, hook: str, product: str, with_product_ref: 
 _FORMAT_RATIO = {"reels": "9:16", "stories": "9:16", "carousel": "4:5", "photo": "4:5"}
 
 
-def generate_post_assets(post_id: int, ratio: Optional[str] = None) -> Optional[int]:
+def _apply_logo(image_path) -> None:
+    """Накладывает логотип бренда (если загружен в /brand) в правый нижний угол."""
+    logo = brand.logo_ref()
+    if not logo:
+        return
+    try:
+        from PIL import Image
+        base = Image.open(image_path).convert("RGBA")
+        lg = Image.open(logo).convert("RGBA")
+        w = int(base.width * 0.18)
+        h = max(1, int(lg.height * w / lg.width))
+        lg = lg.resize((w, h), Image.LANCZOS)
+        m = int(base.width * 0.04)
+        base.alpha_composite(lg, (base.width - w - m, base.height - h - m))
+        base.convert("RGB").save(image_path)
+    except Exception as e:
+        log.warning("logo overlay failed: %s", e)
+
+
+def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str = "") -> Optional[int]:
     """Генерит визуал с лицом бренда, кладёт в data/media, пишет PostAsset.
-    ratio=None → выбирается по формату поста. Возвращает id ассета."""
+    ratio=None → по формату поста; extra → доп. подсказка к промпту (для слайдов карусели).
+    Возвращает id ассета."""
     if not config.XAI_API_KEY:
         raise RuntimeError("Не задан XAI_API_KEY в .env (нужен для генерации визуала Grok)")
     with session_scope() as s:
@@ -66,6 +86,8 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None) -> Optional[
     if prod_ref:
         refs.append(prod_ref)
     prompt = _visual_prompt(visual_idea, hook, product, with_product_ref=bool(prod_ref))
+    if extra:
+        prompt += ". " + extra
 
     try:
         scene_path = scenes.generate_branded(
@@ -73,6 +95,7 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None) -> Optional[
         )
         dest = config.MEDIA_DIR / f"post_{post_id}_{ord_}.png"
         shutil.copy(scene_path, dest)
+        _apply_logo(dest)
     except Exception:
         with session_scope() as s:  # вернуть статус, не оставлять в «generating»
             p = s.get(Post, post_id)
@@ -89,6 +112,30 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None) -> Optional[
             p.status = "review"
         s.flush()
         return asset.id
+
+
+_SLIDE_HINTS = [
+    "",  # слайд 1 — герой: лицо бренда + продукт
+    "крупный план продукта на чистом светлом столе, мягкий студийный свет, минимализм",
+    "лайфстайл: модель использует продукт в повседневной обстановке, естественно",
+    "макро-детали продукта и текстуры, свежесть, аппетитный кадр",
+    "продукт рядом с натуральными ингредиентами (фрукты, зелень), чистая эстетика",
+]
+
+
+def generate_carousel(post_id: int, slides: int = 4) -> int:
+    """Генерит N слайдов карусели (герой + контент-кадры в стиле бренда). Каждый слайд
+    добавляется как PostAsset (ord по порядку). Возвращает кол-во созданных слайдов."""
+    slides = max(2, min(slides, 8))
+    made = 0
+    for i in range(slides):
+        hint = _SLIDE_HINTS[i] if i < len(_SLIDE_HINTS) else "ещё один кадр в фирменном стиле бренда"
+        try:
+            if generate_post_assets(post_id, extra=hint):
+                made += 1
+        except Exception as e:
+            log.warning("carousel slide %d failed: %s", i, e)
+    return made
 
 
 # ── Текст (если у черновика нет подписи — напр. пришёл из идеи) ──
