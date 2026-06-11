@@ -39,6 +39,10 @@ IMAGE_MODEL = os.getenv("IMAGE_MODEL", "black-forest-labs/flux-dev")  # дефо
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 # ── xAI / Grok (grok-2-image) — пока не задан, добавить XAI_API_KEY в .env ──
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
+# Модель брендовой генерации (лицо+банка через image-edit с референсами).
+# Дефолт — Replicate google/nano-banana (xAI-кредиты кончились 2026-06-11).
+# Вернуть Grok: CF_BRANDED_MODEL=grok (нужны кредиты xAI).
+BRANDED_MODEL = os.getenv("CF_BRANDED_MODEL", "google/nano-banana")
 
 # ── Content Factory сервис (FastAPI) ──
 DB_PATH = os.getenv("CF_DB_PATH", str(DATA_DIR / "content_factory.db"))

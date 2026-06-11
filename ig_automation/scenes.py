@@ -254,18 +254,37 @@ BRAND_FACE = config.ROOT / "assets" / "brand" / "ai_model.png"
 _AR = {"4:5": "3:4", "9:16": "9:16", "1:1": "1:1"}
 
 
+def _call_replicate_edit(model: str, prompt: str, refs: list[str | Path], ratio: str) -> bytes:
+    """Брендовый image-edit через Replicate (nano-banana и т.п.) с референс-картинками.
+    Референсы — data-URL в image_input (мультиреференс: лицо + банка)."""
+    body: dict = {"prompt": prompt, "image_input": [_data_url(r) for r in refs], "output_format": "png"}
+    if "nano-banana" in model:
+        body["aspect_ratio"] = ratio
+    resp = _call_replicate(model, body)
+    url = _output_url(resp)
+    r = requests.get(url, timeout=120)
+    r.raise_for_status()
+    return r.content
+
+
 def generate_branded(
     prompt: str,
     refs: list[str | Path] | None = None,
     ratio: str = "4:5",
     out_name: str | None = None,
 ) -> Path:
-    """Grok image-edit с референсом постоянного лица бренда → тот же персонаж,
-    сцена меняется промптом. refs=None → только лицо (assets/brand/ai_model.png)."""
+    """Image-edit с референсом постоянного лица бренда → тот же персонаж, сцена по
+    промпту. Бэкенд по config.BRANDED_MODEL: Replicate google/nano-banana (дефолт)
+    или Grok (CF_BRANDED_MODEL=grok). refs=None → только лицо."""
     if ratio not in RATIOS:
         raise ValueError(f"ratio {ratio!r} не из {list(RATIOS)}")
     refs = refs or [BRAND_FACE]
-    content = _call_xai_edit(f"{sanitize(prompt)}. no text, no logo", refs, _AR[ratio])
+    full = f"{sanitize(prompt)}. no text, no logo"
+    model = config.BRANDED_MODEL
+    if "grok" in model:
+        content = _call_xai_edit(full, refs, _AR[ratio])
+    else:
+        content = _call_replicate_edit(model, full, refs, ratio)
     im = _fit(Image.open(BytesIO(content)).convert("RGB"), ratio)
     SCENES_DIR.mkdir(parents=True, exist_ok=True)
     out = SCENES_DIR / (out_name or "branded.png")
