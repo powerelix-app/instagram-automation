@@ -42,6 +42,15 @@
 </div>
 {% endif %}
 
+<div class="flex items-center gap-2 flex-wrap mb-4 text-sm">
+  <span class="text-slate-400">Язык:</span>
+  <a href="/recon?topic={{ sel_topic|urlencode }}{% if show_all %}&show=all{% endif %}"
+     class="px-2.5 py-1 rounded-full {% if not sel_lang %}bg-slate-800 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">🌐 все</a>
+  <a href="/recon?topic={{ sel_topic|urlencode }}&lang=ru{% if show_all %}&show=all{% endif %}"
+     class="px-2.5 py-1 rounded-full {% if sel_lang == 'ru' %}bg-blue-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">🇷🇺 русские</a>
+  <span class="text-xs text-slate-400">иностранные — для механик; основа — русские</span>
+</div>
+
 {% if irrelevant_count and not show_all %}
 <div class="text-xs text-slate-400 mb-3">🤖 AI-фильтр спрятал {{ irrelevant_count }} нерелевантных ролика(ов).
   <a href="/recon?topic={{ sel_topic | urlencode }}&show=all" class="text-blue-600 hover:underline">показать всё</a></div>
@@ -63,6 +72,7 @@
         <span class="text-slate-500">▶ {{ "{:,}".format(r.play_count).replace(",", " ") }}</span>
         <span class="text-slate-400">❤ {{ r.likes }} · 💬 {{ r.comments }}</span>
         <span class="text-xs bg-slate-100 px-2 py-0.5 rounded">#{{ r.topic }}</span>
+        {% if r.lang == 'ru' %}<span class="text-xs" title="русский">🇷🇺</span>{% elif r.lang %}<span class="text-xs text-slate-400" title="{{ r.lang }}">🌐 {{ r.lang }}</span>{% endif %}
         {% if not r.relevant %}<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded" title="{{ r.reason }}">🚫 не по теме</span>{% endif %}
         {% if r.url %}<a href="{{ r.url }}" target="_blank" class="text-blue-600 text-xs hover:underline">открыть ↗</a>{% endif %}
       </div>

@@ -42,6 +42,7 @@ class TrendReel(Base):
     topic: Mapped[str] = mapped_column(String(128), default="")
     relevant: Mapped[bool] = mapped_column(Boolean, default=True)
     relevance_reason: Mapped[str] = mapped_column(String(255), default="")
+    lang: Mapped[str] = mapped_column(String(8), default="")  # ru|en|other
     scraped_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

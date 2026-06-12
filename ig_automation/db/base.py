@@ -45,6 +45,7 @@ def _migrate(engine) -> None:
             ("thumbnail_url", "VARCHAR DEFAULT ''"),
             ("relevant", "BOOLEAN DEFAULT 1"),
             ("relevance_reason", "VARCHAR DEFAULT ''"),
+            ("lang", "VARCHAR DEFAULT ''"),
         ],
         "deals": [
             ("last_touch_at", "DATETIME"),

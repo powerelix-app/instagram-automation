@@ -48,26 +48,30 @@ class _RelItem(BaseModel):
     index: int
     relevant: bool
     reason: str = Field(default="", description="кратко почему (рус.)")
+    lang: str = Field(default="other", description="язык ролика: ru, en или other")
 
 
 class _RelOut(BaseModel):
     items: List[_RelItem]
 
 
-_REL_SYSTEM = """Бренд POWERELIX — БАДы, витамины, спортивное питание, ЗОЖ. Тебе дают список
-вирусных Reels (автор, текст, хэштеги). Для КАЖДОГО реши, релевантен ли он как источник
-идей/хуков для контента ЭТОГО бренда: тема здоровья, нутрициологии, витаминов/добавок,
-спорта/фитнеса, энергии, иммунитета, сна, ЖКТ, красоты-изнутри, самочувствия, питания.
-Отсекай (relevant=false) чисто развлекательный вирусняк без связи со здоровьем: relatable-юмор,
-танцы, отношения, быт, дети-приколы, мода, мемы. Пограничные про здоровье/тело/энергию —
-оставляй (relevant=true). Верни по элементу на каждый индекс."""
+_REL_SYSTEM = """Бренд POWERELIX — БАДы, витамины, спортпит, ЗОЖ; аудитория РУССКОЯЗЫЧНАЯ.
+Тебе дают список вирусных Reels (автор, текст, хэштеги). Для КАЖДОГО верни:
+- relevant: релевантен ли как источник идей/хуков для контента бренда. Считай релевантным ШИРОКО:
+  здоровье, самочувствие, тело, энергия, сон, иммунитет, ЖКТ, питание, нутрициология,
+  витамины/добавки, спорт/фитнес, красота-изнутри, привычки/режим, продуктивность через тело.
+  Отсекай (relevant=false) ТОЛЬКО чисто развлекательный вирусняк без связи со здоровьем/телом:
+  relatable-юмор, фильтры/эффекты, «угадай животное», мемы про отношения, мода, танцы, дети-приколы.
+- reason: кратко почему (рус.).
+- lang: язык ролика по тексту/хэштегам — "ru" (русский), "en" (английский/латиница), "other".
+Верни по элементу на каждый индекс."""
 
 
 def _score_relevance(reels: List[dict]) -> List[tuple]:
-    """Один батч-запрос к Claude: relevant + причина для каждого ролика.
-    Возвращает [(bool, reason)] выровненный по reels. Любой сбой → все релевантны."""
+    """Один батч-запрос к Claude: relevant + причина + язык для каждого ролика.
+    Возвращает [(bool, reason, lang)] выровненный по reels. Любой сбой → все релевантны."""
     if not config.ANTHROPIC_API_KEY or not reels:
-        return [(True, "")] * len(reels)
+        return [(True, "", "")] * len(reels)
     lines = []
     for i, r in enumerate(reels):
         tags = " ".join(r.get("hashtags") or [])[:200]
@@ -80,11 +84,12 @@ def _score_relevance(reels: List[dict]) -> List[tuple]:
             messages=[{"role": "user", "content": "Ролики:\n" + "\n".join(lines)}],
             output_format=_RelOut,
         )
-        verdict = {it.index: (it.relevant, it.reason) for it in resp.parsed_output.items}
-        return [verdict.get(i, (True, "")) for i in range(len(reels))]
+        verdict = {it.index: (it.relevant, it.reason, (getattr(it, "lang", "") or "").lower())
+                   for it in resp.parsed_output.items}
+        return [verdict.get(i, (True, "", "")) for i in range(len(reels))]
     except Exception as e:
         log.warning("relevance scoring failed, keeping all: %s", e)
-        return [(True, "")] * len(reels)
+        return [(True, "", "")] * len(reels)
 
 
 def _store_reels(reels: List[dict], topic: str) -> int:
@@ -92,7 +97,7 @@ def _store_reels(reels: List[dict], topic: str) -> int:
     scores = _score_relevance(reels)
     added = 0
     with session_scope() as s:
-        for r, (rel, reason) in zip(reels, scores):
+        for r, (rel, reason, lang) in zip(reels, scores):
             url = r.get("url") or ""
             if url and s.query(TrendReel).filter(TrendReel.url == url).first():
                 continue
@@ -103,11 +108,11 @@ def _store_reels(reels: List[dict], topic: str) -> int:
                 local_media_path=_download_thumb(r["thumbnail_url"]),
                 thumbnail_url=r["thumbnail_url"], music_info=str(r["music_info"])[:512],
                 transcript=str(r["transcript"]), topic=topic,
-                relevant=rel, relevance_reason=(reason or "")[:255],
+                relevant=rel, relevance_reason=(reason or "")[:255], lang=(lang or "")[:8],
             ))
             added += 1
-    log.info("store %r: +%d из %d (релевантных %d)", topic, added, len(reels),
-             sum(1 for rel, _ in scores))
+    log.info("store %r: +%d из %d (релевантных %d, ru %d)", topic, added, len(reels),
+             sum(1 for rel, _, _ in scores), sum(1 for _, _, lang in scores if lang == "ru"))
     return added
 
 
@@ -242,15 +247,19 @@ def count_irrelevant(topic: Optional[str] = None) -> int:
         return q.count()
 
 
-def list_reels(topic: Optional[str] = None, include_irrelevant: bool = False) -> List[dict]:
+def list_reels(topic: Optional[str] = None, include_irrelevant: bool = False,
+               lang: str = "") -> List[dict]:
     """Список роликов для UI, по убыванию просмотров. По умолчанию — только
-    релевантные нише (AI-фильтр); include_irrelevant=True показывает и отсеянные."""
+    релевантные нише (AI-фильтр); include_irrelevant=True показывает и отсеянные;
+    lang="ru" → только русскоязычные."""
     with session_scope() as s:
         q = s.query(TrendReel)
         if topic:
             q = q.filter(TrendReel.topic == topic)
         if not include_irrelevant:
             q = q.filter(TrendReel.relevant.is_(True))
+        if lang:
+            q = q.filter(TrendReel.lang == lang)
         reels = q.order_by(TrendReel.play_count.desc()).all()
         analyzed_ids = {a.trend_reel_id for a in s.query(HookAnalysis.trend_reel_id).all()}
         out = []
@@ -268,6 +277,6 @@ def list_reels(topic: Optional[str] = None, include_irrelevant: bool = False) ->
                 "thumb": r.local_media_path or r.thumbnail_url,
                 "video_url": r.video_url, "topic": r.topic,
                 "analyzed": r.id in analyzed_ids, "analysis": an,
-                "relevant": r.relevant, "reason": r.relevance_reason,
+                "relevant": r.relevant, "reason": r.relevance_reason, "lang": r.lang,
             })
         return out

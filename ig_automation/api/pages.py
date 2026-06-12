@@ -84,7 +84,7 @@ def status(request: Request, _: bool = Depends(require_user)):
 # ── Фаза 2: Разведка ──
 
 @router.get("/recon", response_class=HTMLResponse)
-def recon_page(request: Request, topic: str = "", show: str = "", msg: str = "", _: bool = Depends(require_user)):
+def recon_page(request: Request, topic: str = "", show: str = "", lang: str = "", msg: str = "", _: bool = Depends(require_user)):
     topics = recon.list_topics()
     include = show == "all"  # показать отсеянные AI-фильтром
     # "" → последняя тема; "__all__" → все темы вперемешку
@@ -97,8 +97,8 @@ def recon_page(request: Request, topic: str = "", show: str = "", msg: str = "",
         request, "recon.html",
         _ctx(
             request,
-            reels=recon.list_reels(filt, include_irrelevant=include),
-            topics=topics, sel_topic=sel, show_all=include,
+            reels=recon.list_reels(filt, include_irrelevant=include, lang=lang),
+            topics=topics, sel_topic=sel, show_all=include, sel_lang=lang,
             irrelevant_count=recon.count_irrelevant(filt), msg=msg,
         ),
     )
