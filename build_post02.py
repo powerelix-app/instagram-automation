@@ -140,7 +140,7 @@ def hero_product_slide(path, scene, heading, benefit, disclaimer=None):
 
 # ── слайды ──
 cover(f"{OUT}/01.png", "output/scenes/post02_s1.png",
-      "Качели настроения — это не характер",
+      "Это не ты — это гормоны",
       "Почему женское состояние скачет — и что мягко помогает", "СОХРАНИ  →")
 text_slide(f"{OUT}/02.png", "Знакомо?", bullets=[
     "Любая мелочь выводит из себя",
