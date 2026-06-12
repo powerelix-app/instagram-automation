@@ -20,7 +20,8 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from .config import ROOT
 from .post_template import _cutout, _hex
 
-FONTS = Path.home() / "Library" / "Fonts"
+_BUNDLED = ROOT / "assets" / "fonts"
+FONTS = _BUNDLED if (_BUNDLED / "montserrat-black.ttf").exists() else Path.home() / "Library" / "Fonts"
 MONT_BLACK = str(FONTS / "montserrat-black.ttf")
 INTER_XB = str(FONTS / "Inter-ExtraBold.otf")
 INTER_SB = str(FONTS / "Inter-SemiBold.otf")

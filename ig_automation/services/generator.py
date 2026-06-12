@@ -381,25 +381,28 @@ def generate_reels_video(post_id: int) -> Optional[int]:
 # ── Текст-оверлей: чёткие плашки поверх чистой картинки (Pillow) ──
 
 class OverlayText(BaseModel):
-    headline: str = Field(description="цепкий заголовок для картинки, 2-5 слов, БЕЗ кавычек и точки")
-    points: List[str] = Field(description="2-4 коротких пункта-тезиса по 2-4 слова (не предложения!), без точек")
-    disclaimer: str = Field(description="для продуктовых постов 'БАД. Не лекарство', иначе пустая строка")
+    headline: str = Field(description="цепкий заголовок-крючок для обложки, 2-6 слов, БЕЗ кавычек и точки в конце")
+    subtitle: str = Field(description="одна короткая строка-подзаголовок (выгода), до 6-7 слов, без точки")
+    tag: str = Field(description="короткий тег-призыв капсом, напр 'СОХРАНИ  →' или 'ЛИСТАЙ  →'")
+    disclaimer: str = Field(description="для продуктовых постов 'БАД. Не является лекарственным средством', иначе пустая строка")
 
 
-_OVERLAY_SYSTEM = """Ты — дизайнер-копирайтер инфографики Instagram для бренда БАД POWERELIX (РФ).
-Придумай ЛАКОНИЧНЫЙ текст ДЛЯ НАЛОЖЕНИЯ на картинку: цепкий заголовок + 2-4 пункта-плашки.
-Очень коротко: плашки — это тезисы по 2-4 слова, НЕ предложения. На русском, на «ты», без воды.
-БАД-правила РФ: без «лечит/диагностирует/гарантирует», мягкие формулировки. Верни строго по схеме."""
+_OVERLAY_SYSTEM = """Ты — дизайнер-копирайтер обложек Instagram для бренда БАД POWERELIX (РФ).
+Придумай текст для ОБЛОЖКИ поста: цепкий ЗАГОЛОВОК-крючок (крупный, 2-6 слов) + одна строка
+ПОДЗАГОЛОВКА (короткая выгода) + короткий ТЕГ-призыв ('СОХРАНИ  →' или 'ЛИСТАЙ  →').
+Коротко, на русском, на «ты», без воды и без кавычек. БАД-правила РФ: без «лечит/диагностирует/
+гарантирует», мягкие формулировки. Для продуктовых постов дисклеймер заполни, иначе пустым.
+Верни строго по схеме."""
 
 
 def suggest_overlay_text(post_id: int) -> dict:
-    """Claude придумывает короткий текст для наложения (заголовок + 2-4 плашки + дисклеймер)."""
+    """Claude придумывает текст обложки (заголовок + подзаголовок + тег + дисклеймер)."""
     if not config.ANTHROPIC_API_KEY:
         raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
     with session_scope() as s:
         post = s.get(Post, post_id)
         if not post:
-            return {"headline": "", "points": [], "disclaimer": ""}
+            return {"headline": "", "subtitle": "", "tag": overlay.DEFAULT_TAG, "disclaimer": ""}
         brief = (
             f"Хук: {post.hook or '—'}\nИдея визуала: {post.visual_idea or '—'}\n"
             f"Рубрика: {post.rubric or '—'}\nПродукт: {post.product or '—'}"
@@ -411,19 +414,20 @@ def suggest_overlay_text(post_id: int) -> dict:
             brief += "\n\n" + ctx
     client = anthropic.Anthropic()
     resp = client.messages.parse(
-        model=config.CLAUDE_MODEL, max_tokens=800, system=_OVERLAY_SYSTEM,
-        messages=[{"role": "user", "content": f"Текст для наложения на картинку поста:\n\n{brief}"}],
+        model=config.CLAUDE_MODEL, max_tokens=600, system=_OVERLAY_SYSTEM,
+        messages=[{"role": "user", "content": f"Текст обложки поста:\n\n{brief}"}],
         output_format=OverlayText,
     )
     o = resp.parsed_output
-    return {"headline": o.headline, "points": [p for p in o.points if p][:4], "disclaimer": o.disclaimer}
+    return {"headline": o.headline, "subtitle": o.subtitle,
+            "tag": o.tag or overlay.DEFAULT_TAG, "disclaimer": o.disclaimer}
 
 
 def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,
-                       headline: Optional[str] = None, points: Optional[List[str]] = None,
-                       disclaimer: Optional[str] = None) -> Optional[int]:
-    """Накладывает текст на чистую картинку (источник или последний визуал) → новый ассет.
-    Если текст не передан — придумывает через Claude. Композит помечается model='overlay'."""
+                       headline: Optional[str] = None, subtitle: Optional[str] = None,
+                       tag: Optional[str] = None, disclaimer: Optional[str] = None) -> Optional[int]:
+    """Накладывает фирменную обложку-текст на чистую картинку (источник или последний визуал)
+    → новый ассет (model='overlay'). Если текст не передан — придумывает через Claude."""
     with session_scope() as s:
         post = s.get(Post, post_id)
         if not post:
@@ -437,17 +441,15 @@ def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,
             raise RuntimeError("Нет картинки для наложения — сначала сгенерируй визуал")
         src_path = config.MEDIA_DIR / src.path.replace("/media/", "", 1)
         ord_ = q.count()
-    if headline is None and points is None:
+    if headline is None and subtitle is None:
         txt = suggest_overlay_text(post_id)
-        headline, points, disclaimer = txt["headline"], txt["points"], txt["disclaimer"]
-    points = [p for p in (points or []) if p]
+        headline, subtitle, tag, disclaimer = txt["headline"], txt["subtitle"], txt["tag"], txt["disclaimer"]
     dest = config.MEDIA_DIR / f"post_{post_id}_txt{ord_}.png"
-    overlay.render(src_path, points=points, headline=headline or "",
-                   disclaimer=disclaimer or "", out_path=str(dest))
-    _apply_logo(dest)
+    overlay.render_cover(src_path, headline=headline or "", subtitle=subtitle or "",
+                         tag=tag or overlay.DEFAULT_TAG, disclaimer=disclaimer or "", out_path=str(dest))
     with session_scope() as s:
         a = PostAsset(post_id=post_id, kind="image", path=f"/media/{dest.name}", model="overlay",
-                      prompt=((headline or "") + " | " + " / ".join(points))[:300], ord=ord_)
+                      prompt=((headline or "") + " — " + (subtitle or ""))[:300], ord=ord_)
         s.add(a)
         s.flush()
         return a.id

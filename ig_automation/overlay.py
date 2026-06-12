@@ -1,28 +1,27 @@
-"""Наложение текста на сгенерированную картинку (Pillow) — чёткие плашки с правильной
-кириллицей. AI-модель текст рисовать не умеет (коверкает), поэтому текст рисуем сами."""
+"""Наложение фирменного текста на фото поста (Pillow) — стиль обложки POWERELIX:
+вордмарк POWERELIX (Montserrat Black, без логотипа) + крупный заголовок Montserrat Black
+капсом + акцент-черта #00C29B + подзаголовок (Inter) + тег «СОХРАНИ →» + дисклеймер БАД.
+
+Переиспользует движок brand_overlay (тот же, что делает эталонные карусели build_post01).
+AI текст в кадре коверкает (особенно кириллицу), поэтому фото генерим чистым, текст рисуем сами."""
 from __future__ import annotations
 
 from pathlib import Path
 from typing import List, Optional
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
-from . import config
+from . import brand_overlay as bo
 
-FONTS = config.ROOT / "assets" / "fonts"
-_XB = str(FONTS / "Inter-ExtraBold.otf")
-_SB = str(FONTS / "Inter-SemiBold.otf")
-
-
-def _font(path: str, size: int) -> ImageFont.FreeTypeFont:
-    return ImageFont.truetype(path, size)
+ACCENT = bo._hex("#00C29B")
+DEFAULT_TAG = "СОХРАНИ  →"
 
 
-def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, maxw: float) -> List[str]:
+def _wrap(d, text: str, font, maxw: float) -> List[str]:
     lines, cur = [], ""
     for w in (text or "").split():
         t = (cur + " " + w).strip()
-        if draw.textlength(t, font=font) <= maxw:
+        if d.textlength(t, font=font) <= maxw:
             cur = t
         else:
             if cur:
@@ -30,60 +29,57 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.FreeTypeFont, ma
             cur = w
     if cur:
         lines.append(cur)
-    return lines or [""]
+    return lines
 
 
-def render(bg_path, points: List[str], headline: str = "", disclaimer: str = "",
-           out_path: Optional[str] = None) -> Path:
-    """Накладывает заголовок (вверху) + плашки-пункты (низ-центр) + дисклеймер (низ)."""
-    im = Image.open(bg_path).convert("RGB")
-    W, H = im.size
-    draw = ImageDraw.Draw(im, "RGBA")
-    pad = int(W * 0.06)
+def render_cover(bg_path, headline: str, subtitle: str = "", tag: str = DEFAULT_TAG,
+                 disclaimer: str = "", out_path: Optional[str] = None) -> Path:
+    """Кладёт обложку-текст на фото. Раскладка якорится снизу вверх с явными зазорами:
+    [дисклеймер] [тег] [подзаголовок] [акцент] [заголовок] — ничего не слипается."""
+    W, H, M = bo.W, bo.H, bo.M
+    img = bo._scrim(bo._cover(Image.open(bg_path)), top=140, bottom=660)
+    d = ImageDraw.Draw(img)
+    bo._spaced(d, (M, 60), "POWERELIX", bo._font(bo.MONT_BLACK, 52), bo.WHITE, 3)
 
-    # Заголовок сверху (с тенью для читаемости на любом фоне)
-    if headline:
-        fh = _font(_XB, max(28, int(W * 0.072)))
-        y = int(H * 0.055)
-        for ln in _wrap(draw, headline.upper(), fh, W - 2 * pad):
-            tw = draw.textlength(ln, font=fh)
-            x = (W - tw) // 2
-            draw.text((x + 3, y + 3), ln, font=fh, fill=(0, 0, 0, 130))
-            draw.text((x, y), ln, font=fh, fill=(255, 255, 255, 255))
-            y += int(fh.size * 1.14)
+    fh = bo._font(bo.MONT_BLACK, 104)
+    fs = bo._font(bo.INTER_SB, 42)
+    ft = bo._font(bo.INTER_MED, 28)
+    fd = bo._font(bo.INTER_MED, 24)
+    HEAD_LH, SUB_LH = 110, 54
 
-    # Плашки-пункты в нижней половине, по центру
-    fp = _font(_XB, max(24, int(W * 0.052)))
-    bpx, bpy = int(W * 0.045), int(W * 0.026)
-    gap = int(W * 0.022)
-    rows = []
-    for p in [p for p in points if p][:4]:
-        plines = _wrap(draw, p.upper(), fp, int(W * 0.76))
-        h = len(plines) * int(fp.size * 1.12) + 2 * bpy
-        w = max(draw.textlength(l, font=fp) for l in plines) + 2 * bpx
-        rows.append((plines, int(w), int(h)))
-    total = sum(h for _, _, h in rows) + gap * max(0, len(rows) - 1)
-    y = int(H * 0.92) - total if rows else 0  # прижимаем к низу
-    y = max(int(H * 0.52), y)
-    for plines, w, h in rows:
-        x0 = (W - w) // 2
-        draw.rounded_rectangle((x0, y, x0 + w, y + h), radius=int(h * 0.24), fill=(255, 255, 255, 240))
-        ty = y + bpy
-        for l in plines:
-            tw = draw.textlength(l, font=fp)
-            draw.text(((W - tw) // 2, ty), l, font=fp, fill=(28, 28, 38, 255))
-            ty += int(fp.size * 1.12)
-        y += h + gap
+    lines = _wrap(d, (headline or "").upper(), fh, W - 2 * M)
+    subl = _wrap(d, subtitle, fs, W - 2 * M) if subtitle else []
 
-    # Дисклеймер внизу на тёмной полосе
+    # снизу вверх
+    y = H - 70
+    disc_y = tag_y = None
     if disclaimer:
-        fd = _font(_SB, max(14, int(W * 0.026)))
-        bar_h = int(H * 0.052)
-        draw.rectangle((0, H - bar_h, W, H), fill=(0, 0, 0, 150))
-        dw = draw.textlength(disclaimer, font=fd)
-        draw.text(((W - dw) // 2, H - bar_h + (bar_h - fd.size) // 2), disclaimer, font=fd,
-                  fill=(255, 255, 255, 235))
+        y -= fd.size
+        disc_y = y
+        y -= 26
+    if tag:
+        y -= ft.size
+        tag_y = y
+        y -= 48
+    sub_bottom = y
+    sub_top = sub_bottom - len(subl) * SUB_LH
+    accent_y = (sub_top - 30) if subl else (sub_bottom - 8)
+    head_bottom = accent_y - 22
+    hy = head_bottom - len(lines) * HEAD_LH
+
+    for ln in lines:
+        d.text((M, hy), ln, font=fh, fill=bo.WHITE)
+        hy += HEAD_LH
+    d.rectangle([M, accent_y, M + 110, accent_y + 8], fill=ACCENT)
+    sy = sub_top
+    for ln in subl:
+        d.text((M, sy), ln, font=fs, fill=bo.WHITE)
+        sy += SUB_LH
+    if tag_y is not None:
+        bo._spaced(d, (M, tag_y), tag, ft, ACCENT, 4)
+    if disc_y is not None:
+        d.text((M, disc_y), disclaimer, font=fd, fill=(225, 225, 225))
 
     out = Path(out_path) if out_path else Path(bg_path).with_name("overlay.png")
-    im.save(out)
+    img.convert("RGB").save(out)
     return out

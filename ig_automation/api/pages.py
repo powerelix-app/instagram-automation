@@ -289,16 +289,17 @@ def post_gen_visual(request: Request, post_id: int, _: bool = Depends(require_us
 
 @router.post("/post/{post_id}/overlay")
 def post_overlay(request: Request, post_id: int, source_asset_id: str = Form(""),
-                 headline: str = Form(""), points: str = Form(""), disclaimer: str = Form(""),
-                 _: bool = Depends(require_user)):
+                 headline: str = Form(""), subtitle: str = Form(""), tag: str = Form(""),
+                 disclaimer: str = Form(""), _: bool = Depends(require_user)):
     try:
         src = int(source_asset_id) if source_asset_id.strip() else None
-        hl, pts, dis = headline.strip(), [l.strip() for l in points.splitlines() if l.strip()], disclaimer.strip()
-        if not hl and not pts and not dis:  # ничего не ввели → Claude придумает сам
+        hl, sub, tg, dis = headline.strip(), subtitle.strip(), tag.strip(), disclaimer.strip()
+        if not hl and not sub:  # ничего не ввели → Claude придумает сам
             aid = generator.apply_text_overlay(post_id, source_asset_id=src)
         else:
-            aid = generator.apply_text_overlay(post_id, source_asset_id=src, headline=hl, points=pts, disclaimer=dis)
-        msg = "Текст наложен на картинку" if aid else "Не удалось наложить текст"
+            aid = generator.apply_text_overlay(post_id, source_asset_id=src, headline=hl,
+                                               subtitle=sub, tag=tg or None, disclaimer=dis)
+        msg = "Обложка наложена на картинку" if aid else "Не удалось наложить текст"
     except Exception as e:
         log.warning("overlay failed: %s", e)
         msg = f"Ошибка наложения текста: {e}"
