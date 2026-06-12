@@ -353,6 +353,43 @@ def _call_replicate_grok_image(prompt: str, image: str | Path | None = None,
     raise RuntimeError("Replicate grok image: таймаут")
 
 
+def _call_replicate_faceswap(swap_image: str | Path, target_image: str | Path,
+                             model: str = "cdingram/face-swap",
+                             poll_tries: int = 60, poll_every: int = 3) -> bytes:
+    """Face-swap через Replicate: лицо `swap_image` → на `target_image`. Возвращает байты.
+
+    Приём для продуктовых кадров: Grok рисует живой хват + сохраняет реальную этикетку
+    (но лицо чужое) → face-swap ставит лицо нашей AI-модели (`ai_model.png`), банку не
+    трогает. Модель community → запускаем через /v1/predictions с version-хешем.
+    """
+    h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}", "Content-Type": "application/json",
+         "Prefer": "wait"}
+    ver = requests.get(f"https://api.replicate.com/v1/models/{model}", headers=h, timeout=40
+                       ).json()["latest_version"]["id"]
+    body = {"swap_image": _data_url(swap_image, 1024), "input_image": _data_url(target_image, 1280)}
+    r = requests.post("https://api.replicate.com/v1/predictions", headers=h,
+                      json={"version": ver, "input": body}, timeout=180)
+    if r.status_code >= 400:
+        raise RuntimeError(f"face-swap → HTTP {r.status_code}: {r.text[:300]}")
+    pred = r.json()
+    get_url = pred.get("urls", {}).get("get")
+    for _ in range(poll_tries):
+        st = pred.get("status")
+        if st == "succeeded":
+            out = pred.get("output")
+            if isinstance(out, list):
+                out = out[0] if out else None
+            if not out:
+                raise RuntimeError("face-swap: пустой output")
+            img = requests.get(out, timeout=120); img.raise_for_status()
+            return img.content
+        if st in ("failed", "canceled"):
+            raise RuntimeError(f"face-swap {st}: {str(pred.get('error'))[:200]}")
+        time.sleep(poll_every)
+        pred = requests.get(get_url, headers={"Authorization": h["Authorization"]}, timeout=60).json()
+    raise RuntimeError("face-swap: таймаут")
+
+
 def _output_url(resp: dict) -> str:
     out = resp.get("output")
     if isinstance(out, list):
