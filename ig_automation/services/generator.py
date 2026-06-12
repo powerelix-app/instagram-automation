@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import shutil
 from typing import List, Optional
 
@@ -24,21 +25,37 @@ _BRAND_STYLE = (
 
 # ── Визуал ──
 
+# Убираем из сцены упоминания текста/надписей и CAPS-блоки (это контент плашек —
+# AI всё равно рисует его коряво; настоящий текст накладываем оверлеем отдельно).
+_TEXT_HINT_RE = re.compile(
+    r"(текст на экране|надпис\w*|плашк\w*|кодовое слово|дисклеймер|заголов\w*|субтитр\w*|"
+    r"caption|on-?screen)[^.;]*[.;]?", re.IGNORECASE)
+_CAPS_RE = re.compile(r"[А-ЯЁA-Z]{3,}(?:[\s,«»\"'–-]+[А-ЯЁA-Z]{2,})*")
+
+
+def _clean_scene(text: str) -> str:
+    text = _TEXT_HINT_RE.sub("", text or "")
+    text = _CAPS_RE.sub("", text)
+    text = re.sub(r"[«»\"']", "", text)
+    return re.sub(r"\s{2,}", " ", text).strip()[:200]
+
+
 def _visual_prompt(visual_idea: str, hook: str, product: str, with_product_ref: bool) -> str:
-    parts: List[str] = []
-    if visual_idea:
-        parts.append(visual_idea)
-    elif hook:
-        parts.append(hook)
+    parts: List[str] = ["профессиональная чистая лайфстайл-фотография для Instagram, реалистичная"]
+    scene = _clean_scene(visual_idea) or _clean_scene(hook)
+    if scene:
+        parts.append(scene)
     if product and product not in ("", "—"):
         if with_product_ref:
-            parts.append(
-                f"в кадре — РЕАЛЬНАЯ банка продукта «{product}» как на референсе, "
-                "этикетка читаема и не искажена, модель держит её в руках или рядом"
-            )
+            parts.append("в руках реальная банка продукта как на референсе, этикетка читаема и не искажена")
         else:
-            parts.append(f"в кадре уместно показать продукт: {product}")
+            parts.append(f"уместно показать продукт {product}")
     parts.append(_BRAND_STYLE)
+    parts.append(
+        "БЕЗ ТЕКСТА в кадре: никаких букв, слов, надписей, плашек, подписей, этикеток с текстом; "
+        "no text, no letters, no words, no captions, no labels, no writing anywhere; "
+        "оставь чистое пространство для наложения текста потом"
+    )
     return ". ".join(parts)
 
 
