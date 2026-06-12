@@ -333,10 +333,29 @@ BRAND_FACE = config.ROOT / "assets" / "brand" / "ai_model.png"
 _AR = {"4:5": "3:4", "9:16": "9:16", "1:1": "1:1"}
 
 
+def _public_ref_url(p: str | Path) -> str:
+    """Публичная ссылка на референс (Replicate сам скачает его). Пусто — если не под
+    /media или /brand-files (тогда придётся base64). Маленький POST вместо большого
+    base64 — РКН не рвёт короткие запросы к api.replicate.com."""
+    p = Path(p)
+    for base, sub in ((config.MEDIA_DIR, "media"), (config.ROOT / "assets" / "brand", "brand-files")):
+        try:
+            rel = p.resolve().relative_to(base.resolve())
+            return f"{config.PUBLIC_BASE}/{sub}/{rel.as_posix()}"
+        except (ValueError, OSError):
+            continue
+    return ""
+
+
+def _ref_input(r: str | Path) -> str:
+    """Референс → публичный URL (предпочтительно) или base64 data-URL (фолбэк)."""
+    return _public_ref_url(r) or _data_url(r)
+
+
 def _call_replicate_edit(model: str, prompt: str, refs: list[str | Path], ratio: str) -> bytes:
     """Брендовый image-edit через Replicate (nano-banana и т.п.) с референс-картинками.
-    Референсы — data-URL в image_input (мультиреференс: лицо + банка)."""
-    body: dict = {"prompt": prompt, "image_input": [_data_url(r) for r in refs], "output_format": "png"}
+    Референсы передаём публичными URL (короткий POST — РКН не рвёт)."""
+    body: dict = {"prompt": prompt, "image_input": [_ref_input(r) for r in refs], "output_format": "png"}
     if "nano-banana" in model:
         body["aspect_ratio"] = ratio
     resp = _call_replicate(model, body)

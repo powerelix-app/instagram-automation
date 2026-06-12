@@ -68,6 +68,10 @@ def create_app(enable_scheduler: bool = True) -> FastAPI:
     # Превью собранных Reels (data/media) — для UI Разведки.
     config.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
     app.mount("/media", StaticFiles(directory=str(config.MEDIA_DIR)), name="media")
+    # Бренд-ассеты (лицо модели) — публично, чтобы Replicate скачивал их как референс.
+    brand_dir = config.ROOT / "assets" / "brand"
+    if brand_dir.exists():
+        app.mount("/brand-files", StaticFiles(directory=str(brand_dir)), name="brand-files")
 
     @app.exception_handler(HTTPException)
     async def on_http_exc(request: Request, exc: HTTPException):
