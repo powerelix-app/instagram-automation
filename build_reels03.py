@@ -25,7 +25,7 @@ GREY = (220, 210, 214)
 # (кадр, промт движения, длительность, главный_текст, слоган_снизу, дисклеймер?)
 SHOTS = [
     ("ri_1calm", "very subtle gentle motion, she breathes slowly, soft hair movement, slow gentle "
-                 "camera push-in, serene and calm", 3, "Минута для себя", None, False),
+                 "camera push-in, serene and calm", 3, "Устала быть\nсильной 24/7?", None, False),
     ("ri_2water", "water pours smoothly into the glass, gentle flowing liquid motion, soft slow", 2,
                   None, None, False),
     ("ri_3capsule", "subtle gentle motion, soft light shifting, petals drift slightly, slow push-in",
@@ -38,8 +38,9 @@ SHOTS = [
                  "Женский баланс · каждый день", True),
 ]
 
-VO_TEXT = ("Минута для себя. Мягкая поддержка женского баланса. "
-           "Инозитол POWERELIX — спокойствие и баланс каждый день.")
+VO_TEXT = ("Когда ты последний раз была просто собой? Найди минуту тишины. "
+           "Глоток воды, вдох — и выдох. Инозитол POWERELIX мягко поддержит твой "
+           "женский баланс — и внутри становится спокойнее. Баланс и спокойствие каждый день.")
 VO_VOICE = "shimmer"
 
 
@@ -81,12 +82,12 @@ def overlay_png(path, main, slogan, disclaimer):
         for ln in lines:
             d.text((M, y), ln, font=fm, fill=WHITE); y += 96
     if disclaimer:
-        fw = _font(MONT_BLACK, 104)
-        tw = d.textlength("POWERELIX", font=fw) + 8 * 3
-        wordmark(d, (W - tw) // 2, H - 540, 104, WHITE)
-        fs = _font(INTER_SB, 40)
+        # элегантный финал: бренд уже на банке (POWERELIX), большой вордмарк не дублируем.
+        # Тонкая акцент-линия + изящный слоган, мягко «сливающийся» с банкой.
+        fs = _font(INTER_SB, 50)
         sw = d.textlength(slogan, font=fs)
-        d.text(((W - sw) // 2, H - 410), slogan, font=fs, fill=PINK)
+        d.rectangle([(W - 90) // 2, H - 320, (W + 90) // 2, H - 312], fill=PINK)
+        d.text(((W - sw) // 2, H - 286), slogan, font=fs, fill=(255, 255, 255))
         d.text((M, H - 70), "БАД. Не является лекарственным средством. Есть противопоказания.",
                font=_font(INTER_MED, 26), fill=GREY)
     elif slogan:
