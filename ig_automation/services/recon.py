@@ -109,6 +109,7 @@ def _store_reels(reels: List[dict], topic: str) -> int:
                 thumbnail_url=r["thumbnail_url"], music_info=str(r["music_info"])[:512],
                 transcript=str(r["transcript"]), topic=topic,
                 relevant=rel, relevance_reason=(reason or "")[:255], lang=(lang or "")[:8],
+                media_type=r.get("media_type", ""),
             ))
             added += 1
     log.info("store %r: +%d из %d (релевантных %d, ru %d)", topic, added, len(reels),
@@ -278,5 +279,6 @@ def list_reels(topic: Optional[str] = None, include_irrelevant: bool = False,
                 "video_url": r.video_url, "topic": r.topic,
                 "analyzed": r.id in analyzed_ids, "analysis": an,
                 "relevant": r.relevant, "reason": r.relevance_reason, "lang": r.lang,
+                "media_type": r.media_type,
             })
         return out

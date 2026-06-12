@@ -46,6 +46,7 @@ def _migrate(engine) -> None:
             ("relevant", "BOOLEAN DEFAULT 1"),
             ("relevance_reason", "VARCHAR DEFAULT ''"),
             ("lang", "VARCHAR DEFAULT ''"),
+            ("media_type", "VARCHAR DEFAULT ''"),
         ],
         "deals": [
             ("last_touch_at", "DATETIME"),

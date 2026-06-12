@@ -87,11 +87,16 @@ def _normalize_reel(item: dict[str, Any]) -> Optional[dict[str, Any]]:
     play = int(_first(item, "play_count", "playCount", "videoPlayCount", "videoViewCount",
                       "video_view_count", "ig_play_count", "views") or 0)
 
-    # это видео/reels?
-    is_video = bool(video_url) or item.get("media_type") == 2 \
-        or (item.get("productType") or item.get("product_type") or "").lower() in ("clips", "reel") \
-        or "video" in (item.get("type") or "").lower()
-    if not is_video and not play:
+    # тип контента (видео/карусель/фото) — для UI. Карусели и фото тоже берём:
+    # под русским хэштегом это нативный нишевый контент (источник идей).
+    t = (item.get("type") or item.get("productType") or item.get("product_type") or "").lower()
+    if video_url or item.get("media_type") == 2 or t in ("clips", "reel", "video"):
+        media_type = "video"
+    elif t in ("sidecar", "carousel", "carousel_container") or item.get("media_type") == 8:
+        media_type = "carousel"
+    else:
+        media_type = "image"
+    if not url and not caption:  # пропускаем только совсем пустые
         return None
 
     # превью
@@ -113,29 +118,31 @@ def _normalize_reel(item: dict[str, Any]) -> Optional[dict[str, Any]]:
         "hashtags": hashtags,
         "video_url": video_url,
         "thumbnail_url": thumb or "",
+        "media_type": media_type,
         "music_info": "",
         "transcript": _first(item, "transcript", "captions") or "",
     }
 
 
 def search_reels(topic: str, limit: int = 30, newer_than: str = "30 days") -> list[dict[str, Any]]:
-    """Ищет вирусные Reels по теме. Основной актор — data-slayer (с просмотрами+mp4),
-    фолбэк — instagram-scraper по хэштегу. Сортировку по просмотрам делаем у себя."""
+    """Контент по теме. ПЕРВИЧНО — по хэштегу через instagram-scraper: язык термина
+    совпадает с языком контента (русский запрос → русский #хэштег → русский контент,
+    карусели/фото/видео). ФОЛБЭК — data-slayer (вирусные reels по ключу, чаще иностранные)."""
+    tag = topic.lstrip("#").strip().replace(" ", "")
+    tag_url = f"https://www.instagram.com/explore/tags/{quote(tag)}/"
     items: list[dict[str, Any]] = []
     try:
-        items = _run_actor(SEARCH_ACTOR, {"search": topic, "maxItems": limit}, max_charge_usd=1.5)
+        items = _run_actor(ACTOR, {
+            "directUrls": [tag_url], "resultsType": "posts",
+            "resultsLimit": limit, "addParentData": False,
+        })
     except (requests.RequestException, RuntimeError) as e:
-        log.warning("apify search_reels primary failed for %r: %s", topic, e)
+        log.warning("apify hashtag scrape failed for %r: %s", topic, e)
 
     if not items or all(i.get("error") for i in items):
-        tag = topic.lstrip("#").strip().replace(" ", "")
-        tag_url = f"https://www.instagram.com/explore/tags/{quote(tag)}/"
         try:
-            items = _run_actor(ACTOR, {
-                "directUrls": [tag_url], "resultsType": "posts",
-                "resultsLimit": limit, "addParentData": False,
-            })
-            log.info("apify fallback (instagram-scraper) для %r: %d items", topic, len(items))
+            items = _run_actor(SEARCH_ACTOR, {"search": topic, "maxItems": limit}, max_charge_usd=1.5)
+            log.info("apify fallback (data-slayer) для %r: %d items", topic, len(items))
         except (requests.RequestException, RuntimeError) as e:
             log.warning("apify fallback failed for %r: %s", topic, e)
 

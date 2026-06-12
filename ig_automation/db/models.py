@@ -43,6 +43,7 @@ class TrendReel(Base):
     relevant: Mapped[bool] = mapped_column(Boolean, default=True)
     relevance_reason: Mapped[str] = mapped_column(String(255), default="")
     lang: Mapped[str] = mapped_column(String(8), default="")  # ru|en|other
+    media_type: Mapped[str] = mapped_column(String(12), default="")  # video|carousel|image
     scraped_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

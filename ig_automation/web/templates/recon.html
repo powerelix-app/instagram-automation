@@ -69,8 +69,9 @@
     <div class="flex-1 min-w-0">
       <div class="flex items-center gap-2 text-sm flex-wrap">
         <span class="font-semibold">@{{ r.username }}</span>
-        <span class="text-slate-500">▶ {{ "{:,}".format(r.play_count).replace(",", " ") }}</span>
-        <span class="text-slate-400">❤ {{ r.likes }} · 💬 {{ r.comments }}</span>
+        {% if r.media_type == 'carousel' %}<span class="text-xs bg-purple-50 text-purple-700 px-2 py-0.5 rounded">🎠 карусель</span>{% elif r.media_type == 'image' %}<span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">🖼️ фото</span>{% elif r.media_type == 'video' %}<span class="text-xs bg-slate-100 text-slate-500 px-2 py-0.5 rounded">🎬 reels</span>{% endif %}
+        {% if r.play_count %}<span class="text-slate-500">▶ {{ "{:,}".format(r.play_count).replace(",", " ") }}</span>{% endif %}
+        {% if r.likes %}<span class="text-slate-400">❤ {{ r.likes }} · 💬 {{ r.comments }}</span>{% endif %}
         <span class="text-xs bg-slate-100 px-2 py-0.5 rounded">#{{ r.topic }}</span>
         {% if r.lang == 'ru' %}<span class="text-xs" title="русский">🇷🇺</span>{% elif r.lang %}<span class="text-xs text-slate-400" title="{{ r.lang }}">🌐 {{ r.lang }}</span>{% endif %}
         {% if not r.relevant %}<span class="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded" title="{{ r.reason }}">🚫 не по теме</span>{% endif %}
