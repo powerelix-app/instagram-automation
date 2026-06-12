@@ -77,43 +77,83 @@ def _scene_clip(post_id: int, idx: int, visual: str, product: str) -> Path:
     return Path(vid)
 
 
-def _narration(script: dict, scenes_list: list) -> str:
-    """Текст озвучки: хук + voiceover ТОЛЬКО используемых сцен + cta (иначе озвучка
-    окажется длиннее видео и хвост застынет)."""
-    parts = [script.get("hook", "")]
-    for sc in scenes_list:
-        parts.append(sc.get("voiceover") or sc.get("onscreen") or "")
-    parts.append(script.get("cta", ""))
-    return " ".join(p.strip() for p in parts if p and p.strip())
+def _scene_texts(script: dict, scenes_list: list) -> List[str]:
+    """Озвучка ПО СЦЕНАМ: хук добавляем к первой, cta — к последней; каждая сцена в
+    кадре держится ровно столько, сколько звучит её кусок."""
+    out: List[str] = []
+    last = len(scenes_list) - 1
+    for i, sc in enumerate(scenes_list):
+        t = (sc.get("voiceover") or sc.get("onscreen") or "").strip()
+        if i == 0:
+            t = (script.get("hook", "").strip() + " " + t).strip()
+        if i == last:
+            t = (t + " " + script.get("cta", "").strip()).strip()
+        out.append(t or "…")
+    return out
 
 
-def _assemble(clips: List[Path], audio: Optional[Path], out: Path) -> None:
-    """Нормализует клипы в 1080×1920@30, склеивает; добивает видео до длины озвучки
-    (заморозкой последнего кадра) и муксует звук."""
-    # 1) склейка с нормализацией
-    inputs: List[str] = []
-    filt = []
-    for i, c in enumerate(clips):
-        inputs += ["-i", str(c)]
-        filt.append(f"[{i}:v]scale={VW}:{VH}:force_original_aspect_ratio=increase,"
-                    f"crop={VW}:{VH},fps=30,setsar=1[v{i}]")
-    concat = "".join(f"[v{i}]" for i in range(len(clips))) + f"concat=n={len(clips)}:v=1:a=0[outv]"
-    tmp_concat = out.with_name(out.stem + "_concat.mp4")
-    _run(["ffmpeg", "-y", *inputs, "-filter_complex", ";".join(filt) + ";" + concat,
-          "-map", "[outv]", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", str(tmp_concat)])
+def _silence(dur: float, out_path: Path) -> Path:
+    _run(["ffmpeg", "-y", "-f", "lavfi", "-i", "anullsrc=r=32000:cl=mono",
+          "-t", f"{max(0.5, dur):.2f}", "-c:a", "aac", "-b:a", "128k", str(out_path)])
+    return out_path
 
-    if not audio or not audio.exists():
-        shutil.move(str(tmp_concat), str(out))
-        return
-    # 2) подгон под озвучку + мукс. Если озвучка длиннее видео — ЗАЦИКЛИВАЕМ видео под
-    # неё (сцены продолжают двигаться), а не морозим последний кадр.
-    vdur, adur = _ffprobe_dur(tmp_concat), _ffprobe_dur(audio)
-    target = max(vdur, adur)
-    loop = ["-stream_loop", "-1"] if adur > vdur + 0.3 else []
-    _run(["ffmpeg", "-y", *loop, "-i", str(tmp_concat), "-i", str(audio),
-          "-map", "0:v", "-map", "1:a", "-t", f"{target:.2f}",
-          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", str(out)])
-    tmp_concat.unlink(missing_ok=True)
+
+def _seg_video(clip: Path, dur: float, out_path: Path) -> Path:
+    """Нормализует клип в 1080×1920@30 и подгоняет его длину под `dur` (зацикливает
+    движение, если клип короче), без звука."""
+    cdur = _ffprobe_dur(clip)
+    loop = ["-stream_loop", "-1"] if dur > cdur + 0.3 else []
+    _run(["ffmpeg", "-y", *loop, "-i", str(clip), "-t", f"{max(0.5, dur):.2f}",
+          "-vf", f"scale={VW}:{VH}:force_original_aspect_ratio=increase,crop={VW}:{VH},fps=30,setsar=1",
+          "-an", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", "30", str(out_path)])
+    return out_path
+
+
+def _assemble_synced(segments: List[tuple], out: Path) -> None:
+    """segments = [(clip, audio|None)]. Каждая сцена держится в кадре столько, сколько
+    звучит её озвучка (нет аудио → берём длину клипа + тишина). Сцены сменяются в такт
+    голосу. Склейка видео (concat copy) + склейка аудио (concat filter) + мукс."""
+    seg_vids: List[Path] = []
+    seg_auds: List[Path] = []
+    tmp: List[Path] = []
+    for i, (clip, audio) in enumerate(segments):
+        if audio and audio.exists():
+            dur = _ffprobe_dur(audio) or _ffprobe_dur(clip) or 5.0
+            aud = audio
+        else:
+            dur = _ffprobe_dur(clip) or 5.0
+            aud = _silence(dur, out.with_name(f"{out.stem}_sil{i}.m4a"))
+            tmp.append(aud)
+        seg = _seg_video(clip, dur, out.with_name(f"{out.stem}_seg{i}.mp4"))
+        seg_vids.append(seg)
+        seg_auds.append(aud)
+        tmp.append(seg)
+
+    # видео: concat demuxer (одинаковые параметры → copy, быстро)
+    listf = out.with_name(out.stem + "_list.txt")
+    listf.write_text("".join(f"file '{p.resolve()}'\n" for p in seg_vids))
+    tmp.append(listf)
+    vcat = out.with_name(out.stem + "_v.mp4")
+    _run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listf), "-c", "copy", str(vcat)])
+    tmp.append(vcat)
+
+    # аудио: concat filter → aac
+    ain: List[str] = []
+    for a in seg_auds:
+        ain += ["-i", str(a)]
+    af = "".join(f"[{i}:a]" for i in range(len(seg_auds))) + f"concat=n={len(seg_auds)}:v=0:a=1[a]"
+    acat = out.with_name(out.stem + "_a.m4a")
+    _run(["ffmpeg", "-y", *ain, "-filter_complex", af, "-map", "[a]", "-c:a", "aac", "-b:a", "128k", str(acat)])
+    tmp.append(acat)
+
+    # мукс
+    _run(["ffmpeg", "-y", "-i", str(vcat), "-i", str(acat), "-map", "0:v", "-map", "1:a",
+          "-c", "copy", "-shortest", str(out)])
+    for p in tmp:
+        try:
+            p.unlink(missing_ok=True)
+        except OSError:
+            pass
 
 
 def build_full_reels(post_id: int) -> Optional[int]:
@@ -136,23 +176,23 @@ def build_full_reels(post_id: int) -> Optional[int]:
     if len((script or {}).get("scenes", [])) > MAX_SCENES:
         log.info("reels: сцен %d, беру первые %d", len(script["scenes"]), MAX_SCENES)
 
-    clips: List[Path] = []
+    texts = _scene_texts(script, scenes_list)
+    segments: List[tuple] = []
     for i, sc in enumerate(scenes_list):
-        clips.append(_scene_clip(post_id, i, sc.get("visual", ""), product))
-
-    narration = _narration(script, scenes_list)
-    audio = None
-    try:
-        audio = _tts(narration, config.MEDIA_DIR / f"reelvo_{post_id}_{n}.mp3")
-    except Exception as e:
-        log.warning("reels TTS failed (соберу без озвучки): %s", e)
+        clip = _scene_clip(post_id, i, sc.get("visual", ""), product)
+        audio = None
+        try:
+            audio = _tts(texts[i], config.MEDIA_DIR / f"reelvo_{post_id}_{n}_{i}.mp3")
+        except Exception as e:
+            log.warning("reels TTS сцена %d не удалась (тишина): %s", i, e)
+        segments.append((clip, audio))
 
     dest = config.MEDIA_DIR / f"reelfull_{post_id}_{n}.mp4"
-    _assemble(clips, audio, dest)
+    _assemble_synced(segments, dest)
 
     with session_scope() as s:
         a = PostAsset(post_id=post_id, kind="video", path=f"/media/{dest.name}",
-                      model="reels-full", prompt=narration[:300], ord=n)
+                      model="reels-full", prompt=" ".join(texts)[:300], ord=n)
         s.add(a)
         p = s.get(Post, post_id)
         if p and p.status == "generating":
