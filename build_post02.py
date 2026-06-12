@@ -1,0 +1,183 @@
+"""Сборка карусели Пост №2 «Качели настроения» (Инозитол, 7 слайдов, 1080x1350).
+
+Структура как у Поста №1, но женская тема: розовый акцент (#FA5098), копия про
+«гормональные качели». Hero-кадры (обложка + продукт) генерятся отдельно через
+gpt-image-2 (`output/scenes/post02_s1.png`, `post02_s6.png`). Текст-слайды — Pillow.
+БАД: мягкие формулировки, дисклеймер.
+"""
+import os
+
+import numpy as np
+from PIL import Image, ImageDraw, ImageFilter
+
+from ig_automation.brand_overlay import (
+    W, H, M, _font, _canvas, _cover, _spaced, _hex,
+    MONT_BLACK, INTER_SB, INTER_MED, INTER_XB, WHITE, INK, GREY,
+)
+
+ACCENT = _hex("#FA5098")  # инозитол — розовый (женский баланс)
+DDARK = (18, 8, 13)       # тёмно-розовый для затемнения фото-слайдов
+OUT = "output/post02"
+os.makedirs(OUT, exist_ok=True)
+
+
+def _mark(img, d, light=False):
+    """Wordmark POWERELIX (Montserrat Black). Белый на тёмных слайдах, чёрный на кремовых."""
+    _spaced(d, (M, 60), "POWERELIX", _font(MONT_BLACK, 52), WHITE if light else INK, 3)
+
+
+def _wrap(d, text, font, maxw):
+    lines, cur = [], ""
+    for w in text.split():
+        t = (cur + " " + w).strip()
+        if d.textlength(t, font=font) <= maxw:
+            cur = t
+        else:
+            lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def _darken(img, base=46, top=440, bottom=120):
+    """Тёмно-розовое затемнение фото под читаемость текста (фон остаётся живым)."""
+    ys = np.arange(H)[:, None].astype(float)
+    da = (base
+          + np.where(ys < top, (top - ys) / top * 90, 0)
+          + np.where(ys > H - bottom, (ys - (H - bottom)) / bottom * 150, 0))
+    da = np.clip(da, 0, 232).astype("uint8")
+    ovL = Image.fromarray(np.repeat(da, W, axis=1).reshape(H, W))
+    return Image.composite(Image.new("RGB", (W, H), DDARK), img.convert("RGB"), ovL)
+
+
+def cover(path, scene, hook, sub, tag):
+    img = _darken(_cover(Image.open(scene)), base=58, top=120, bottom=600)
+    d = ImageDraw.Draw(img)
+    _mark(img, d, light=True)
+    fh = _font(MONT_BLACK, 92)
+    lines = _wrap(d, hook.upper(), fh, W - 2 * M)
+    fs = _font(INTER_SB, 38)
+    sub_lines = _wrap(d, sub, fs, W - 2 * M)
+    y = H - 150 - len(lines) * 98 - 28 - len(sub_lines) * 46
+    for ln in lines:
+        d.text((M, y), ln, font=fh, fill=WHITE)
+        y += 98
+    d.rectangle([M, y + 6, M + 120, y + 16], fill=ACCENT)
+    y += 30
+    for sl in sub_lines:
+        d.text((M, y), sl, font=fs, fill=WHITE)
+        y += 46
+    _spaced(d, (M, H - 96), tag, _font(INTER_MED, 28), ACCENT, 4)
+    img.save(path)
+    return path
+
+
+def text_slide(path, heading, bullets=None, note=None, big=None, cta=None):
+    img = _canvas()
+    d = ImageDraw.Draw(img)
+    _mark(img, d)
+    y = 280
+    fh = _font(MONT_BLACK, 70)
+    for ln in _wrap(d, heading, fh, W - 2 * M):
+        d.text((M, y), ln, font=fh, fill=INK)
+        y += 80
+    y += 36
+    if big:
+        fb = _font(MONT_BLACK, 86)
+        for ln in _wrap(d, big, fb, W - 2 * M):
+            d.text((M, y), ln, font=fb, fill=ACCENT)
+            y += 96
+        y += 24
+    if bullets:
+        fb = _font(INTER_SB, 44)
+        for b in bullets:
+            d.ellipse([M, y + 16, M + 20, y + 36], fill=ACCENT)
+            for ln in _wrap(d, b, fb, W - 2 * M - 52):
+                d.text((M + 44, y), ln, font=fb, fill=INK)
+                y += 58
+            y += 20
+    if note:
+        y += 10
+        fn = _font(INTER_MED, 36)
+        for ln in _wrap(d, note, fn, W - 2 * M):
+            d.text((M, y), ln, font=fn, fill=GREY)
+            y += 48
+    if cta:
+        fc = _font(INTER_SB, 32)
+        clines = _wrap(d, cta, fc, W - 2 * M)
+        yy = H - 110 - len(clines) * 42
+        d.rectangle([M, yy - 26, M + 110, yy - 18], fill=ACCENT)
+        for ln in clines:
+            d.text((M, yy), ln, font=fc, fill=INK)
+            yy += 42
+    img.save(path)
+    return path
+
+
+def hero_product_slide(path, scene, heading, benefit, disclaimer=None):
+    """Текст поверх hero-фото (модель с банкой). Банка уже в кадре."""
+    img = _darken(_cover(Image.open(scene)), base=40, top=420, bottom=140)
+    d = ImageDraw.Draw(img)
+    _mark(img, d, light=True)
+    y = 230
+    fh = _font(MONT_BLACK, 60)
+    for ln in _wrap(d, heading, fh, W - 2 * M):
+        d.text((M, y), ln, font=fh, fill=WHITE)
+        y += 68
+    d.rectangle([M, y + 8, M + 110, y + 16], fill=ACCENT)
+    y += 32
+    fb = _font(INTER_MED, 36)
+    for ln in _wrap(d, benefit, fb, int(W * 0.62)):
+        d.text((M, y), ln, font=fb, fill=WHITE)
+        y += 48
+    if disclaimer:
+        d.rectangle([0, H - 64, W, H], fill=DDARK)
+        d.text((M, H - 50), disclaimer, font=_font(INTER_MED, 23), fill=(225, 215, 220))
+    img.save(path)
+    return path
+
+
+# ── слайды ──
+cover(f"{OUT}/01.png", "output/scenes/post02_s1.png",
+      "Качели настроения — это не характер",
+      "Почему женское состояние скачет — и что мягко помогает", "СОХРАНИ  →")
+text_slide(f"{OUT}/02.png", "Знакомо?", bullets=[
+    "Любая мелочь выводит из себя",
+    "То прилив сил, то полный ноль",
+    "Перед циклом — будто другой человек",
+    "Тянет на сладкое без причины",
+])
+text_slide(f"{OUT}/03.png", "Дело не в характере.",
+           big="Это гормональные качели.",
+           note="Телу нужен баланс, а не сила воли.")
+text_slide(f"{OUT}/04.png", "Что раскачивает баланс:", bullets=[
+    "Хронический стресс",
+    "Недосып",
+    "Много сахара и кофе",
+    "Жёсткие диеты",
+    "Сбитый режим",
+])
+text_slide(f"{OUT}/05.png", "Что помогает мягко выровнять:", bullets=[
+    "Сон по режиму",
+    "Меньше сахара",
+    "Движение и воздух",
+    "Поддержка инозитолом",
+])
+hero_product_slide(f"{OUT}/06.png", "output/scenes/post02_s6.png",
+                   "Инозитол — женский баланс",
+                   "Мягкая поддержка гормонального баланса, обмена веществ и настроения.",
+                   disclaimer="БАД. Не является лекарственным средством. Есть противопоказания.")
+text_slide(f"{OUT}/07.png", "Хочешь меньше качелей?",
+           note="Инозитол POWERELIX — по ссылке в профиле. "
+                "А что выводит из равновесия тебя? Пиши в комментариях.",
+           cta="Сохрани · Подписывайся — про женское здоровье по-простому")
+
+# превью-контактка
+prev = Image.new("RGB", (W // 3 * 4 + 50, H // 3 * 2 + 30), (255, 255, 255))
+for i in range(1, 8):
+    im = Image.open(f"{OUT}/{i:02d}.png").resize((W // 3, H // 3))
+    r, c = divmod(i - 1, 4)
+    prev.paste(im, (10 + c * (W // 3 + 10), 10 + r * (H // 3 + 10)))
+prev.save(f"{OUT}/_sheet.jpg", quality=82)
+print("готово:", OUT)
