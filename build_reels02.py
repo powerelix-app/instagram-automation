@@ -27,7 +27,7 @@ GREY = (205, 210, 205)
 # (кадр, промт движения, длительность, главный_текст, слоган_снизу, дисклеймер?)
 SHOTS = [
     ("r2_1tired", "subtle weary motion, she slowly blinks and breathes, very slow camera push-in, "
-                  "dull cool muted tones", 3, "Утром — как выжатая?", None, False),
+                  "dull cool muted tones", 3, "Просыпаешься —\nа сил нет?", None, False),
     ("r2_2reach", "her hand reaches out and picks up the bottle, gentle natural motion, warm light "
                   "growing", 3, "Дай телу зелёную\nперезагрузку", None, False),
     ("r2_3pour", "the green chlorophyll swirls and blooms into the water, smooth liquid motion, "
