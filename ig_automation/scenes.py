@@ -311,6 +311,50 @@ def _call_replicate_image(prompt: str, refs: list[str | Path] | None = None,
     raise RuntimeError("Replicate image: таймаут ожидания")
 
 
+def _call_replicate_gptimage(prompt: str, refs: list[str | Path] | None = None,
+                             aspect_ratio: str = "2:3", quality: str = "high",
+                             model: str = "openai/gpt-image-2",
+                             poll_tries: int = 120, poll_every: int = 4) -> bytes:
+    """gpt-image-2 (OpenAI) через Replicate — ЛУЧШИЙ рендер текста в картинке.
+
+    Принимает массив референсов `input_images` (лицо + банка). ⭐ Связка-победитель для
+    продуктовых кадров с ВЕРНОЙ этикеткой: refs=[лицо, банка] + в промте ПРОПИСАТЬ точный
+    текст этикетки + quality=high → натуральный хват И корректный мелкий русский текст
+    (Grok/nano его плавят, gpt-image-2 — нет). Нужен OPENAI_API_KEY. aspect 4:5→2:3.
+    """
+    body: dict = {"prompt": prompt, "aspect_ratio": aspect_ratio, "quality": quality,
+                  "output_format": "png"}
+    if config.OPENAI_API_KEY:
+        body["openai_api_key"] = config.OPENAI_API_KEY
+    if refs:
+        body["input_images"] = [_data_url(r, 1024) for r in refs]
+    url = f"https://api.replicate.com/v1/models/{model}/predictions"
+    h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}", "Content-Type": "application/json",
+         "Prefer": "wait"}
+    r = requests.post(url, headers=h, json={"input": body}, timeout=300)
+    if r.status_code == 402:
+        raise SystemExit("Replicate: недостаточно баланса (HTTP 402).")
+    if r.status_code >= 400:
+        raise RuntimeError(f"{model} → HTTP {r.status_code}: {r.text[:300]}")
+    pred = r.json()
+    get_url = pred.get("urls", {}).get("get")
+    for _ in range(poll_tries):
+        st = pred.get("status")
+        if st == "succeeded":
+            out = pred.get("output")
+            if isinstance(out, list):
+                out = out[0] if out else None
+            if not out:
+                raise RuntimeError("gpt-image: пустой output")
+            img = requests.get(out, timeout=120); img.raise_for_status()
+            return img.content
+        if st in ("failed", "canceled"):
+            raise RuntimeError(f"gpt-image {st}: {str(pred.get('error'))[:200]}")
+        time.sleep(poll_every)
+        pred = requests.get(get_url, headers={"Authorization": h["Authorization"]}, timeout=60).json()
+    raise RuntimeError("gpt-image: таймаут")
+
+
 def _call_replicate_grok_image(prompt: str, image: str | Path | None = None,
                                aspect_ratio: str = "2:3", resolution: str = "2k",
                                model: str = "xai/grok-imagine-image-quality",
