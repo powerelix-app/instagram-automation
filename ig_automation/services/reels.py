@@ -71,10 +71,17 @@ def _scene_clip(post_id: int, idx: int, visual: str, product: str) -> Path:
                                    out_name=f"reelscene_{post_id}_{idx}.png")
     hero_media = config.MEDIA_DIR / f"reelscene_{post_id}_{idx}.png"
     shutil.copy(hero, hero_media)  # в /media → Replicate скачает по URL (короткий POST)
-    vid = scenes.generate_video(hero_media, prompt="natural cinematic motion, soft lighting",
-                                duration=5, aspect_ratio="9:16",
-                                out_name=f"reelclip_{post_id}_{idx}.mp4")
-    return Path(vid)
+    last: Optional[Exception] = None
+    for attempt in range(3):  # video-модель Replicate периодически флакает — ретраим
+        try:
+            vid = scenes.generate_video(hero_media, prompt="natural cinematic motion, soft lighting",
+                                        duration=5, aspect_ratio="9:16",
+                                        out_name=f"reelclip_{post_id}_{idx}.mp4")
+            return Path(vid)
+        except Exception as e:
+            last = e
+            log.warning("reels: видео сцены %d, попытка %d/3: %s", idx, attempt + 1, e)
+    raise last or RuntimeError("video gen failed")
 
 
 def _scene_texts(script: dict, scenes_list: list) -> List[str]:
@@ -179,13 +186,20 @@ def build_full_reels(post_id: int) -> Optional[int]:
     texts = _scene_texts(script, scenes_list)
     segments: List[tuple] = []
     for i, sc in enumerate(scenes_list):
-        clip = _scene_clip(post_id, i, sc.get("visual", ""), product)
+        try:  # упавшая сцена не должна убивать весь ролик — пропускаем её
+            clip = _scene_clip(post_id, i, sc.get("visual", ""), product)
+        except Exception as e:
+            log.warning("reels: сцена %d не сгенерилась, пропускаю: %s", i, e)
+            continue
         audio = None
         try:
             audio = _tts(texts[i], config.MEDIA_DIR / f"reelvo_{post_id}_{n}_{i}.mp3")
         except Exception as e:
             log.warning("reels TTS сцена %d не удалась (тишина): %s", i, e)
         segments.append((clip, audio))
+
+    if not segments:
+        raise RuntimeError("ни одна сцена не сгенерировалась (Replicate флакнул) — попробуй ещё раз")
 
     dest = config.MEDIA_DIR / f"reelfull_{post_id}_{n}.mp4"
     _assemble_synced(segments, dest)
