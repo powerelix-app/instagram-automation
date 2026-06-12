@@ -231,7 +231,7 @@ def _call_replicate_video(prompt: str, image: str | Path, duration: int = 5,
     Используем, когда официальный xAI-баланс пуст, а на Replicate есть кредиты.
     aspect_ratio по умолчанию = формат входной картинки (наши 9:16 → без растяжения).
     """
-    body = {"image": _data_url(image), "prompt": prompt, "duration": duration,
+    body = {"image": _ref_input(image), "prompt": prompt, "duration": duration,
             "aspect_ratio": aspect_ratio, "resolution": resolution}
     url = f"https://api.replicate.com/v1/models/{model}/predictions"
     h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}", "Content-Type": "application/json"}

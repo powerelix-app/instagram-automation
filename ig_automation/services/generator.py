@@ -302,7 +302,9 @@ def generate_reels_video(post_id: int) -> Optional[int]:
     prompt = _visual_prompt(visual_idea, hook, product, with_product_ref=bool(pr))
     try:
         hero = scenes.generate_branded(prompt, refs=refs, ratio="9:16", out_name=f"reelhero_{post_id}_{n}.png")
-        video = scenes.generate_video(hero, prompt="natural cinematic motion, soft lighting",
+        hero_media = config.MEDIA_DIR / f"reelhero_{post_id}_{n}.png"
+        shutil.copy(hero, hero_media)  # в /media → Replicate скачает hero по URL (короткий POST)
+        video = scenes.generate_video(hero_media, prompt="natural cinematic motion, soft lighting",
                                       duration=5, aspect_ratio="9:16", out_name=f"reel_{post_id}_{n}.mp4")
         dest = config.MEDIA_DIR / f"reel_{post_id}_{n}.mp4"
         shutil.copy(video, dest)
