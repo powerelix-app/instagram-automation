@@ -77,10 +77,11 @@ def _scene_clip(post_id: int, idx: int, visual: str, product: str) -> Path:
     return Path(vid)
 
 
-def _narration(script: dict) -> str:
-    """Текст озвучки: хук + voiceover каждой сцены + cta."""
+def _narration(script: dict, scenes_list: list) -> str:
+    """Текст озвучки: хук + voiceover ТОЛЬКО используемых сцен + cta (иначе озвучка
+    окажется длиннее видео и хвост застынет)."""
     parts = [script.get("hook", "")]
-    for sc in script.get("scenes", []):
+    for sc in scenes_list:
         parts.append(sc.get("voiceover") or sc.get("onscreen") or "")
     parts.append(script.get("cta", ""))
     return " ".join(p.strip() for p in parts if p and p.strip())
@@ -140,9 +141,10 @@ def build_full_reels(post_id: int) -> Optional[int]:
     for i, sc in enumerate(scenes_list):
         clips.append(_scene_clip(post_id, i, sc.get("visual", ""), product))
 
+    narration = _narration(script, scenes_list)
     audio = None
     try:
-        audio = _tts(_narration(script), config.MEDIA_DIR / f"reelvo_{post_id}_{n}.mp3")
+        audio = _tts(narration, config.MEDIA_DIR / f"reelvo_{post_id}_{n}.mp3")
     except Exception as e:
         log.warning("reels TTS failed (соберу без озвучки): %s", e)
 
@@ -151,7 +153,7 @@ def build_full_reels(post_id: int) -> Optional[int]:
 
     with session_scope() as s:
         a = PostAsset(post_id=post_id, kind="video", path=f"/media/{dest.name}",
-                      model="reels-full", prompt=_narration(script)[:300], ord=n)
+                      model="reels-full", prompt=narration[:300], ord=n)
         s.add(a)
         p = s.get(Post, post_id)
         if p and p.status == "generating":
