@@ -68,3 +68,7 @@ PUBLIC_BASE = os.getenv("CF_PUBLIC_BASE", "https://content.bandabogachey.online"
 TG_TOKEN = os.getenv("CF_TG_TOKEN", "")
 TG_CHAT = os.getenv("CF_TG_CHAT", "")
 TG_RELAY = os.getenv("CF_TG_RELAY", "https://tg-relay.makc-rogozhnikov.workers.dev").rstrip("/")
+
+# ── TTS для озвучки Reels (Replicate, русский — api.openai.com заблокирован с РФ-VPS) ──
+TTS_MODEL = os.getenv("CF_TTS_MODEL", "minimax/speech-02-turbo")
+TTS_VOICE = os.getenv("CF_TTS_VOICE", "Wise_Woman")

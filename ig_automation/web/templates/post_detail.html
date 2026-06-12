@@ -133,7 +133,8 @@
     <span class="font-semibold text-sm">🎬 Reels — сценарий и видео</span>
     <div class="flex gap-2">
       <form action="/post/{{ post.id }}/gen-reels-script" method="post"><button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1">{% if post.reels_script %}↻ Сценарий{% else %}📝 Сценарий{% endif %}</button></form>
-      <form action="/post/{{ post.id }}/gen-reels-video" method="post"><button class="text-xs bg-pink-600 hover:bg-pink-500 text-white rounded px-3 py-1">🎥 Видео (~1-2 мин)</button></form>
+      <form action="/post/{{ post.id }}/gen-reels-video" method="post"><button class="text-xs bg-pink-600 hover:bg-pink-500 text-white rounded px-3 py-1">🎥 Клип (~1-2 мин)</button></form>
+      <form action="/post/{{ post.id }}/gen-reels-full" method="post" {% if not post.reels_script %}title="сначала сгенерируй сценарий"{% endif %}><button class="text-xs bg-fuchsia-700 hover:bg-fuchsia-600 text-white rounded px-3 py-1" {% if not post.reels_script %}disabled style="opacity:.5"{% endif %}>🎬 Многосценный + озвучка (~3-6 мин)</button></form>
     </div>
   </div>
   {% if post.reels_script %}

@@ -20,7 +20,7 @@ from ..services import brand as brand_svc
 from ..services import catalog as catalog_svc
 from ..services import ideas as ideas_svc
 from ..services import bloggers as bloggers_svc
-from ..services import compliance, generator, insights, planner, publisher, recon, tokens
+from ..services import compliance, generator, insights, planner, publisher, recon, reels, tokens
 from .auth import auth_disabled, require_user
 
 log = logging.getLogger(__name__)
@@ -432,6 +432,17 @@ def post_gen_reels_video(request: Request, post_id: int, _: bool = Depends(requi
     except Exception as e:
         log.warning("reels video failed: %s", e)
         msg = f"Ошибка видео: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/post/{post_id}/gen-reels-full")
+def post_gen_reels_full(request: Request, post_id: int, _: bool = Depends(require_user)):
+    try:
+        reels.start_full_reels(post_id)
+        msg = "🎬 Многосценный Reels собирается в фоне (~3-6 мин) — обновите страницу позже"
+    except Exception as e:
+        log.warning("reels-full start failed: %s", e)
+        msg = f"Ошибка запуска сборки: {e}"
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
 
 
