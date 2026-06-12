@@ -12,16 +12,54 @@
 </div>
 
 <div class="bg-white border rounded-xl p-5">
-  <div class="font-semibold mb-2">Статус сборки</div>
-  <ul class="text-sm space-y-1 text-slate-600">
-    <li>✅ Фаза 1 — фундамент сервиса (БД, навигация, auth, статус аккаунта)</li>
-    <li class="text-slate-400">⬜ Фаза 2 — Разведка трендов (Apify → разбор хуков)</li>
-    <li class="text-slate-400">⬜ Фаза 3 — Контент-план + Банк идей</li>
-    <li class="text-slate-400">⬜ Фаза 4 — Генерация (визуал с лицом бренда)</li>
-    <li class="text-slate-400">⬜ Фаза 5 — Аппрув + БАД-линт</li>
-    <li class="text-slate-400">⬜ Фаза 6 — Публикация + планировщик</li>
-    <li class="text-slate-400">⬜ Фаза 7 — Аналитика</li>
-  </ul>
-  <a href="/status" class="inline-block mt-4 text-blue-600 hover:underline text-sm">⚙️ Проверить аккаунт и токены →</a>
+  <div class="flex items-center justify-between mb-3">
+    <div class="font-semibold">📌 Что сегодня</div>
+    <form action="/search" method="get" class="flex items-center gap-1">
+      <input name="q" placeholder="поиск по CRM…" class="text-sm border rounded px-2 py-1 w-40">
+      <button class="text-sm border rounded px-2 py-1 hover:bg-slate-50">🔎</button>
+    </form>
+  </div>
+
+  {% if today.nothing %}
+    <div class="text-sm text-slate-400 py-4 text-center">Всё разобрано 👍 Запусти <a href="/recon" class="text-blue-600 hover:underline">разведку</a> или добавь <a href="/ideas" class="text-blue-600 hover:underline">идей</a>.</div>
+  {% else %}
+  <div class="space-y-2">
+    {% macro row(items, icon, label, color, link_each=true) %}
+      {% if items %}
+      <div class="border-l-4 {{ color }} bg-slate-50 rounded-r p-3">
+        <div class="text-sm font-semibold mb-1">{{ icon }} {{ label }} <span class="text-slate-400">· {{ items|length }}</span></div>
+        <div class="flex flex-wrap gap-1.5">
+          {% for p in items[:8] %}
+          <a href="/post/{{ p.id }}" class="text-xs bg-white border rounded px-2 py-1 hover:border-blue-400">
+            {{ p.hook }}{% if p.scheduled_at %} · <span class="text-slate-400">{{ p.scheduled_at[:16] }}</span>{% endif %}
+          </a>
+          {% endfor %}
+          {% if items|length > 8 %}<span class="text-xs text-slate-400 py-1">+{{ items|length - 8 }}</span>{% endif %}
+        </div>
+      </div>
+      {% endif %}
+    {% endmacro %}
+
+    {{ row(today.due, "🔴", "Опубликовать сегодня", "border-red-400") }}
+    {{ row(today.failed, "⚠️", "Ошибки публикации", "border-red-500") }}
+    {{ row(today.review, "👀", "На проверке — аппрув", "border-amber-400") }}
+    {{ row(today.approved, "✅", "Готовы — запланировать", "border-emerald-400") }}
+    {{ row(today.draft, "✏️", "Черновики — доделать", "border-slate-300") }}
+
+    {% if today.followups %}
+    <div class="border-l-4 border-violet-400 bg-slate-50 rounded-r p-3">
+      <div class="text-sm font-semibold mb-1">📣 Написать блогерам <span class="text-slate-400">· {{ today.followups|length }}</span></div>
+      <div class="flex flex-wrap gap-1.5">
+        {% for f in today.followups[:10] %}
+        <a href="/blogger/{{ f.blogger.id }}" class="text-xs bg-white border rounded px-2 py-1 hover:border-violet-400">
+          {% if f.blogger %}@{{ f.blogger.handle or f.blogger.name }}{% else %}сделка #{{ f.deal.id }}{% endif %}
+          <span class="text-slate-400">· {{ f.deal.stage_label or f.deal.stage }}</span>
+        </a>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

@@ -14,7 +14,7 @@ from fastapi.templating import Jinja2Templates
 
 from .. import config
 from ..db.base import session_scope
-from ..db.models import ContentPlan, Idea, Post, TrendReel
+from ..db.models import Blogger, ContentPlan, Deal, Idea, Post, TrendReel
 from ..products import product_names, products_list
 from ..services import brand as brand_svc
 from ..services import catalog as catalog_svc
@@ -50,9 +50,63 @@ def _counts() -> Dict[str, int]:
         }
 
 
+def _today() -> Dict[str, Any]:
+    """Дашборд «Что сегодня»: что требует действия — публикация, проверка, блогеры."""
+    today = datetime.now(_MSK).date().isoformat()
+
+    def slim(p: Post) -> dict:
+        return {"id": p.id, "hook": (p.hook or p.product or "пост")[:64],
+                "format": p.format, "scheduled_at": p.scheduled_at or ""}
+
+    with session_scope() as s:
+        def by(status):
+            return [slim(p) for p in s.query(Post).filter(Post.status == status)
+                    .order_by(Post.id.desc()).all()]
+        review, draft, approved, failed = by("review"), by("draft"), by("approved"), by("failed")
+        scheduled = [slim(p) for p in s.query(Post).filter(Post.status == "scheduled")
+                     .order_by(Post.scheduled_at).all()]
+    due = [p for p in scheduled if p["scheduled_at"][:10] <= today]
+    followups = bloggers_svc.needs_followup()
+    return {
+        "due": due, "review": review, "draft": draft, "approved": approved,
+        "failed": failed, "followups": followups,
+        "nothing": not (due or review or draft or approved or failed or followups),
+    }
+
+
 @router.get("/", response_class=HTMLResponse)
 def home(request: Request, _: bool = Depends(require_user)):
-    return templates.TemplateResponse(request, "home.html", _ctx(request, counts=_counts()))
+    return templates.TemplateResponse(request, "home.html", _ctx(request, counts=_counts(), today=_today()))
+
+
+@router.get("/search", response_class=HTMLResponse)
+def search(request: Request, q: str = "", _: bool = Depends(require_user)):
+    """Сквозной поиск по CRM: блогеры, посты, сделки (Python-side — корректный регистр кириллицы)."""
+    q = (q or "").strip()
+    res: Dict[str, list] = {"bloggers": [], "posts": [], "deals": []}
+    if len(q) >= 2:
+        ql = q.lower()
+
+        def hit(*vals):
+            return any(ql in (v or "").lower() for v in vals)
+
+        with session_scope() as s:
+            for b in s.query(Blogger).order_by(Blogger.id.desc()).all():
+                if hit(b.name, b.handle, b.niche, b.notes, b.city, b.contact):
+                    res["bloggers"].append({"id": b.id, "name": b.name, "handle": b.handle,
+                                            "niche": b.niche, "status": b.status})
+            for p in s.query(Post).order_by(Post.id.desc()).all():
+                if hit(p.hook, p.caption, p.product, p.rubric, p.visual_idea):
+                    res["posts"].append({"id": p.id, "hook": (p.hook or p.product or "пост")[:70],
+                                         "status": p.status, "format": p.format})
+            blmap = {b.id: b.name for b in s.query(Blogger).all()}
+            for d in s.query(Deal).order_by(Deal.id.desc()).all():
+                if hit(d.notes, d.promo_code, d.product, d.post_url):
+                    res["deals"].append({"id": d.id, "blogger_id": d.blogger_id,
+                                         "blogger": blmap.get(d.blogger_id, "?"),
+                                         "stage": d.stage, "promo": d.promo_code})
+    total = sum(len(v) for v in res.values())
+    return templates.TemplateResponse(request, "search.html", _ctx(request, q=q, res=res, total=total))
 
 
 @router.get("/status", response_class=HTMLResponse)

@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Поиск{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-3">🔎 Поиск по CRM</h1>
+
+<form action="/search" method="get" class="mb-5 flex items-center gap-2">
+  <input name="q" value="{{ q }}" placeholder="блогер, ник, ниша, хук поста, промокод…" autofocus
+         class="border rounded-lg px-3 py-2 w-full max-w-md">
+  <button class="bg-slate-800 hover:bg-slate-700 text-white rounded-lg px-4 py-2">Найти</button>
+</form>
+
+{% if q and q|length >= 2 %}
+  <div class="text-sm text-slate-500 mb-3">По запросу «{{ q }}» — найдено: {{ total }}</div>
+
+  {% if res.bloggers %}
+  <div class="mb-5">
+    <div class="font-semibold text-sm mb-2">📣 Блогеры · {{ res.bloggers|length }}</div>
+    <div class="space-y-1">
+      {% for b in res.bloggers %}
+      <a href="/blogger/{{ b.id }}" class="block bg-white border rounded-lg px-3 py-2 hover:border-violet-400 text-sm">
+        <span class="font-medium">@{{ b.handle or b.name }}</span>
+        {% if b.name and b.handle %}<span class="text-slate-400">· {{ b.name }}</span>{% endif %}
+        {% if b.niche %}<span class="text-slate-500">· {{ b.niche }}</span>{% endif %}
+        <span class="text-xs text-slate-400 float-right">{{ b.status }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if res.posts %}
+  <div class="mb-5">
+    <div class="font-semibold text-sm mb-2">📝 Посты · {{ res.posts|length }}</div>
+    <div class="space-y-1">
+      {% for p in res.posts %}
+      <a href="/post/{{ p.id }}" class="block bg-white border rounded-lg px-3 py-2 hover:border-blue-400 text-sm">
+        {{ p.hook }}
+        <span class="text-xs text-slate-400 float-right">{{ p.format }} · {{ p.status }}</span>
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if res.deals %}
+  <div class="mb-5">
+    <div class="font-semibold text-sm mb-2">🤝 Сделки · {{ res.deals|length }}</div>
+    <div class="space-y-1">
+      {% for d in res.deals %}
+      <a href="/blogger/{{ d.blogger_id }}" class="block bg-white border rounded-lg px-3 py-2 hover:border-amber-400 text-sm">
+        {{ d.blogger }} <span class="text-slate-400">· {{ d.stage }}</span>
+        {% if d.promo %}<span class="text-xs text-slate-500 float-right">промо: {{ d.promo }}</span>{% endif %}
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if total == 0 %}
+  <div class="text-slate-400 py-6 text-center">Ничего не найдено. Попробуй другое слово.</div>
+  {% endif %}
+{% else %}
+  <div class="text-slate-400">Введи минимум 2 символа. Ищу по блогерам (имя/ник/ниша/заметки/контакт), постам (хук/подпись/товар/рубрика) и сделкам (заметки/промокод).</div>
+{% endif %}
+{% endblock %}

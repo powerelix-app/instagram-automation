@@ -61,3 +61,10 @@ SIMULATE_PUBLISH = os.getenv("CF_SIMULATE_PUBLISH", "1") not in ("0", "false", "
 # Публичный базовый URL сервиса — Graph API требует публичную ссылку на картинку
 # (image_url). На проде = поддомен контент-завода.
 PUBLIC_BASE = os.getenv("CF_PUBLIC_BASE", "https://content.bandabogachey.online").rstrip("/")
+
+# ── Telegram (ежедневные напоминания по фоллоу-апам/задачам) ──
+# api.telegram.org заблокирован с РФ-VPS → шлём через Cloudflare-релей (тот же, что
+# wb-promotion). Чтобы включить: задать CF_TG_TOKEN (токен бота) и CF_TG_CHAT (chat_id).
+TG_TOKEN = os.getenv("CF_TG_TOKEN", "")
+TG_CHAT = os.getenv("CF_TG_CHAT", "")
+TG_RELAY = os.getenv("CF_TG_RELAY", "https://tg-relay.makc-rogozhnikov.workers.dev").rstrip("/")
