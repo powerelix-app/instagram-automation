@@ -105,15 +105,14 @@ def _assemble(clips: List[Path], audio: Optional[Path], out: Path) -> None:
     if not audio or not audio.exists():
         shutil.move(str(tmp_concat), str(out))
         return
-    # 2) подгон под озвучку + мукс
+    # 2) подгон под озвучку + мукс. Если озвучка длиннее видео — ЗАЦИКЛИВАЕМ видео под
+    # неё (сцены продолжают двигаться), а не морозим последний кадр.
     vdur, adur = _ffprobe_dur(tmp_concat), _ffprobe_dur(audio)
-    pad = max(0.0, adur - vdur)
     target = max(vdur, adur)
-    vf = f"tpad=stop_mode=clone:stop_duration={pad:.2f}" if pad > 0.1 else "null"
-    _run(["ffmpeg", "-y", "-i", str(tmp_concat), "-i", str(audio),
-          "-filter_complex", f"[0:v]{vf}[v]", "-map", "[v]", "-map", "1:a",
-          "-t", f"{target:.2f}", "-c:v", "libx264", "-pix_fmt", "yuv420p",
-          "-c:a", "aac", "-b:a", "128k", "-shortest", str(out)])
+    loop = ["-stream_loop", "-1"] if adur > vdur + 0.3 else []
+    _run(["ffmpeg", "-y", *loop, "-i", str(tmp_concat), "-i", str(audio),
+          "-map", "0:v", "-map", "1:a", "-t", f"{target:.2f}",
+          "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", str(out)])
     tmp_concat.unlink(missing_ok=True)
 
 
