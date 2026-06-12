@@ -18,8 +18,8 @@ log = logging.getLogger(__name__)
 
 # Стилевая подпись бренда в каждый визуал-промпт — чтобы кадр был «в духе» POWERELIX.
 _BRAND_STYLE = (
-    "молодая женщина — постоянное лицо бренда POWERELIX, та же внешность что на референсе; "
-    "естественный свет, чистая современная эстетика здоровья и энергии, без текста"
+    "молодая привлекательная девушка — то же лицо что на референсе лица, та же внешность; "
+    "естественный свет, чистая современная эстетика здоровья и энергии"
 )
 
 
@@ -40,21 +40,54 @@ def _clean_scene(text: str) -> str:
     return re.sub(r"\s{2,}", " ", text).strip()[:200]
 
 
-def _visual_prompt(visual_idea: str, hook: str, product: str, with_product_ref: bool) -> str:
-    parts: List[str] = ["профессиональная чистая лайфстайл-фотография для Instagram, реалистичная"]
-    scene = _clean_scene(visual_idea) or _clean_scene(hook)
+# Claude превращает сценарий-идею (с репликами/тезисами/CTA) в чистое описание ФОТО-КАДРА.
+# Регексы _clean_scene не справляются: всё содержание visual_idea — текст-инструкция,
+# и модель рисует «ролик с подписями». Поэтому извлекаем только физический кадр.
+_SCENE_SYSTEM = """Ты — фотограф. Преврати идею поста в КОРОТКОЕ описание ОДНОГО ФОТО-КАДРА для
+нейросети-генератора. Опиши ТОЛЬКО что физически видно в кадре: кто (внешность/поза/эмоция),
+где (обстановка/свет), что делает, какой предмет в руках.
+СТРОГО НЕЛЬЗЯ упоминать: текст на экране, надписи, заголовки, плашки, реплики/слова героя,
+призывы, комментарии, хэштеги, кодовые слова, названия брендов, дисклеймеры, цифры-списки.
+Это статичное ФОТО без единой буквы в кадре. Одно-два предложения на русском, без кавычек."""
+
+
+def _scene_description(visual_idea: str, hook: str, product: str) -> str:
+    """Claude → чистая визуальная сцена (без текста/реплик/бренда). Фолбэк — регекс-чистка."""
+    raw = (visual_idea or hook or "").strip()
+    if not config.ANTHROPIC_API_KEY or not raw:
+        return _clean_scene(raw)
+    try:
+        msg = f"Идея поста: {raw}"
+        if product and product not in ("", "—"):
+            msg += f"\nВ кадре уместна баночка добавки: {product}"
+        resp = anthropic.Anthropic().messages.create(
+            model=config.CLAUDE_MODEL, max_tokens=220, system=_SCENE_SYSTEM,
+            messages=[{"role": "user", "content": msg}],
+        )
+        txt = "".join(getattr(b, "text", "") for b in resp.content).strip()
+        return _clean_scene(txt) or _clean_scene(raw)
+    except Exception as e:
+        log.warning("scene description fallback (%s)", e)
+        return _clean_scene(raw)
+
+
+def _visual_prompt(scene: str, product: str, with_product_ref: bool) -> str:
+    parts: List[str] = ["профессиональная чистая лайфстайл-фотография для Instagram, фотореализм, реалистичная"]
     if scene:
         parts.append(scene)
-    if product and product not in ("", "—"):
-        if with_product_ref:
-            parts.append("в руках реальная банка продукта как на референсе, этикетка читаема и не искажена")
-        else:
-            parts.append(f"уместно показать продукт {product}")
+    if with_product_ref:
+        parts.append(
+            "на прикреплённом референсе — реальная банка добавки; в кадре ТА ЖЕ банка в руках у девушки, "
+            "повтори форму и этикетку точно как на референсе, не искажай и не дорисовывай текст на этикетке"
+        )
+    elif product and product not in ("", "—"):
+        parts.append(f"уместно показать баночку добавки {product}")
     parts.append(_BRAND_STYLE)
     parts.append(
-        "БЕЗ ТЕКСТА в кадре: никаких букв, слов, надписей, плашек, подписей, этикеток с текстом; "
-        "no text, no letters, no words, no captions, no labels, no writing anywhere; "
-        "оставь чистое пространство для наложения текста потом"
+        "КАТЕГОРИЧЕСКИ БЕЗ ТЕКСТА В КАДРЕ: никаких букв, цифр, слов, надписей, плашек, подписей, "
+        "логотипов, заголовков, субтитров, водяных знаков; no text, no letters, no numbers, no words, "
+        "no captions, no labels, no logo, no watermark anywhere; единственный допустимый текст — "
+        "этикетка банки и только как на референсе; оставь чистое пространство для наложения текста потом"
     )
     return ". ".join(parts)
 
@@ -107,8 +140,10 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
     prod_ref = brand.product_ref(product)
     if prod_ref:
         refs.append(prod_ref)
-    refs += [p for p in user_refs if p.exists()]
-    prompt = _visual_prompt(visual_idea, hook, product, with_product_ref=bool(prod_ref))
+    existing_user_refs = [p for p in user_refs if p.exists()]
+    refs += existing_user_refs
+    scene = _scene_description(visual_idea, hook, product)
+    prompt = _visual_prompt(scene, product, with_product_ref=bool(prod_ref) or bool(existing_user_refs))
     if extra:
         prompt += ". " + extra
 
@@ -316,7 +351,8 @@ def generate_reels_video(post_id: int) -> Optional[int]:
     pr = brand.product_ref(product)
     if pr:
         refs.append(pr)
-    prompt = _visual_prompt(visual_idea, hook, product, with_product_ref=bool(pr))
+    scene = _scene_description(visual_idea, hook, product)
+    prompt = _visual_prompt(scene, product, with_product_ref=bool(pr))
     try:
         hero = scenes.generate_branded(prompt, refs=refs, ratio="9:16", out_name=f"reelhero_{post_id}_{n}.png")
         hero_media = config.MEDIA_DIR / f"reelhero_{post_id}_{n}.png"
