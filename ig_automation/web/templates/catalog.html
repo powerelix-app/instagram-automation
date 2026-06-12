@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Товары{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-1">🏷️ Товары — артикулы WB</h1>
+<p class="text-slate-500 mb-5 text-sm">Внеси артикул Wildberries и ссылку на каждый товар. Когда привяжешь товар к посту, текст будет адаптирован под него и вставит этот артикул/ссылку.</p>
+
+<div class="space-y-2">
+  {% for it in items %}
+  <form action="/catalog/save" method="post" class="bg-white border rounded-xl p-3 flex flex-wrap gap-2 items-end">
+    <input type="hidden" name="product_id" value="{{ it.id }}">
+    <div class="flex-1 min-w-[160px]">
+      <div class="text-sm font-semibold flex items-center gap-2">{% if it.accent %}<span class="inline-block w-3 h-3 rounded-full" style="background:{{ it.accent }}"></span>{% endif %}{{ it.name }}</div>
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Артикул WB (nmId)</label>
+      <input name="nmid" value="{{ it.nmid }}" placeholder="12345678" class="px-2 py-1 border rounded w-32 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Ссылка WB</label>
+      <input name="wb_url" value="{{ it.wb_url }}" placeholder="https://wildberries.ru/..." class="px-2 py-1 border rounded w-56 text-sm">
+    </div>
+    <div>
+      <label class="block text-xs text-slate-500 mb-1">Акцент для текста (опц.)</label>
+      <input name="note" value="{{ it.note }}" placeholder="напр. со скидкой по промокоду" class="px-2 py-1 border rounded w-48 text-sm">
+    </div>
+    <button class="bg-slate-700 hover:bg-slate-600 text-white rounded px-3 py-1.5 text-sm">Сохранить</button>
+  </form>
+  {% endfor %}
+</div>
+{% endblock %}

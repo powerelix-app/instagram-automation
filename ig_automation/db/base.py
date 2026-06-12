@@ -48,6 +48,9 @@ def _migrate(engine) -> None:
             ("lang", "VARCHAR DEFAULT ''"),
             ("media_type", "VARCHAR DEFAULT ''"),
         ],
+        "posts": [
+            ("product_id", "VARCHAR DEFAULT ''"),
+        ],
         "deals": [
             ("last_touch_at", "DATETIME"),
             ("next_followup_at", "DATETIME"),

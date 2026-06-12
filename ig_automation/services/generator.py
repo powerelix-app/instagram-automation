@@ -8,8 +8,8 @@ from typing import List, Optional
 import anthropic
 from pydantic import BaseModel, Field
 
-from .. import config, scenes
-from . import brand, compliance
+from .. import config, products, scenes
+from . import brand, catalog, compliance
 from ..db.base import session_scope
 from ..db.models import Post, PostAsset
 
@@ -153,28 +153,64 @@ _TEXT_SYSTEM = """Ты — SMM-копирайтер бренда БАД POWERELI
 Верни строго структуру по схеме."""
 
 
+def set_post_product(post_id: int, product_id: str) -> None:
+    """Привязывает пост к конкретному товару каталога (id + каноничное название)."""
+    p = products.product_by_id(product_id)
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return
+        post.product_id = str(product_id) if p else ""
+        if p:
+            post.product = p.get("full_name", p.get("name", ""))
+
+
 def generate_post_text(post_id: int) -> Optional[int]:
-    """Догенерирует подпись/хэштеги/CTA через Claude. Возвращает post_id."""
+    """Догенерирует подпись/хэштеги/CTA через Claude под конкретный товар (если привязан),
+    с вставкой артикула/ссылки WB. Возвращает post_id."""
     if not config.ANTHROPIC_API_KEY:
         raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
     with session_scope() as s:
         post = s.get(Post, post_id)
         if not post:
             return None
+        pid = post.product_id
         brief = (
-            f"Рубрика: {post.rubric or '—'}\nПродукт: {post.product or '—'}\n"
-            f"Формат: {post.format}\nХук: {post.hook or '—'}\nИдея визуала: {post.visual_idea or '—'}"
+            f"Рубрика: {post.rubric or '—'}\nФормат: {post.format}\n"
+            f"Хук: {post.hook or '—'}\nИдея визуала: {post.visual_idea or '—'}"
         )
+    if pid:
+        ctx = products.one_context(pid)
+        link = catalog.link_line(pid)
+        if ctx:
+            brief += "\n\n" + ctx
+        if link:
+            brief += (
+                f"\n\nГДЕ КУПИТЬ ({link}). В конце подписи добавь призыв с этим артикулом/ссылкой "
+                "(в Instagram ссылка некликабельна — пиши «ищи на Wildberries, артикул XXXX» "
+                "или «ссылка в шапке профиля»)."
+            )
+    else:
+        brief = f"Продукт: {post.product or '—'}\n" + brief
     client = anthropic.Anthropic()
     resp = client.messages.parse(
         model=config.CLAUDE_MODEL, max_tokens=2000, system=_TEXT_SYSTEM,
-        messages=[{"role": "user", "content": f"Напиши текст поста:\n\n{brief}"}],
+        messages=[{"role": "user", "content": f"Напиши текст поста под этот товар:\n\n{brief}"}],
         output_format=TextOut,
     )
     out = resp.parsed_output
+    caption = out.caption
+    # Гарантируем артикул/ссылку WB В САМОЙ подписи (Claude иногда кладёт в CTA).
+    if pid:
+        lk = catalog.get_link(pid)
+        if lk and lk.get("nmid") and lk["nmid"] not in caption:
+            buy = f"\n\n🛒 На Wildberries — артикул {lk['nmid']}"
+            if lk.get("wb_url"):
+                buy += f"\n{lk['wb_url']}"
+            caption = caption.rstrip() + buy
     with session_scope() as s:
         post = s.get(Post, post_id)
-        post.caption = out.caption
+        post.caption = caption
         post.hashtags = out.hashtags
         post.cta = out.cta
         return post_id
@@ -255,7 +291,8 @@ def get_post(post_id: int) -> Optional[dict]:
             .order_by(PostAsset.ord).all()
         )
         return {
-            "id": p.id, "rubric": p.rubric, "product": p.product, "format": p.format,
+            "id": p.id, "rubric": p.rubric, "product": p.product, "product_id": p.product_id,
+            "format": p.format,
             "hook": p.hook, "caption": p.caption, "hashtags": p.hashtags or [],
             "visual_idea": p.visual_idea, "cta": p.cta, "status": p.status,
             "scheduled_at": p.scheduled_at, "ig_media_id": p.ig_media_id,

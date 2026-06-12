@@ -50,3 +50,37 @@ def products_context() -> str:
 
 def product_names() -> list[str]:
     return [p.get("full_name", p["name"]) for p in load_brand()["products"]]
+
+
+def products_list() -> list[dict]:
+    """Краткий список товаров для пикера/каталога: id, название, акцентный цвет."""
+    return [
+        {"id": str(p["id"]), "name": p.get("full_name", p["name"]),
+         "accent": p.get("accent_color", "")}
+        for p in load_brand()["products"]
+    ]
+
+
+def product_by_id(pid: str) -> dict | None:
+    for p in load_brand()["products"]:
+        if str(p["id"]) == str(pid):
+            return p
+    return None
+
+
+def one_context(pid: str) -> str:
+    """Детальный контекст ОДНОГО товара для генерации текста под него."""
+    p = product_by_id(pid)
+    if not p:
+        return ""
+    subs = ", ".join(s["name"] for s in (p.get("active_substances") or [])[:6]) \
+        or p.get("active_substances_summary", "")
+    benefits = ", ".join(p.get("key_benefits_3", []))
+    return (
+        f"ТОВАР: {p.get('full_name', p['name'])}\n"
+        f"Форма: {p.get('form', '')}; курс: {p.get('duration_days', '')} дней; приём: {p.get('dose_per_day', '')}\n"
+        f"Слоган: «{p.get('slogan_main', '')}»\n"
+        f"Польза: {benefits}\n"
+        f"Ключевые вещества: {subs}\n"
+        f"Акцентный цвет: {p.get('accent_color', '')}"
+    )

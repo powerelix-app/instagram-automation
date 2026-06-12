@@ -8,6 +8,16 @@
   <span class="text-xs text-slate-400">{{ post.format }}{% if post.rubric %} · {{ post.rubric }}{% endif %}{% if post.product and post.product != '—' %} · {{ post.product }}{% endif %}</span>
 </div>
 
+<form action="/post/{{ post.id }}/set-product" method="post" class="mb-4 flex items-center gap-2 text-sm flex-wrap bg-white border rounded-xl p-3">
+  <span class="text-slate-500">🏷️ Товар поста:</span>
+  <select name="product_id" onchange="this.form.submit()" class="px-3 py-2 border rounded">
+    <option value="">— не привязан —</option>
+    {% for p in catalog_products %}<option value="{{ p.id }}" {% if post.product_id == p.id %}selected{% endif %}>{{ p.name }}</option>{% endfor %}
+  </select>
+  {% if post.product_id %}<span class="text-emerald-600 text-xs">текст и визуал пойдут под этот товар + артикул</span>{% else %}<span class="text-slate-400 text-xs">выбери товар — текст адаптируется под него</span>{% endif %}
+  <a href="/catalog" class="text-blue-600 hover:underline text-xs ml-auto">внести артикулы →</a>
+</form>
+
 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
   <!-- Визуал -->
   <div>

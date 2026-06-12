@@ -96,6 +96,7 @@ class Post(Base):
     format: Mapped[str] = mapped_column(String(16), default="photo")  # photo|carousel|reels
     rubric: Mapped[str] = mapped_column(String(64), default="")
     product: Mapped[str] = mapped_column(String(128), default="")
+    product_id: Mapped[str] = mapped_column(String(32), default="")  # id товара из каталога (привязка)
     hook: Mapped[str] = mapped_column(Text, default="")
     caption: Mapped[str] = mapped_column(Text, default="")
     hashtags: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
@@ -188,6 +189,16 @@ class Deliverable(Base):
     status: Mapped[str] = mapped_column(String(16), default="requested")  # requested|received|approved|published
     url: Mapped[str] = mapped_column(String(512), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class ProductLink(Base):
+    """Артикул/ссылка WB на товар каталога — для вставки в текст поста."""
+    __tablename__ = "product_links"
+    product_id: Mapped[str] = mapped_column(String(32), primary_key=True)  # id из brand_powerelix.json
+    nmid: Mapped[str] = mapped_column(String(32), default="")  # артикул Wildberries
+    wb_url: Mapped[str] = mapped_column(String(512), default="")
+    note: Mapped[str] = mapped_column(String(255), default="")  # доп. акцент для текста
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=_now, onupdate=_now)
 
 
 class MessageTemplate(Base):

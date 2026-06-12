@@ -15,8 +15,9 @@ from fastapi.templating import Jinja2Templates
 from .. import config
 from ..db.base import session_scope
 from ..db.models import ContentPlan, Idea, Post, TrendReel
-from ..products import product_names
+from ..products import product_names, products_list
 from ..services import brand as brand_svc
+from ..services import catalog as catalog_svc
 from ..services import ideas as ideas_svc
 from ..services import bloggers as bloggers_svc
 from ..services import compliance, generator, insights, planner, publisher, recon, tokens
@@ -268,7 +269,10 @@ def post_detail(request: Request, post_id: int, msg: str = "", _: bool = Depends
     if not post:
         return RedirectResponse("/posts?msg=Пост не найден", status_code=303)
     chk = generator.check_compliance(post_id)
-    return templates.TemplateResponse(request, "post_detail.html", _ctx(request, post=post, chk=chk, msg=msg))
+    return templates.TemplateResponse(
+        request, "post_detail.html",
+        _ctx(request, post=post, chk=chk, catalog_products=products_list(), msg=msg),
+    )
 
 
 @router.post("/post/{post_id}/gen-visual")
@@ -280,6 +284,24 @@ def post_gen_visual(request: Request, post_id: int, _: bool = Depends(require_us
         log.warning("gen visual failed: %s", e)
         msg = f"Ошибка генерации визуала: {e}"
     return RedirectResponse(f"/post/{post_id}?msg={msg}", status_code=303)
+
+
+@router.post("/post/{post_id}/set-product")
+def post_set_product(request: Request, post_id: int, product_id: str = Form(""), _: bool = Depends(require_user)):
+    generator.set_post_product(post_id, product_id)
+    return RedirectResponse(f"/post/{post_id}?msg={quote('Товар привязан — перегенерируй текст')}", status_code=303)
+
+
+@router.get("/catalog", response_class=HTMLResponse)
+def catalog_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(request, "catalog.html", _ctx(request, items=catalog_svc.all_with_links(), msg=msg))
+
+
+@router.post("/catalog/save")
+def catalog_save(request: Request, product_id: str = Form(...), nmid: str = Form(""),
+                 wb_url: str = Form(""), note: str = Form(""), _: bool = Depends(require_user)):
+    catalog_svc.set_link(product_id, nmid, wb_url, note)
+    return RedirectResponse("/catalog?msg=Сохранено", status_code=303)
 
 
 @router.post("/post/{post_id}/gen-carousel")
