@@ -25,7 +25,7 @@ GREY = (220, 210, 214)
 # (кадр, промт движения, длительность, главный_текст, слоган_снизу, дисклеймер?)
 SHOTS = [
     ("ri_1calm", "very subtle gentle motion, she breathes slowly, soft hair movement, slow gentle "
-                 "camera push-in, serene and calm", 3, "Устала быть\nсильной 24/7?", None, False),
+                 "camera push-in, serene and calm", 3, "Хочешь больше\nспокойствия?", None, False),
     ("ri_2water", "water pours smoothly into the glass, gentle flowing liquid motion, soft slow", 2,
                   None, None, False),
     ("ri_3capsule", "subtle gentle motion, soft light shifting, petals drift slightly, slow push-in",
