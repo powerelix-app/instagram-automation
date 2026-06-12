@@ -232,6 +232,44 @@ def _call_replicate_video(prompt: str, image: str | Path, duration: int = 5,
     raise RuntimeError("Replicate video: таймаут ожидания рендера")
 
 
+def _call_replicate_image(prompt: str, refs: list[str | Path] | None = None,
+                          aspect_ratio: str = "9:16", model: str = "google/nano-banana",
+                          poll_tries: int = 60, poll_every: int = 4) -> bytes:
+    """Image-генерация через Replicate (nano-banana) с мультиреференсом (image_input[]).
+
+    Запасной путь, когда прямой xAI-баланс пуст (edits/generations → 403). nano-banana
+    хорошо держит лицо/продукт по референсам. Короткий негатив (длинный ловит E005).
+    """
+    body: dict = {"prompt": f"{sanitize(prompt)}. no text, no logo", "aspect_ratio": aspect_ratio}
+    if refs:
+        body["image_input"] = [_data_url(r) for r in refs]
+    url = f"https://api.replicate.com/v1/models/{model}/predictions"
+    h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}", "Content-Type": "application/json",
+         "Prefer": "wait"}
+    r = requests.post(url, headers=h, json={"input": body}, timeout=180)
+    if r.status_code == 402:
+        raise SystemExit("Replicate: недостаточно баланса (HTTP 402).")
+    if r.status_code >= 400:
+        raise RuntimeError(f"{model} → HTTP {r.status_code}: {r.text[:300]}")
+    pred = r.json()
+    get_url = pred.get("urls", {}).get("get")
+    for _ in range(poll_tries):
+        st = pred.get("status")
+        if st == "succeeded":
+            out = pred.get("output")
+            if isinstance(out, list):
+                out = out[0] if out else None
+            if not out:
+                raise RuntimeError("Replicate image: пустой output")
+            img = requests.get(out, timeout=120); img.raise_for_status()
+            return img.content
+        if st in ("failed", "canceled"):
+            raise RuntimeError(f"Replicate image {st}: {str(pred.get('error'))[:200]}")
+        time.sleep(poll_every)
+        pred = requests.get(get_url, headers={"Authorization": h["Authorization"]}, timeout=60).json()
+    raise RuntimeError("Replicate image: таймаут ожидания")
+
+
 def _output_url(resp: dict) -> str:
     out = resp.get("output")
     if isinstance(out, list):
