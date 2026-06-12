@@ -34,10 +34,10 @@ def publish(post_id: int) -> Dict:
         if post.status not in ("approved", "scheduled"):
             return {"ok": False, "error": "пост не одобрен (нужен статус approved/scheduled)"}
         asset = (
-            s.query(PostAsset).filter(PostAsset.post_id == post_id)
+            s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
             .order_by(PostAsset.ord).first()
         )
-        if not asset or asset.kind != "image":
+        if not asset:
             return {"ok": False, "error": "нет картинки для публикации (сгенерируй визуал)"}
         caption = _full_caption(post.caption, post.hashtags)
         image_url = config.PUBLIC_BASE + asset.path

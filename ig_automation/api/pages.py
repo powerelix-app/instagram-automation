@@ -304,6 +304,24 @@ def catalog_save(request: Request, product_id: str = Form(...), nmid: str = Form
     return RedirectResponse("/catalog?msg=Сохранено", status_code=303)
 
 
+@router.post("/post/{post_id}/ref-upload")
+async def post_ref_upload(request: Request, post_id: int, file: UploadFile = File(...), _: bool = Depends(require_user)):
+    try:
+        data = await file.read()
+        generator.add_post_ref(post_id, data, file.filename or "ref.png")
+        msg = "Референс добавлен — будет учтён при генерации"
+    except Exception as e:
+        log.warning("ref upload failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/post/{post_id}/asset/{aid}/delete")
+def post_asset_delete(request: Request, post_id: int, aid: int, _: bool = Depends(require_user)):
+    generator.delete_post_asset(aid)
+    return RedirectResponse(f"/post/{post_id}", status_code=303)
+
+
 @router.post("/post/{post_id}/gen-carousel")
 def post_gen_carousel(request: Request, post_id: int, slides: int = Form(4), _: bool = Depends(require_user)):
     try:

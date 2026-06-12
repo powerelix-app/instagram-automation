@@ -77,14 +77,20 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
             return None
         product, hook, visual_idea = post.product, post.hook, post.visual_idea
         ratio = ratio or _FORMAT_RATIO.get(post.format, "4:5")
-        ord_ = s.query(PostAsset).filter(PostAsset.post_id == post_id).count()
+        ord_ = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image").count()
+        # пользовательские референсы поста (банка/сцена) — kind="ref"
+        user_refs = [
+            config.MEDIA_DIR / a.path.replace("/media/", "", 1)
+            for a in s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "ref").all()
+        ]
         post.status = "generating"
 
-    # Референсы: лицо бренда + (если есть) реальная банка этого товара.
+    # Референсы: лицо бренда + (если есть) реальная банка товара + ручные референсы поста.
     refs = [brand.model_ref()]
     prod_ref = brand.product_ref(product)
     if prod_ref:
         refs.append(prod_ref)
+    refs += [p for p in user_refs if p.exists()]
     prompt = _visual_prompt(visual_idea, hook, product, with_product_ref=bool(prod_ref))
     if extra:
         prompt += ". " + extra
@@ -271,7 +277,7 @@ def list_posts() -> List[dict]:
         out = []
         for p in posts:
             first = (
-                s.query(PostAsset).filter(PostAsset.post_id == p.id)
+                s.query(PostAsset).filter(PostAsset.post_id == p.id, PostAsset.kind == "image")
                 .order_by(PostAsset.ord).first()
             )
             out.append({
@@ -297,5 +303,38 @@ def get_post(post_id: int) -> Optional[dict]:
             "visual_idea": p.visual_idea, "cta": p.cta, "status": p.status,
             "scheduled_at": p.scheduled_at, "ig_media_id": p.ig_media_id,
             "permalink": p.permalink, "error": p.error,
-            "assets": [{"path": a.path, "model": a.model} for a in assets],
+            "assets": [{"id": a.id, "path": a.path, "model": a.model} for a in assets if a.kind == "image"],
+            "refs": [{"id": a.id, "path": a.path} for a in assets if a.kind == "ref"],
         }
+
+
+def add_post_ref(post_id: int, file_bytes: bytes, filename: str) -> Optional[int]:
+    """Загружает референс под пост (банка/сцена) — будет добавлен в генерацию."""
+    import hashlib
+    from pathlib import Path
+    ext = Path(filename or "").suffix.lower()
+    if ext not in (".png", ".jpg", ".jpeg", ".webp"):
+        raise ValueError("формат не поддерживается (PNG/JPG/WEBP)")
+    if not file_bytes:
+        raise ValueError("пустой файл")
+    config.MEDIA_DIR.mkdir(parents=True, exist_ok=True)
+    name = f"ref_{post_id}_{hashlib.md5(file_bytes).hexdigest()[:8]}{ext}"
+    (config.MEDIA_DIR / name).write_bytes(file_bytes)
+    with session_scope() as s:
+        n = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "ref").count()
+        a = PostAsset(post_id=post_id, kind="ref", path=f"/media/{name}", model="upload", ord=n)
+        s.add(a)
+        s.flush()
+        return a.id
+
+
+def delete_post_asset(asset_id: int) -> None:
+    with session_scope() as s:
+        a = s.get(PostAsset, asset_id)
+        if not a:
+            return
+        try:
+            (config.MEDIA_DIR / a.path.replace("/media/", "", 1)).unlink()
+        except OSError:
+            pass
+        s.delete(a)
