@@ -72,3 +72,5 @@ TG_RELAY = os.getenv("CF_TG_RELAY", "https://tg-relay.makc-rogozhnikov.workers.d
 # ── TTS для озвучки Reels (Replicate, русский — api.openai.com заблокирован с РФ-VPS) ──
 TTS_MODEL = os.getenv("CF_TTS_MODEL", "minimax/speech-02-turbo")
 TTS_VOICE = os.getenv("CF_TTS_VOICE", "Wise_Woman")
+# Lip-sync для Reels (губы модели под озвучку). Пусто = выключить (озвучка просто закадром).
+LIPSYNC_MODEL = os.getenv("CF_LIPSYNC_MODEL", "bytedance/latentsync")

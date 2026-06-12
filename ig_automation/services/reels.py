@@ -10,6 +10,7 @@ import logging
 import shutil
 import subprocess
 import threading
+import time
 from pathlib import Path
 from typing import List, Optional
 
@@ -24,6 +25,56 @@ log = logging.getLogger(__name__)
 
 MAX_SCENES = 4
 VW, VH = 1080, 1920
+_lipsync_version: Optional[str] = None
+
+
+def _public_url(p: Path) -> str:
+    """Публичный URL файла из MEDIA_DIR (Replicate скачивает по нему с РФ-сервера)."""
+    return f"{config.PUBLIC_BASE}/media/{p.name}"
+
+
+def _replicate_version_run(version: str, body: dict, poll_tries: int = 100, poll_every: int = 4) -> dict:
+    """Запуск Replicate-модели по version-id (для не-official моделей, напр. latentsync)."""
+    h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}", "Content-Type": "application/json"}
+    r = requests.post("https://api.replicate.com/v1/predictions", headers=h,
+                      json={"version": version, "input": body}, timeout=60)
+    if r.status_code >= 400:
+        raise RuntimeError(f"replicate HTTP {r.status_code}: {r.text[:200]}")
+    pred = r.json()
+    get = (pred.get("urls") or {}).get("get")
+    for _ in range(poll_tries):
+        st = pred.get("status")
+        if st == "succeeded":
+            return pred
+        if st in ("failed", "canceled"):
+            raise RuntimeError(f"replicate {st}: {str(pred.get('error'))[:200]}")
+        time.sleep(poll_every)
+        for _a in range(3):
+            try:
+                pred = requests.get(get, headers=h, timeout=30).json()
+                break
+            except requests.RequestException:
+                time.sleep(2)
+    raise RuntimeError("replicate: таймаут lip-sync")
+
+
+def _lipsync(video: Path, audio: Path, out_path: Path) -> Path:
+    """Подгоняет губы в video под audio (latentsync). video/audio должны лежать в MEDIA_DIR
+    (нужны публичные URL). Выход — видео со звуком и синхронными губами."""
+    global _lipsync_version
+    if _lipsync_version is None:
+        h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}"}
+        d = requests.get(f"https://api.replicate.com/v1/models/{config.LIPSYNC_MODEL}", headers=h, timeout=30).json()
+        _lipsync_version = (d.get("latest_version") or {}).get("id")
+        if not _lipsync_version:
+            raise RuntimeError("lip-sync: не удалось получить version модели")
+    pred = _replicate_version_run(_lipsync_version, {"video": _public_url(video), "audio": _public_url(audio)})
+    out = pred.get("output")
+    url = out if isinstance(out, str) else (out[0] if isinstance(out, list) and out else None)
+    if not url:
+        raise RuntimeError("lip-sync: пустой output")
+    out_path.write_bytes(requests.get(url, timeout=180).content)
+    return out_path
 
 
 def _run(cmd: List[str]) -> None:
@@ -185,6 +236,7 @@ def build_full_reels(post_id: int) -> Optional[int]:
 
     texts = _scene_texts(script, scenes_list)
     segments: List[tuple] = []
+    junk: List[Path] = []
     for i, sc in enumerate(scenes_list):
         try:  # упавшая сцена не должна убивать весь ролик — пропускаем её
             clip = _scene_clip(post_id, i, sc.get("visual", ""), product)
@@ -196,13 +248,35 @@ def build_full_reels(post_id: int) -> Optional[int]:
             audio = _tts(texts[i], config.MEDIA_DIR / f"reelvo_{post_id}_{n}_{i}.mp3")
         except Exception as e:
             log.warning("reels TTS сцена %d не удалась (тишина): %s", i, e)
-        segments.append((clip, audio))
+        if audio:
+            # растягиваем клип под длину озвучки и в MEDIA_DIR (нужен публичный URL для lip-sync)
+            dur = _ffprobe_dur(audio) or 5.0
+            ext = _seg_video(clip, dur + 0.4, config.MEDIA_DIR / f"reelext_{post_id}_{n}_{i}.mp4")
+            junk.append(ext)
+            if config.LIPSYNC_MODEL:
+                try:  # губы под озвучку; синк-видео уже со звуком, но переклеим тот же audio
+                    synced = _lipsync(ext, audio, config.MEDIA_DIR / f"reelsync_{post_id}_{n}_{i}.mp4")
+                    junk.append(synced)
+                    segments.append((synced, audio))
+                    continue
+                except Exception as e:
+                    log.warning("reels: lip-sync сцена %d не удалась, без синка: %s", i, e)
+            segments.append((ext, audio))
+        else:
+            segments.append((clip, None))
 
     if not segments:
         raise RuntimeError("ни одна сцена не сгенерировалась (Replicate флакнул) — попробуй ещё раз")
 
     dest = config.MEDIA_DIR / f"reelfull_{post_id}_{n}.mp4"
     _assemble_synced(segments, dest)
+
+    # подчистка промежуточных файлов сцены (оставляем только итоговый ролик)
+    for p in junk:
+        p.unlink(missing_ok=True)
+    for pat in (f"reelvo_{post_id}_{n}_*.mp3", f"reelscene_{post_id}_*.png"):
+        for f in config.MEDIA_DIR.glob(pat):
+            f.unlink(missing_ok=True)
 
     with session_scope() as s:
         a = PostAsset(post_id=post_id, kind="video", path=f"/media/{dest.name}",
