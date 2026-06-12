@@ -44,23 +44,50 @@ def _headers() -> dict:
     }
 
 
-def _call_replicate(model: str, body: dict, timeout: int = 300, retries: int = 3) -> dict:
+def _call_replicate(model: str, body: dict, timeout: int = 60, retries: int = 4,
+                    poll_tries: int = 90, poll_every: int = 4) -> dict:
+    """Запуск модели Replicate с АСИНХРОННЫМ поллингом (без `Prefer: wait`).
+
+    С РФ-VPS длинное wait-соединение к api.replicate.com рвёт РКН (SSLEOFError) —
+    поэтому POST мгновенный (короткое соединение), а статус опрашиваем отдельно.
+    Возвращает завершённый prediction (с полем output), как раньше."""
+    if not config.REPLICATE_API_TOKEN:
+        raise SystemExit("Не задан REPLICATE_API_TOKEN в .env.")
     url = f"https://api.replicate.com/v1/models/{model}/predictions"
+    h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}", "Content-Type": "application/json"}
     last: Exception | None = None
+    pred: dict | None = None
     for i in range(retries):
         try:
-            r = requests.post(url, headers=_headers(), json={"input": body}, timeout=timeout)
+            r = requests.post(url, headers=h, json={"input": body}, timeout=timeout)
             if r.status_code == 402:
                 raise SystemExit("Replicate: недостаточно баланса на аккаунте (HTTP 402).")
             if r.status_code >= 400:
                 last = RuntimeError(f"{model} → HTTP {r.status_code}: {r.text[:300]}")
                 time.sleep(2 * (i + 1))
                 continue
-            return r.json()
-        except requests.RequestException as e:  # сеть/таймаут → backoff и retry
+            pred = r.json()
+            break
+        except requests.RequestException as e:  # сеть/SSL-обрыв (РКН) → backoff и retry
             last = e
             time.sleep(2 * (i + 1))
-    raise last or RuntimeError("Replicate: запрос не удался")
+    if pred is None:
+        raise last or RuntimeError("Replicate: старт запроса не удался")
+    get_url = (pred.get("urls") or {}).get("get")
+    for _ in range(poll_tries):
+        st = pred.get("status")
+        if st == "succeeded":
+            return pred
+        if st in ("failed", "canceled"):
+            raise RuntimeError(f"Replicate {st}: {str(pred.get('error'))[:200]}")
+        time.sleep(poll_every)
+        for _a in range(3):  # опрос статуса с ретраем на транзиентные обрывы
+            try:
+                pred = requests.get(get_url, headers=h, timeout=30).json()
+                break
+            except requests.RequestException:
+                time.sleep(2)
+    raise RuntimeError("Replicate: таймаут ожидания рендера")
 
 
 def _call_xai_image(prompt: str, aspect_ratio: str = "3:4", retries: int = 3) -> bytes:
