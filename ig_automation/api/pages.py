@@ -287,6 +287,24 @@ def post_gen_visual(request: Request, post_id: int, _: bool = Depends(require_us
     return RedirectResponse(f"/post/{post_id}?msg={msg}", status_code=303)
 
 
+@router.post("/post/{post_id}/overlay")
+def post_overlay(request: Request, post_id: int, source_asset_id: str = Form(""),
+                 headline: str = Form(""), points: str = Form(""), disclaimer: str = Form(""),
+                 _: bool = Depends(require_user)):
+    try:
+        src = int(source_asset_id) if source_asset_id.strip() else None
+        hl, pts, dis = headline.strip(), [l.strip() for l in points.splitlines() if l.strip()], disclaimer.strip()
+        if not hl and not pts and not dis:  # ничего не ввели → Claude придумает сам
+            aid = generator.apply_text_overlay(post_id, source_asset_id=src)
+        else:
+            aid = generator.apply_text_overlay(post_id, source_asset_id=src, headline=hl, points=pts, disclaimer=dis)
+        msg = "Текст наложен на картинку" if aid else "Не удалось наложить текст"
+    except Exception as e:
+        log.warning("overlay failed: %s", e)
+        msg = f"Ошибка наложения текста: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
 @router.post("/post/{post_id}/set-product")
 def post_set_product(request: Request, post_id: int, product_id: str = Form(""), _: bool = Depends(require_user)):
     generator.set_post_product(post_id, product_id)

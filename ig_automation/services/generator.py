@@ -9,7 +9,7 @@ from typing import List, Optional
 import anthropic
 from pydantic import BaseModel, Field
 
-from .. import config, products, scenes
+from .. import config, overlay, products, scenes
 from . import brand, catalog, compliance
 from ..db.base import session_scope
 from ..db.models import Post, PostAsset
@@ -338,6 +338,81 @@ def generate_reels_video(post_id: int) -> Optional[int]:
         p = s.get(Post, post_id)
         if p and p.status == "generating":
             p.status = "review"
+        s.flush()
+        return a.id
+
+
+# ── Текст-оверлей: чёткие плашки поверх чистой картинки (Pillow) ──
+
+class OverlayText(BaseModel):
+    headline: str = Field(description="цепкий заголовок для картинки, 2-5 слов, БЕЗ кавычек и точки")
+    points: List[str] = Field(description="2-4 коротких пункта-тезиса по 2-4 слова (не предложения!), без точек")
+    disclaimer: str = Field(description="для продуктовых постов 'БАД. Не лекарство', иначе пустая строка")
+
+
+_OVERLAY_SYSTEM = """Ты — дизайнер-копирайтер инфографики Instagram для бренда БАД POWERELIX (РФ).
+Придумай ЛАКОНИЧНЫЙ текст ДЛЯ НАЛОЖЕНИЯ на картинку: цепкий заголовок + 2-4 пункта-плашки.
+Очень коротко: плашки — это тезисы по 2-4 слова, НЕ предложения. На русском, на «ты», без воды.
+БАД-правила РФ: без «лечит/диагностирует/гарантирует», мягкие формулировки. Верни строго по схеме."""
+
+
+def suggest_overlay_text(post_id: int) -> dict:
+    """Claude придумывает короткий текст для наложения (заголовок + 2-4 плашки + дисклеймер)."""
+    if not config.ANTHROPIC_API_KEY:
+        raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return {"headline": "", "points": [], "disclaimer": ""}
+        brief = (
+            f"Хук: {post.hook or '—'}\nИдея визуала: {post.visual_idea or '—'}\n"
+            f"Рубрика: {post.rubric or '—'}\nПродукт: {post.product or '—'}"
+        )
+        pid = post.product_id
+    if pid:
+        ctx = products.one_context(pid)
+        if ctx:
+            brief += "\n\n" + ctx
+    client = anthropic.Anthropic()
+    resp = client.messages.parse(
+        model=config.CLAUDE_MODEL, max_tokens=800, system=_OVERLAY_SYSTEM,
+        messages=[{"role": "user", "content": f"Текст для наложения на картинку поста:\n\n{brief}"}],
+        output_format=OverlayText,
+    )
+    o = resp.parsed_output
+    return {"headline": o.headline, "points": [p for p in o.points if p][:4], "disclaimer": o.disclaimer}
+
+
+def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,
+                       headline: Optional[str] = None, points: Optional[List[str]] = None,
+                       disclaimer: Optional[str] = None) -> Optional[int]:
+    """Накладывает текст на чистую картинку (источник или последний визуал) → новый ассет.
+    Если текст не передан — придумывает через Claude. Композит помечается model='overlay'."""
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return None
+        q = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
+        if source_asset_id:
+            src = s.get(PostAsset, int(source_asset_id))
+        else:  # последний «чистый» визуал (не оверлей)
+            src = q.filter(PostAsset.model != "overlay").order_by(PostAsset.ord.desc()).first()
+        if not src:
+            raise RuntimeError("Нет картинки для наложения — сначала сгенерируй визуал")
+        src_path = config.MEDIA_DIR / src.path.replace("/media/", "", 1)
+        ord_ = q.count()
+    if headline is None and points is None:
+        txt = suggest_overlay_text(post_id)
+        headline, points, disclaimer = txt["headline"], txt["points"], txt["disclaimer"]
+    points = [p for p in (points or []) if p]
+    dest = config.MEDIA_DIR / f"post_{post_id}_txt{ord_}.png"
+    overlay.render(src_path, points=points, headline=headline or "",
+                   disclaimer=disclaimer or "", out_path=str(dest))
+    _apply_logo(dest)
+    with session_scope() as s:
+        a = PostAsset(post_id=post_id, kind="image", path=f"/media/{dest.name}", model="overlay",
+                      prompt=((headline or "") + " | " + " / ".join(points))[:300], ord=ord_)
+        s.add(a)
         s.flush()
         return a.id
 
