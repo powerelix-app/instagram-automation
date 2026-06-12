@@ -171,6 +171,15 @@ def set_post_product(post_id: int, product_id: str) -> None:
             post.product = p.get("full_name", p.get("name", ""))
 
 
+def set_post_blogger(post_id: int, blogger_id: str) -> None:
+    """Привязывает пост к блогеру (контент для него) или к своему аккаунту (пусто)."""
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return
+        post.blogger_id = int(blogger_id) if blogger_id else None
+
+
 def generate_post_text(post_id: int) -> Optional[int]:
     """Догенерирует подпись/хэштеги/CTA через Claude под конкретный товар (если привязан),
     с вставкой артикула/ссылки WB. Возвращает post_id."""
@@ -395,6 +404,7 @@ def get_post(post_id: int) -> Optional[dict]:
             "visual_idea": p.visual_idea, "cta": p.cta, "status": p.status,
             "scheduled_at": p.scheduled_at, "ig_media_id": p.ig_media_id,
             "permalink": p.permalink, "error": p.error, "reels_script": p.reels_script,
+            "blogger_id": p.blogger_id,
             "assets": [{"id": a.id, "path": a.path, "model": a.model} for a in assets if a.kind == "image"],
             "refs": [{"id": a.id, "path": a.path} for a in assets if a.kind == "ref"],
             "videos": [{"id": a.id, "path": a.path} for a in assets if a.kind == "video"],

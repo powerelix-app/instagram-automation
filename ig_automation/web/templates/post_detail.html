@@ -18,6 +18,15 @@
   <a href="/catalog" class="text-blue-600 hover:underline text-xs ml-auto">внести артикулы →</a>
 </form>
 
+<form action="/post/{{ post.id }}/set-blogger" method="post" class="mb-4 flex items-center gap-2 text-sm flex-wrap bg-white border rounded-xl p-3">
+  <span class="text-slate-500">📣 Для кого:</span>
+  <select name="blogger_id" onchange="this.form.submit()" class="px-3 py-2 border rounded">
+    <option value="">— свой аккаунт —</option>
+    {% for bl in bloggers %}<option value="{{ bl.id }}" {% if post.blogger_id == bl.id %}selected{% endif %}>{{ bl.name or bl.handle }}</option>{% endfor %}
+  </select>
+  <span class="text-slate-400 text-xs">если контент для блогера — попадёт в его историю</span>
+</form>
+
 <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
   <!-- Визуал -->
   <div>

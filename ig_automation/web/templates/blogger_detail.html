@@ -46,6 +46,21 @@
 <div class="text-xs text-slate-400 mb-5">Нет шаблонов сообщений. <a href="/templates" class="text-blue-600 hover:underline">Создать →</a></div>
 {% endif %}
 
+{% if linked_posts %}
+<div class="bg-white border rounded-xl p-4 mb-5">
+  <div class="font-semibold text-sm mb-2">📝 Контент для блогера ({{ linked_posts|length }})</div>
+  <div class="space-y-1">
+    {% for p in linked_posts %}
+    <a href="/post/{{ p.id }}" class="flex items-center gap-2 text-sm hover:bg-slate-50 rounded px-1 py-0.5">
+      <span class="text-xs bg-slate-100 rounded px-2 py-0.5">{{ p.format }}</span>
+      <span class="text-xs text-slate-400">{{ p.status }}</span>
+      <span class="flex-1 truncate">{{ p.hook or "пост #" ~ p.id }}</span>
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
 <div class="flex items-center justify-between mb-2">
   <h2 class="text-lg font-semibold">Сделки</h2>
   <form action="/blogger/{{ b.id }}/add-deal" method="post" class="flex gap-2 items-center">

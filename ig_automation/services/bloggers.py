@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 
 from ..db.base import session_scope
-from ..db.models import Blogger, Deal, Deliverable, MessageTemplate
+from ..db.models import Blogger, Deal, Deliverable, MessageTemplate, Post
 
 # Воронка работы с блогером (порядок = стадии).
 STAGES: List[tuple] = [
@@ -56,7 +56,11 @@ def get_blogger(bid: int) -> Optional[dict]:
                 s.query(Deliverable).filter(Deliverable.deal_id == d.id).order_by(Deliverable.id).all()
             ]
             deal_dicts.append(dd)
-        return {"b": b, "deals": deal_dicts}
+        posts = s.query(Post).filter(Post.blogger_id == bid).order_by(Post.id.desc()).all()
+        post_dicts = [
+            {"id": p.id, "hook": p.hook, "status": p.status, "format": p.format} for p in posts
+        ]
+        return {"b": b, "deals": deal_dicts, "posts": post_dicts}
 
 
 def set_status(bid: int, status: str) -> None:

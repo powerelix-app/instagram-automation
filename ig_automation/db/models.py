@@ -93,6 +93,7 @@ class Post(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     plan_id: Mapped[Optional[int]] = mapped_column(ForeignKey("content_plans.id"), nullable=True)
     idea_id: Mapped[Optional[int]] = mapped_column(ForeignKey("ideas.id"), nullable=True)
+    blogger_id: Mapped[Optional[int]] = mapped_column(ForeignKey("bloggers.id"), nullable=True)  # контент для блогера
     format: Mapped[str] = mapped_column(String(16), default="photo")  # photo|carousel|reels
     rubric: Mapped[str] = mapped_column(String(64), default="")
     product: Mapped[str] = mapped_column(String(128), default="")

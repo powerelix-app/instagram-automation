@@ -271,7 +271,8 @@ def post_detail(request: Request, post_id: int, msg: str = "", _: bool = Depends
     chk = generator.check_compliance(post_id)
     return templates.TemplateResponse(
         request, "post_detail.html",
-        _ctx(request, post=post, chk=chk, catalog_products=products_list(), msg=msg),
+        _ctx(request, post=post, chk=chk, catalog_products=products_list(),
+             bloggers=bloggers_svc.list_bloggers(), msg=msg),
     )
 
 
@@ -290,6 +291,12 @@ def post_gen_visual(request: Request, post_id: int, _: bool = Depends(require_us
 def post_set_product(request: Request, post_id: int, product_id: str = Form(""), _: bool = Depends(require_user)):
     generator.set_post_product(post_id, product_id)
     return RedirectResponse(f"/post/{post_id}?msg={quote('Товар привязан — перегенерируй текст')}", status_code=303)
+
+
+@router.post("/post/{post_id}/set-blogger")
+def post_set_blogger(request: Request, post_id: int, blogger_id: str = Form(""), _: bool = Depends(require_user)):
+    generator.set_post_blogger(post_id, blogger_id)
+    return RedirectResponse(f"/post/{post_id}?msg={quote('Привязка к блогеру обновлена')}", status_code=303)
 
 
 @router.get("/catalog", response_class=HTMLResponse)
@@ -435,8 +442,8 @@ def blogger_detail(request: Request, bid: int, msg: str = "", _: bool = Depends(
         return RedirectResponse("/bloggers?msg=Блогер не найден", status_code=303)
     return templates.TemplateResponse(
         request, "blogger_detail.html",
-        _ctx(request, b=data["b"], deals=data["deals"], stages=bloggers_svc.STAGES,
-             status_labels=bloggers_svc.STATUS_LABELS,
+        _ctx(request, b=data["b"], deals=data["deals"], linked_posts=data["posts"],
+             stages=bloggers_svc.STAGES, status_labels=bloggers_svc.STATUS_LABELS,
              msg_templates=bloggers_svc.templates_for(data["b"]), msg=msg),
     )
 
