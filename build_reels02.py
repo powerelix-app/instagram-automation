@@ -34,15 +34,16 @@ SHOTS = [
                  "sparkling droplets", 3, None, None, False),
     ("r2_4drink", "she drinks slowly with eyes closed, serene, gentle motion, colors turning rich "
                   "and vibrant emerald", 3, "Свежесть.\nБодрость.", None, False),
-    ("r2_5energy", "lively energetic motion, hair and mint leaves moving, water splash, bright and "
-                   "alive", 2, "Каждый день.", None, False),
+    ("r2_5energy", "lively energetic walking motion outdoors, hair moving in the breeze, bright "
+                   "natural daylight, joyful and alive", 3, "Каждый день.", None, False),
     ("r2_6pack", "slow cinematic push-in on the bottle, water droplets sparkle, gentle", 4, None,
                  "Здоровье · Энергия · Каждый день", True),
 ]
 
-VO_TEXT = ("Утром как выжатая? Дай телу зелёную перезагрузку. "
-           "Хлорофилл POWERELIX — свежесть и бодрость каждый день.")
-VO_VOICE = "nova"
+VO_TEXT = ("Знакомо? Просыпаешься — а сил уже нет. Дай телу зелёную перезагрузку. "
+           "Хлорофилл POWERELIX — концентрат свежести изнутри. Чистая кожа, крепкий иммунитет, "
+           "лёгкость и энергия. POWERELIX — здоровье и бодрость каждый день.")
+VO_VOICE = "shimmer"
 
 
 def run(cmd):
@@ -142,11 +143,13 @@ def build():
             f.write(f"file '{os.path.basename(s)}'\n")
     silent = f"{OUT}/reels02_silent.mp4"
     run(["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", lst, *ENC, "-movflags", "+faststart", silent])
-    # реклама: ВИДЕО главное — не режем. Слоган-голос идёт поверх начала, хвост дополняем
-    # тишиной (под трендовую музыку в IG). apad + -shortest → длина = длине видео.
+    # озвучка должна идти ПОЧТИ во всю длину ролика (слоган ложится на пэк-шот):
+    # подгоняем темп голоса ровно под длину видео (atempo, мягкий клэмп).
     vo = make_voiceover()
+    vd, ad = _dur(silent), _dur(vo)
+    tempo = min(max(ad / vd, 0.9), 1.5)
     out = f"{OUT}/reels02_greenreset.mp4"
-    run(["ffmpeg", "-y", "-i", silent, "-i", vo, "-filter:a", "apad",
+    run(["ffmpeg", "-y", "-i", silent, "-i", vo, "-filter:a", f"atempo={tempo:.4f},apad",
          "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
          "-shortest", "-movflags", "+faststart", out])
     for s in seg_files:
