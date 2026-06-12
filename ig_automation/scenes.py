@@ -311,6 +311,48 @@ def _call_replicate_image(prompt: str, refs: list[str | Path] | None = None,
     raise RuntimeError("Replicate image: таймаут ожидания")
 
 
+def _call_replicate_grok_image(prompt: str, image: str | Path | None = None,
+                               aspect_ratio: str = "2:3", resolution: str = "2k",
+                               model: str = "xai/grok-imagine-image-quality",
+                               poll_tries: int = 60, poll_every: int = 4) -> bytes:
+    """Grok image через Replicate (а НЕ прямой xAI — там кончились кредиты).
+
+    Модель `xai/grok-imagine-image-quality` (2k, хороший рендер текста). Принимает ОДНУ
+    референс-картинку `image` для редактирования (не массив). При editing aspect_ratio
+    игнорируется — выход в пропорциях входной картинки.
+    """
+    body: dict = {"prompt": sanitize(prompt), "resolution": resolution}
+    if image:
+        body["image"] = _data_url(image, max_w=1280)
+    else:
+        body["aspect_ratio"] = aspect_ratio
+    url = f"https://api.replicate.com/v1/models/{model}/predictions"
+    h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}", "Content-Type": "application/json",
+         "Prefer": "wait"}
+    r = requests.post(url, headers=h, json={"input": body}, timeout=180)
+    if r.status_code == 402:
+        raise SystemExit("Replicate: недостаточно баланса (HTTP 402).")
+    if r.status_code >= 400:
+        raise RuntimeError(f"{model} → HTTP {r.status_code}: {r.text[:300]}")
+    pred = r.json()
+    get_url = pred.get("urls", {}).get("get")
+    for _ in range(poll_tries):
+        st = pred.get("status")
+        if st == "succeeded":
+            out = pred.get("output")
+            if isinstance(out, list):
+                out = out[0] if out else None
+            if not out:
+                raise RuntimeError("Replicate grok image: пустой output")
+            img = requests.get(out, timeout=120); img.raise_for_status()
+            return img.content
+        if st in ("failed", "canceled"):
+            raise RuntimeError(f"Replicate grok image {st}: {str(pred.get('error'))[:200]}")
+        time.sleep(poll_every)
+        pred = requests.get(get_url, headers={"Authorization": h["Authorization"]}, timeout=60).json()
+    raise RuntimeError("Replicate grok image: таймаут")
+
+
 def _output_url(resp: dict) -> str:
     out = resp.get("output")
     if isinstance(out, list):
