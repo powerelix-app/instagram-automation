@@ -215,6 +215,42 @@ def photo_slide(path, scene, heading, body):
     return path
 
 
+def product_real_slide(path, scene, pid, heading, benefit, disclaimer=None):
+    """Девушка-фон + НАСТОЯЩАЯ банка (вырез cutouts/{pid}.png) на переднем плане —
+    этикетка пиксель-в-пиксель, ИИ её не перерисовывает. Банка ставится в нижний центр
+    (между раскрытыми ладонями модели)."""
+    img = _greendim(_cover(Image.open(scene)), base=46, top=440, bottom=120)
+    d = ImageDraw.Draw(img)
+    _mark(img, d, light=True)
+    y = 230
+    fh = _font(MONT_BLACK, 60)
+    for ln in _wrap(d, heading, fh, W - 2 * M):
+        d.text((M, y), ln, font=fh, fill=WHITE)
+        y += 68
+    d.rectangle([M, y + 8, M + 110, y + 16], fill=ACCENT)
+    y += 32
+    fb = _font(INTER_MED, 36)
+    for ln in _wrap(d, benefit, fb, int(W * 0.66)):
+        d.text((M, y), ln, font=fb, fill=WHITE)
+        y += 48
+    prod = Image.open(f"output/cutouts/{pid}.png").convert("RGBA")
+    ph = int(H * 0.52)
+    pw = int(prod.width * ph / prod.height)
+    prod = prod.resize((pw, ph), Image.LANCZOS)
+    px, py = (W - pw) // 2, H - ph - 120
+    sh = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    ImageDraw.Draw(sh).ellipse([px + pw * 0.1, py + ph - 30, px + pw * 0.9, py + ph + 45],
+                               fill=(0, 0, 0, 120))
+    sh = sh.filter(ImageFilter.GaussianBlur(26))
+    img.paste(sh, (0, 0), sh)
+    img.paste(prod, (px, py), prod)
+    if disclaimer:
+        d.rectangle([0, H - 64, W, H], fill=(6, 16, 11))
+        d.text((M, H - 50), disclaimer, font=_font(INTER_MED, 23), fill=(210, 214, 210))
+    img.save(path)
+    return path
+
+
 def hero_product_slide(path, scene, heading, benefit, disclaimer=None):
     """Текст поверх hero-фото (девушка с банкой). Банка уже в кадре — композит не нужен.
     Текст слева-сверху, где фон чище; затемнение усилено вверху."""
@@ -302,7 +338,8 @@ text_slide(f"{OUT}/05.png", "Что реально помогает:", bullets=[
     "Движение каждый день",
     "Больше зелени в тарелке",
 ])
-hero_product_slide(f"{OUT}/06.png", s6b, "Хлорофилл — концентрат зелени",
+product_real_slide(f"{OUT}/06.png", "output/scenes/s6_girl_bg.png", 1,
+                   "Хлорофилл — концентрат зелени",
                    "Зелёная перезагрузка: свежесть, бодрость и иммунитет каждый день.",
                    disclaimer="БАД. Не является лекарственным средством. Есть противопоказания.")
 text_slide(f"{OUT}/07.png", "Хочешь больше энергии?",
