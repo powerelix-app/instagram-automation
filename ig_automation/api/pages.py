@@ -333,6 +333,28 @@ def post_gen_carousel(request: Request, post_id: int, slides: int = Form(4), _: 
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
 
 
+@router.post("/post/{post_id}/gen-reels-script")
+def post_gen_reels_script(request: Request, post_id: int, _: bool = Depends(require_user)):
+    try:
+        generator.generate_reels_script(post_id)
+        msg = "🎬 Сценарий Reels готов"
+    except Exception as e:
+        log.warning("reels script failed: %s", e)
+        msg = f"Ошибка сценария: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/post/{post_id}/gen-reels-video")
+def post_gen_reels_video(request: Request, post_id: int, _: bool = Depends(require_user)):
+    try:
+        generator.generate_reels_video(post_id)
+        msg = "🎬 Видео сгенерировано"
+    except Exception as e:
+        log.warning("reels video failed: %s", e)
+        msg = f"Ошибка видео: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
 @router.post("/post/{post_id}/gen-text")
 def post_gen_text(request: Request, post_id: int, _: bool = Depends(require_user)):
     try:

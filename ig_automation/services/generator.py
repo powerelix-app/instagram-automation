@@ -222,6 +222,98 @@ def generate_post_text(post_id: int) -> Optional[int]:
         return post_id
 
 
+# ── Reels: сценарий + раскадровка + видео ──
+
+class ReelsScene(BaseModel):
+    visual: str = Field(description="что в кадре — раскадровка сцены")
+    onscreen: str = Field(description="текст на экране для этой сцены (рус.)")
+    voiceover: str = Field(description="закадровый текст/реплика (рус.)")
+
+
+class ReelsScript(BaseModel):
+    hook: str = Field(description="хук первых 0-3 секунд")
+    scenes: List[ReelsScene] = Field(description="3-5 сцен — раскадровка по порядку")
+    cta: str = Field(description="призыв в конце (с упоминанием WB-артикула, если есть)")
+    duration_sec: int = Field(description="рекомендованная длина, сек (15-45)")
+    audio: str = Field(description="идея звука/музыки/тренда")
+
+
+_REELS_SYSTEM = """Ты — сценарист коротких вертикальных видео (Reels) для бренда БАД POWERELIX,
+аудитория РУССКОЯЗЫЧНАЯ. По идее поста напиши СЦЕНАРИЙ Reels: хук 0-3 сек, 3-5 сцен
+(раскадровка: что в кадре + текст на экране + закадровый текст), CTA, длину, идею звука.
+Юр-правила рекламы БАД РФ: без «лечит/диагностирует/гарантирует», мягкие формулировки,
+в конце дисклеймер «не является лекарственным средством». Пиши живо, на «ты», по-русски.
+Верни строго структуру по схеме."""
+
+
+def generate_reels_script(post_id: int) -> Optional[int]:
+    """Claude пишет сценарий+раскадровку Reels по идее поста. Сохраняет в post.reels_script."""
+    if not config.ANTHROPIC_API_KEY:
+        raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return None
+        brief = f"Хук: {post.hook or '—'}\nИдея визуала: {post.visual_idea or '—'}\nРубрика: {post.rubric or '—'}"
+        pid = post.product_id
+    if pid:
+        ctx = products.one_context(pid)
+        if ctx:
+            brief += "\n\n" + ctx
+        link = catalog.link_line(pid)
+        if link:
+            brief += f"\n\nГде купить (упомяни в CTA): {link}"
+    client = anthropic.Anthropic()
+    resp = client.messages.parse(
+        model=config.CLAUDE_MODEL, max_tokens=3000, system=_REELS_SYSTEM,
+        messages=[{"role": "user", "content": f"Сценарий Reels по идее:\n\n{brief}"}],
+        output_format=ReelsScript,
+    )
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        post.reels_script = resp.parsed_output.model_dump(mode="json")
+        return post_id
+
+
+def generate_reels_video(post_id: int) -> Optional[int]:
+    """hero-кадр 9:16 с лицом бренда → image→video (Replicate). PostAsset kind=video."""
+    if not config.REPLICATE_API_TOKEN:
+        raise RuntimeError("Не задан REPLICATE_API_TOKEN (нужен для видео)")
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return None
+        product, hook, visual_idea = post.product, post.hook, post.visual_idea
+        n = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "video").count()
+        post.status = "generating"
+    refs = [brand.model_ref()]
+    pr = brand.product_ref(product)
+    if pr:
+        refs.append(pr)
+    prompt = _visual_prompt(visual_idea, hook, product, with_product_ref=bool(pr))
+    try:
+        hero = scenes.generate_branded(prompt, refs=refs, ratio="9:16", out_name=f"reelhero_{post_id}_{n}.png")
+        video = scenes.generate_video(hero, prompt="natural cinematic motion, soft lighting",
+                                      duration=5, aspect_ratio="9:16", out_name=f"reel_{post_id}_{n}.mp4")
+        dest = config.MEDIA_DIR / f"reel_{post_id}_{n}.mp4"
+        shutil.copy(video, dest)
+    except Exception:
+        with session_scope() as s:
+            p = s.get(Post, post_id)
+            if p and p.status == "generating":
+                p.status = "review"
+        raise
+    with session_scope() as s:
+        a = PostAsset(post_id=post_id, kind="video", path=f"/media/{dest.name}", model="grok-video",
+                      prompt=prompt, ord=n)
+        s.add(a)
+        p = s.get(Post, post_id)
+        if p and p.status == "generating":
+            p.status = "review"
+        s.flush()
+        return a.id
+
+
 # ── Аппрув + БАД-комплаенс (Фаза 5) ──
 
 def check_compliance(post_id: int) -> Optional[dict]:
@@ -302,9 +394,10 @@ def get_post(post_id: int) -> Optional[dict]:
             "hook": p.hook, "caption": p.caption, "hashtags": p.hashtags or [],
             "visual_idea": p.visual_idea, "cta": p.cta, "status": p.status,
             "scheduled_at": p.scheduled_at, "ig_media_id": p.ig_media_id,
-            "permalink": p.permalink, "error": p.error,
+            "permalink": p.permalink, "error": p.error, "reels_script": p.reels_script,
             "assets": [{"id": a.id, "path": a.path, "model": a.model} for a in assets if a.kind == "image"],
             "refs": [{"id": a.id, "path": a.path} for a in assets if a.kind == "ref"],
+            "videos": [{"id": a.id, "path": a.path} for a in assets if a.kind == "video"],
         }
 
 

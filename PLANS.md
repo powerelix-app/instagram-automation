@@ -41,6 +41,8 @@
 
 - ✅ **Гибкость генерации** (2026-06-12): референсы под пост (`PostAsset` kind="ref" — загрузка своей банки/сцены, отделены от слайдов; генерация добавляет их в refs к лицу+товару), выбор слайдов карусели (3-7), удаление слайдов/референсов. `generator.add_post_ref/delete_post_asset`; publisher и get_post фильтруют kind="image".
 
+- ✅ **Reels: сценарий + раскадровка + видео** (2026-06-12): `generate_reels_script` (Claude → хук, 3-5 сцен с раскадровкой visual/onscreen/voiceover, CTA с WB-артикулом, длина, звук; `posts.reels_script` JSON), `generate_reels_video` (hero-кадр 9:16 с лицом бренда → image→video через Replicate `scenes.generate_video`/`_call_replicate_video` grok-imagine-video → PostAsset kind=video). UI секция Reels на посте. Проверено: сценарий 5 сцен, видео 1.9МБ за 49с. ⚠️ видео — короткий клип по hero-кадру; полная сборка многосценного Reels с озвучкой — будущий шаг.
+
 **🎉 КОНВЕЙЕР MVP ГОТОВ (Фазы 1-7):** разведка (темы+аккаунты+AI-фильтр+видео) → план → банк идей → генерация (лицо бренда+банки) → аппрув+БАД-линт → публикация (Graph API+планировщик, режим симуляции) → аналитика. Всё задеплоено на `content.bandabogachey.online`. Боевой постинг включается флагом `CF_SIMULATE_PUBLISH=0`.
 - Примечание: IG-приложение в **dev-режиме** с `content_publish` (аккаунт — админ) → возможно, реальный постинг заработает **без App Review**; флаг `CF_SIMULATE_PUBLISH=1` оставлен как страховка до проверки в Фазе 6.
 

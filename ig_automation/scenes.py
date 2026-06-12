@@ -232,6 +232,20 @@ def _call_replicate_video(prompt: str, image: str | Path, duration: int = 5,
     raise RuntimeError("Replicate video: таймаут ожидания рендера")
 
 
+def generate_video(image: str | Path, prompt: str = "", duration: int = 5,
+                   aspect_ratio: str = "9:16", out_name: str | None = None) -> Path:
+    """image→video через Replicate (grok-imagine-video). Сохраняет mp4 в output/scenes,
+    возвращает путь. Стартовый кадр image — наш брендовый hero 9:16."""
+    content = _call_replicate_video(
+        sanitize(prompt) or "subtle natural cinematic motion, soft lighting, no text",
+        image, duration=duration, aspect_ratio=aspect_ratio,
+    )
+    SCENES_DIR.mkdir(parents=True, exist_ok=True)
+    out = SCENES_DIR / (out_name or "reel.mp4")
+    out.write_bytes(content)
+    return out
+
+
 def _call_replicate_image(prompt: str, refs: list[str | Path] | None = None,
                           aspect_ratio: str = "9:16", model: str = "google/nano-banana",
                           poll_tries: int = 60, poll_every: int = 4) -> bytes:

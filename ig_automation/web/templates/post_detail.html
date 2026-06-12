@@ -96,6 +96,45 @@
   </div>
 </div>
 
+{% if post.format == 'reels' %}
+<div class="bg-white border rounded-xl p-4 mt-4">
+  <div class="flex items-center justify-between mb-2 flex-wrap gap-2">
+    <span class="font-semibold text-sm">🎬 Reels — сценарий и видео</span>
+    <div class="flex gap-2">
+      <form action="/post/{{ post.id }}/gen-reels-script" method="post"><button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1">{% if post.reels_script %}↻ Сценарий{% else %}📝 Сценарий{% endif %}</button></form>
+      <form action="/post/{{ post.id }}/gen-reels-video" method="post"><button class="text-xs bg-pink-600 hover:bg-pink-500 text-white rounded px-3 py-1">🎥 Видео (~1-2 мин)</button></form>
+    </div>
+  </div>
+  {% if post.reels_script %}
+    {% set sc = post.reels_script %}
+    <div class="text-sm mb-2"><b>Хук:</b> {{ sc.hook }} <span class="text-xs text-slate-400">· ~{{ sc.duration_sec }} сек · 🎵 {{ sc.audio }}</span></div>
+    <div class="space-y-1 mb-2">
+      {% for sn in sc.scenes %}
+      <div class="text-xs border-l-2 border-violet-200 pl-2">
+        <div class="text-slate-700"><b>Сцена {{ loop.index }}:</b> {{ sn.visual }}</div>
+        {% if sn.onscreen %}<div class="text-slate-500">📝 на экране: {{ sn.onscreen }}</div>{% endif %}
+        {% if sn.voiceover %}<div class="text-slate-500">🎙️ голос: {{ sn.voiceover }}</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="text-xs text-emerald-700">➡️ {{ sc.cta }}</div>
+  {% else %}
+    <div class="text-xs text-slate-400">Сценарий ещё не сгенерирован — жми «Сценарий».</div>
+  {% endif %}
+  {% if post.videos %}
+  <div class="mt-3 flex gap-2 flex-wrap">
+    {% for v in post.videos %}
+    <div class="relative">
+      <video controls class="w-40 rounded border" src="{{ v.path }}"></video>
+      <form action="/post/{{ post.id }}/asset/{{ v.id }}/delete" method="post" class="absolute top-1 right-1"><button class="bg-black/50 hover:bg-black/70 text-white rounded px-2 text-xs">×</button></form>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <div class="text-[11px] text-slate-400 mt-2">Видео — короткий клип по hero-кадру (стартовая динамика). Полная сборка многосценного Reels с озвучкой — отдельный шаг.</div>
+</div>
+{% endif %}
+
 <div class="bg-white border rounded-xl p-4 mt-5">
   <div class="font-semibold text-sm mb-2">✅ Аппрув + БАД-комплаенс</div>
   {% if chk %}

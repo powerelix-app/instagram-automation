@@ -97,6 +97,7 @@ class Post(Base):
     rubric: Mapped[str] = mapped_column(String(64), default="")
     product: Mapped[str] = mapped_column(String(128), default="")
     product_id: Mapped[str] = mapped_column(String(32), default="")  # id товара из каталога (привязка)
+    reels_script: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # сценарий+раскадровка Reels
     hook: Mapped[str] = mapped_column(Text, default="")
     caption: Mapped[str] = mapped_column(Text, default="")
     hashtags: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
