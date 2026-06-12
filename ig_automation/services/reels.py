@@ -48,7 +48,7 @@ def _tts(text: str, out_path: Path) -> Optional[Path]:
     if not text:
         return None
     body = {"text": text[:4000], "language_boost": "Russian", "voice_id": config.TTS_VOICE,
-            "speed": 1.0, "audio_format": "mp3"}
+            "speed": 1.08, "audio_format": "mp3"}
     pred = scenes._call_replicate(config.TTS_MODEL, body, poll_tries=50, poll_every=3)
     out = pred.get("output")
     url = out if isinstance(out, str) else (out[0] if isinstance(out, list) and out else
