@@ -37,10 +37,9 @@ SHOTS = [
                  "Формула молодости · каждый день", True),
 ]
 
-VO_TEXT = ("Кожа потускнела, волосы ломкие, ногти слоятся? С годами коллагена всё меньше. "
-           "Морской коллаген POWERELIX поддержит кожу, волосы и ногти изнутри — "
-           "твоя формула молодости. Сияй каждый день.")
-VO_VOICE = "shimmer"
+# Озвучка: выбран голос MiniMax Wise_Woman @1.05 (нативный русский, без акцента, бодрый темп).
+# Готовый файл используем напрямую — TTS заново не генерим.
+VO_FILE = "output/reels05/vo_options/spd_Wise_Woman_s105.mp3"
 
 
 def run(cmd):
@@ -93,17 +92,8 @@ def overlay_png(path, main, slogan, disclaimer):
     return path
 
 
-def make_voiceover(path=f"{OUT}/voiceover.mp3"):
-    if os.path.exists(path):
-        return path
-    import requests
-    from ig_automation import config
-    h = {"Authorization": f"Bearer {config.OPENAI_API_KEY}", "Content-Type": "application/json"}
-    body = {"model": "gpt-4o-mini-tts", "voice": VO_VOICE, "input": VO_TEXT, "response_format": "mp3"}
-    r = requests.post("https://api.openai.com/v1/audio/speech", headers=h, json=body, timeout=120)
-    r.raise_for_status()
-    open(path, "wb").write(r.content)
-    return path
+def make_voiceover():
+    return VO_FILE
 
 
 def _dur(f):
