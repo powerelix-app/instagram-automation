@@ -19,17 +19,16 @@ ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv4
 WHITE = (255, 255, 255)
 ACCENT = (0, 210, 160)   # хлорофилл — зелёный
 DDARK = (6, 20, 16)
-VO = f"{HF}/vo_chl.mp3"
+VO = f"{HF}/vo_chl2.mp3"   # озвучка с верным ударением «хлорофи́лл»
 
-# (файл, длительность, хук-текст, финал-брендинг?)
+# v2 — консистентные сцены (единый изумрудный + гладкий стакан + наша банка):
+# хук льётся ИЗ нашей банки → стакан → девушка пьёт → лайфстайл → пэк-шот (запотевшая банка)
 SEG = [
-    ("chl_1_hook", 2.6, "Сила зелени каждый день", False),
-    ("chl_bottle", 1.8, None, False),
-    ("chl_water_mint", 1.5, None, False),
-    ("chl_macro", 1.6, None, False),
-    ("chl_drink", 3.0, None, False),
-    ("chl_lifestyle", 2.3, None, False),
-    ("chl_packshot", 3.6, None, True),
+    ("chl2_hook", 2.8, "Сила зелени каждый день", False),
+    ("chl2_glass", 1.8, None, False),
+    ("chl2_drink", 3.0, None, False),
+    ("chl2_life", 2.5, None, False),
+    ("chl2_bottle", 3.8, None, True),
 ]
 
 
