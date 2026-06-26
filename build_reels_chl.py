@@ -19,7 +19,7 @@ ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv4
 WHITE = (255, 255, 255)
 ACCENT = (0, 210, 160)   # хлорофилл — зелёный
 DDARK = (6, 20, 16)
-VO = f"{HF}/vo_opts/D_higgsfield_Elena.mp3"   # голос Higgsfield Elena (нативный рус., свапаемый)
+VO = f"{HF}/vo_opts/Y_yandex_alena.mp3"   # Яндекс SpeechKit Алёна (нативный рус., верное ударение)
 
 # v3 — финальные правки: хук из нашей банки (Nano Banana, этикетка цела) + наша модель +
 # чистый фон + пэк-шот реальной банки без зума. Анимация: Seedance 2.0 (хук/люди) + Kling (стакан/банка).
@@ -28,7 +28,7 @@ SEG = [
     ("c3_glass", 1.8, None, False),
     ("c3_drink", 3.0, None, False),
     ("c3_life", 2.5, None, False),
-    ("c3_packshot", 3.8, None, True),
+    ("c3_packshot2", 3.8, None, True),
 ]
 
 
