@@ -10,3 +10,18 @@ __pycache__/
 output
 data/content_factory.db
 data/media/
+
+# --- добавлено 2026-07: секреты и тяжёлая медиа ---
+# тестовые скрипты с захардкоженными ключами (НЕ в git)
+heygen_vo.py
+heygen_clone.py
+hf_login.py
+hf_shot.py
+hf_step.py
+clone_test.py
+clone_test2.py
+veo_gen.py
+cand_blonde_real.png
+ai_model_real.png
+# ростер моделей/карточки = медиа (293MB) → Google Drive, не git
+assets/brand/models/

@@ -40,6 +40,11 @@ IMAGE_MODEL = os.getenv("IMAGE_MODEL", "black-forest-labs/flux-dev")  # дефо
 
 # ── OpenAI (gpt-image-1 через Replicate требует ключ юзера как input) ──
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+
+# ── Google Veo (видео-генерация через Gemini API) ──
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+# veo-3.1-generate-preview (качество) / -fast- (быстрее, дешевле) / -lite- (самый дешёвый, без 4K)
+VEO_MODEL = os.getenv("VEO_MODEL", "veo-3.1-fast-generate-preview")
 # ── xAI / Grok (grok-2-image) — пока не задан, добавить XAI_API_KEY в .env ──
 XAI_API_KEY = os.getenv("XAI_API_KEY", "")
 # Модель брендовой генерации (лицо+банка через image-edit с референсами).

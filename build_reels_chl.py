@@ -19,7 +19,7 @@ ENC = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv4
 WHITE = (255, 255, 255)
 ACCENT = (0, 210, 160)   # хлорофилл — зелёный
 DDARK = (6, 20, 16)
-VO = f"{HF}/vo_opts/Z_clone_oksana.mp3"   # клон голоса Оксаны (MiniMax voice_id R8_SR6UB3T2)
+VO = f"{HF}/vo_opts/W_eleven_nastya_v2.mp3"   # ElevenLabs Nastya v2 (выбран 2026-06-28, голос бренда)
 
 # v3 — финальные правки: хук из нашей банки (Nano Banana, этикетка цела) + наша модель +
 # чистый фон + пэк-шот реальной банки без зума. Анимация: Seedance 2.0 (хук/люди) + Kling (стакан/банка).
@@ -102,7 +102,9 @@ def build():
                                "-of", "default=nw=1:nk=1", silent], capture_output=True, text=True).stdout)
     ad = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                                "-of", "default=nw=1:nk=1", VO], capture_output=True, text=True).stdout)
-    tempo = min(max(ad / vd, 0.9), 1.5)
+    # НИКОГДА не замедляем голос (растяжка искажает звук и ударения, напр. «хлорофилл»).
+    # 1.0 = натуральная скорость; ускоряем только если озвучка длиннее видео.
+    tempo = min(max(ad / vd, 1.0), 1.5)
     out = f"{OUT}/reels_chlorophyll_ag1.mp4"
     run(["ffmpeg", "-y", "-i", silent, "-i", VO, "-filter:a", f"atempo={tempo:.4f},apad",
          "-map", "0:v", "-map", "1:a", "-c:v", "copy", "-c:a", "aac", "-b:a", "160k",
