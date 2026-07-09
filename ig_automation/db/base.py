@@ -54,6 +54,12 @@ def _migrate(engine) -> None:
             ("camera_work", "TEXT DEFAULT ''"),
             ("is_deep", "BOOLEAN DEFAULT 0"),
         ],
+        "storyboards": [
+            ("gen_status", "VARCHAR DEFAULT ''"),
+            ("gen_error", "TEXT DEFAULT ''"),
+            ("output_paths", "JSON"),
+            ("output_video", "VARCHAR DEFAULT ''"),
+        ],
         "posts": [
             ("product_id", "VARCHAR DEFAULT ''"),
             ("reels_script", "TEXT"),

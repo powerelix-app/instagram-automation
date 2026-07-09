@@ -79,6 +79,10 @@ class Storyboard(Base):
     vo_full: Mapped[str] = mapped_column(Text, default="")
     music_hint: Mapped[str] = mapped_column(String(255), default="")
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft|approved
+    gen_status: Mapped[str] = mapped_column(String(64), default="")  # ''|старт…|…|done|error
+    gen_error: Mapped[str] = mapped_column(Text, default="")
+    output_paths: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    output_video: Mapped[str] = mapped_column(String(255), default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

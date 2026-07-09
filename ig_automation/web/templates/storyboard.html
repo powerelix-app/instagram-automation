@@ -12,9 +12,39 @@
     <form action="/storyboard/{{ sb.id }}/approve" method="post">
       <button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-4 py-2">✅ Одобрить</button>
     </form>
+    {% else %}
+      {% if not sb.gen_status or sb.gen_status in ('done', 'error') %}
+      <form action="/storyboard/{{ sb.id }}/generate" method="post">
+        <button class="text-sm bg-violet-700 hover:bg-violet-600 text-white rounded-lg px-4 py-2">
+          {% if sb.is_carousel %}🖼 Сгенерировать слайды{% else %}🎬 Сгенерировать ролик{% endif %}
+          {% if sb.gen_status == 'done' %} заново{% endif %}
+        </button>
+      </form>
+      {% endif %}
     {% endif %}
   </div>
 </div>
+{% if sb.gen_status and sb.gen_status not in ('done', 'error') %}
+<meta http-equiv="refresh" content="10">
+<div class="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4 text-sm">
+  ⏳ <b>Генерация:</b> {{ sb.gen_status }} <span class="text-slate-400">(страница обновляется сама)</span>
+</div>
+{% elif sb.gen_status == 'error' %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm">❌ <b>Ошибка:</b> {{ sb.gen_error }}</div>
+{% endif %}
+{% if sb.video %}
+<div class="bg-white border rounded-xl p-4 mb-4">
+  <div class="text-sm mb-2"><b>🎬 Готовый ролик:</b> <a href="{{ sb.video }}" download class="text-violet-700 underline">скачать</a></div>
+  <video src="{{ sb.video }}" controls class="max-h-96 rounded-lg"></video>
+</div>
+{% elif sb.outputs %}
+<div class="bg-white border rounded-xl p-4 mb-4">
+  <div class="text-sm mb-2"><b>🖼 Готовые слайды:</b></div>
+  <div class="flex gap-2 overflow-x-auto">
+    {% for o in sb.outputs %}<a href="{{ o }}" target="_blank"><img src="{{ o }}" class="h-48 rounded border"></a>{% endfor %}
+  </div>
+</div>
+{% endif %}
 <div class="bg-white border rounded-xl p-4 mb-4 text-sm"><b>Концепция:</b> {{ sb.concept }}</div>
 <div class="grid md:grid-cols-2 gap-3 mb-4">
   {% for sc in sb.scenes %}

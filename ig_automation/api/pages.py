@@ -283,7 +283,10 @@ def storyboard_page(request: Request, sb_id: int, _: bool = Depends(require_user
             raise HTTPException(404)
         sb = {"id": r.id, "title": r.title, "concept": r.concept, "product": r.product_name,
               "scenes": r.scenes or [], "vo_full": r.vo_full, "music_hint": r.music_hint,
-              "status": r.status, "reel_id": r.trend_reel_id}
+              "status": r.status, "reel_id": r.trend_reel_id,
+              "gen_status": r.gen_status or "", "gen_error": r.gen_error or "",
+              "outputs": r.output_paths or [], "video": r.output_video or "",
+              "is_carousel": bool(r.scenes) and all(float(x.get("duration_s") or 0) == 0 for x in (r.scenes or []))}
     return templates.TemplateResponse(request, "storyboard.html", _ctx(request, sb=sb))
 
 
@@ -295,6 +298,14 @@ def storyboard_approve(request: Request, sb_id: int, _: bool = Depends(require_u
         r = s.get(Storyboard, sb_id)
         if r:
             r.status = "approved"
+    return RedirectResponse(f"/storyboard/{sb_id}", status_code=303)
+
+
+@router.post("/storyboard/{sb_id}/generate")
+def storyboard_generate(request: Request, sb_id: int, _: bool = Depends(require_user)):
+    """Производство контента из одобренного storyboard (фон)."""
+    from ..services import producer
+    started = producer.produce(sb_id)
     return RedirectResponse(f"/storyboard/{sb_id}", status_code=303)
 
 

@@ -29,6 +29,8 @@ IG_API_BASE = IG_HOST + "/v23.0"
 
 # ── Apify ──
 APIFY_TOKEN = os.getenv("APIFY_TOKEN", "")
+FAL_KEY = os.getenv("FAL_KEY", "")
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "")
 
 # ── Claude ──
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
