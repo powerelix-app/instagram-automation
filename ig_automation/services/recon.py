@@ -683,3 +683,66 @@ def deep_analyze_images(reel_id: int) -> Optional[int]:
         s.add(row)
         s.flush()
         return row.id
+
+
+def storyboard_to_post(sb_id: int) -> Optional[int]:
+    """Готовый storyboard (со слайдами) -> Пост: подпись про продукт + артикул + ассеты."""
+    from .catalog import link_line
+    from .. import products as products_mod
+    from ..db.models import Storyboard, Post, PostAsset
+
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if not sb or not (sb.output_paths or sb.output_video):
+            return None
+        scenes = list(sb.scenes or [])
+        sb_data = {"product_id": sb.product_id, "product_name": sb.product_name,
+                   "title": sb.title, "concept": sb.concept,
+                   "outputs": list(sb.output_paths or []),
+                   "video": sb.output_video or "", "vo_full": sb.vo_full}
+
+    brand = products_mod.load_brand()
+    prod = next((p for p in brand["products"]
+                 if str(p["id"]) == str(sb_data["product_id"])), {})
+
+    class CaptionOut(BaseModel):
+        caption: str = Field(description="Подпись к посту: живой полезный текст про продукт (почему/кому/как принимать), на «ты», с эмодзи и абзацами, 500-900 знаков, БЕЗ хэштегов")
+        hashtags: List[str] = Field(description="8-12 релевантных русских хэштегов без #")
+
+    vo_lines = "\n".join(f"- {sc.get('vo','')}" for sc in scenes if sc.get("vo"))
+    client = anthropic.Anthropic()
+    resp = client.messages.parse(
+        model=config.CLAUDE_MODEL, max_tokens=2000,
+        system="""Ты — SMM-копирайтер бренда БАД POWERELIX (РФ). Пишешь подпись к карусели/ролику.
+ЖЁСТКО: БАД — не лекарство; нельзя «лечит/вылечивает/гарантирует»; только «поддерживает/способствует».
+Структура: цепляющий первый абзац -> польза и кому подходит -> как принимать -> мягкий CTA.""",
+        messages=[{"role": "user", "content":
+                   f"Продукт: {prod.get('name')}\nФорма: {prod.get('form','')}\n"
+                   f"Пользы: {', '.join(prod.get('benefits', [])[:5])}\n"
+                   f"Слоган: {prod.get('slogan','')}\n"
+                   f"Концепция поста: {sb_data['concept']}\n"
+                   f"Строки со слайдов:\n{vo_lines}\n\nНапиши подпись."}],
+        output_format=CaptionOut)
+    out = resp.parsed_output
+    link = link_line(str(sb_data["product_id"])) or ""
+    caption = out.caption.strip()
+    if link:
+        caption += f"\n\n🛒 {link}"
+    caption += "\n\nБАД. Не является лекарственным средством. Есть противопоказания."
+
+    with session_scope() as s:
+        post = Post(
+            format="carousel" if sb_data["outputs"] and not sb_data["video"] else "reels",
+            product=sb_data["product_name"], product_id=str(sb_data["product_id"]),
+            hook=sb_data["title"], caption=caption, hashtags=out.hashtags,
+            visual_idea=sb_data["concept"], status="review",
+            cta="ссылка и артикул в подписи")
+        s.add(post)
+        s.flush()
+        pid = post.id
+        if sb_data["video"]:
+            s.add(PostAsset(post_id=pid, kind="video", path=sb_data["video"],
+                            model="producer", ord=0))
+        for i, ap in enumerate(sb_data["outputs"]):
+            s.add(PostAsset(post_id=pid, kind="image", path=ap, model="producer", ord=i))
+    return pid

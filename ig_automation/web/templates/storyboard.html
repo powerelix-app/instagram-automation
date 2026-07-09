@@ -34,12 +34,20 @@
 {% endif %}
 {% if sb.video %}
 <div class="bg-white border rounded-xl p-4 mb-4">
-  <div class="text-sm mb-2"><b>🎬 Готовый ролик:</b> <a href="{{ sb.video }}" download class="text-violet-700 underline">скачать</a></div>
+  <div class="text-sm mb-2 flex items-center justify-between"><span><b>🎬 Готовый ролик:</b> <a href="{{ sb.video }}" download class="text-violet-700 underline">скачать</a></span>
+    <form action="/storyboard/{{ sb.id }}/to-post" method="post">
+      <button class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded px-3 py-1">📤 В пост (подпись + артикул)</button>
+    </form>
+  </div>
   <video src="{{ sb.video }}" controls class="max-h-96 rounded-lg"></video>
 </div>
 {% elif sb.outputs %}
 <div class="bg-white border rounded-xl p-4 mb-4">
-  <div class="text-sm mb-2"><b>🖼 Готовые слайды:</b></div>
+  <div class="text-sm mb-2 flex items-center justify-between"><b>🖼 Готовые слайды:</b>
+    <form action="/storyboard/{{ sb.id }}/to-post" method="post">
+      <button class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded px-3 py-1">📤 В пост (подпись + артикул)</button>
+    </form>
+  </div>
   <div class="flex gap-2 overflow-x-auto">
     {% for o in sb.outputs %}<a href="{{ o }}" target="_blank"><img src="{{ o }}" class="h-48 rounded border"></a>{% endfor %}
   </div>

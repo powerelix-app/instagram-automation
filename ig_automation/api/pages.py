@@ -309,6 +309,20 @@ def storyboard_generate(request: Request, sb_id: int, _: bool = Depends(require_
     return RedirectResponse(f"/storyboard/{sb_id}", status_code=303)
 
 
+@router.post("/storyboard/{sb_id}/to-post")
+def storyboard_to_post(request: Request, sb_id: int, _: bool = Depends(require_user)):
+    """Storyboard со сгенерированным контентом -> пост (подпись+артикул+ассеты)."""
+    try:
+        pid = recon.storyboard_to_post(sb_id)
+        if pid:
+            return RedirectResponse(f"/post/{pid}", status_code=303)
+        msg = "Сначала сгенерируй контент (слайды/ролик)"
+    except Exception as e:
+        log.warning("to-post failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/storyboard/{sb_id}?msg={quote(msg)}", status_code=303)
+
+
 # ── Фаза 3: Контент-план ──
 
 @router.get("/plan", response_class=HTMLResponse)
