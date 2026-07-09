@@ -102,7 +102,15 @@ def fal_i2v(image: bytes, prompt: str, duration: int = 5) -> bytes:
     vurl = (out.get("video") or {}).get("url") or ""
     if not vurl:
         raise RuntimeError(f"fal: нет video.url в ответе: {str(out)[:200]}")
-    return requests.get(vurl, timeout=300).content
+    try:
+        return requests.get(vurl, timeout=(10, 300)).content
+    except Exception as e:  # fal.media CDN режется с РФ-VPS — качаем через актор
+        log.warning("fal cdn fail (%s) — через media-fetcher", e)
+        from .. import apify
+        data = apify.fetch_via_actor(vurl)
+        if not data:
+            raise RuntimeError("fal cdn недоступен и через прокси")
+        return data
 
 
 def _eleven_post(path: str, payload: dict) -> bytes:
@@ -196,6 +204,10 @@ def _produce_video(sb_id: int):
     out = _out_dir(sb_id)
     clips = []
     for i, sc in enumerate(scenes):
+        cp_done = out / f"clip_{i}.mp4"
+        if cp_done.exists() and cp_done.stat().st_size > 0:
+            clips.append(cp_done)
+            continue
         _set(sb_id, gen_status=f"сцена {i + 1}/{len(scenes)}: стилл…")
         still = gen_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}", ref=ref)
         (out / f"still_{i}.png").write_bytes(still)
