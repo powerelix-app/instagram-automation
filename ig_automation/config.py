@@ -40,6 +40,8 @@ IMAGE_MODEL = os.getenv("IMAGE_MODEL", "black-forest-labs/flux-dev")  # дефо
 
 # ── OpenAI (gpt-image-1 через Replicate требует ключ юзера как input) ──
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+# Whisper: на РФ-VPS ставить ProxyAPI (https://api.proxyapi.ru/openai/v1/audio/transcriptions)
+OPENAI_AUDIO_URL = os.getenv("OPENAI_AUDIO_URL", "https://api.openai.com/v1/audio/transcriptions")
 
 # ── Google Veo (видео-генерация через Gemini API) ──
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")

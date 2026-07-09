@@ -341,19 +341,22 @@ def _ensure_video(reel_id: int) -> str:
         vurl = (norm or {}).get("video_url") or ""
     if not vurl:
         return ""
+    data = b""
     try:
-        r = requests.get(vurl, timeout=300)
+        r = requests.get(vurl, timeout=(10, 300))
         r.raise_for_status()
-        dest.write_bytes(r.content)
-    except Exception as e:  # CDN протух — перечитать через Apify
-        log.warning("video dl fail (%s), retry via apify", e)
-        norm = apify.reel_by_url(page_url) if page_url else None
-        vurl2 = (norm or {}).get("video_url") or ""
-        if not vurl2:
-            return ""
-        r = requests.get(vurl2, timeout=300)
-        r.raise_for_status()
-        dest.write_bytes(r.content)
+        data = r.content
+    except Exception as e:  # CDN недоступен (РКН на VPS) или протух
+        log.warning("direct video dl fail (%s) — пробую media-fetcher", e)
+        data = apify.fetch_via_actor(vurl) or b""
+        if not data and page_url:  # ссылка протухла — перечитать и снова через актор
+            norm = apify.reel_by_url(page_url)
+            vurl2 = (norm or {}).get("video_url") or ""
+            if vurl2:
+                data = apify.fetch_via_actor(vurl2) or b""
+    if not data:
+        return ""
+    dest.write_bytes(data)
     with session_scope() as s:
         reel = s.get(TrendReel, reel_id)
         reel.local_media_path = f"/media/reels/{reel_id}.mp4"
@@ -393,7 +396,7 @@ def _transcribe(video_path: str) -> str:
         if config.OPENAI_API_KEY:
             try:
                 r = requests.post(
-                    "https://api.openai.com/v1/audio/transcriptions",
+                    config.OPENAI_AUDIO_URL,
                     headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
                     files={"file": ("a.mp3", open(mp3, "rb"), "audio/mpeg")},
                     data={"model": "whisper-1", "response_format": "text"}, timeout=180)

@@ -198,3 +198,21 @@ def reel_by_url(url: str) -> Optional[dict[str, Any]]:
         if norm:
             return norm
     return None
+
+
+FETCHER_ACTOR = "dRB9VamNfzOU5fgPP"  # наш media-fetcher: качает URL на стороне Apify (обход РКН для VPS)
+
+
+def fetch_via_actor(url: str, timeout: int = 240) -> Optional[bytes]:
+    """Скачивает файл через актор media-fetcher (для хостов, недоступных с РФ-VPS)."""
+    try:
+        items = _run_actor(FETCHER_ACTOR, {"url": url}, max_charge_usd=0.05, timeout=timeout)
+    except Exception as e:
+        log.warning("media-fetcher run failed: %s", e)
+        return None
+    for it in items:
+        if it.get("ok") and it.get("downloadUrl"):
+            r = requests.get(it["downloadUrl"], params={"token": config.APIFY_TOKEN}, timeout=120)
+            if r.ok and r.content:
+                return r.content
+    return None
