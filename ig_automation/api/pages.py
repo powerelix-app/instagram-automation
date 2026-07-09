@@ -155,6 +155,7 @@ def recon_page(request: Request, topic: str = "", show: str = "", lang: str = ""
             reels=recon.list_reels(filt, include_irrelevant=include, lang=lang),
             topics=topics, sel_topic=sel, show_all=include, sel_lang=lang,
             irrelevant_count=recon.count_irrelevant(filt), msg=msg,
+            products=catalog_svc.all_with_links(),
         ),
     )
 
@@ -245,6 +246,56 @@ async def recon_upload(request: Request, video: UploadFile = File(...), _: bool 
         log.warning("recon upload failed: %s", e)
         msg = f"Ошибка: {e}"
     return RedirectResponse(f"/recon?topic={quote('загрузка')}&msg={quote(msg)}", status_code=303)
+
+
+@router.post("/recon/analysis/{analysis_id}/make-similar")
+def recon_make_similar(request: Request, analysis_id: int, product_id: str = Form(...), _: bool = Depends(require_user)):
+    """Storyboard нашего ролика по механике разобранного референса."""
+    try:
+        sb_id = recon.make_similar(analysis_id, product_id)
+        if sb_id:
+            return RedirectResponse(f"/storyboard/{sb_id}", status_code=303)
+        msg = "Не удалось (нет разбора или продукта)"
+    except Exception as e:
+        log.warning("make-similar failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/recon?msg={quote(msg)}", status_code=303)
+
+
+@router.get("/storyboards", response_class=HTMLResponse)
+def storyboards_page(request: Request, _: bool = Depends(require_user)):
+    from ..db.base import session_scope
+    from ..db.models import Storyboard
+    with session_scope() as s:
+        rows = s.query(Storyboard).order_by(Storyboard.id.desc()).limit(50).all()
+        items = [{"id": r.id, "title": r.title, "product": r.product_name,
+                  "status": r.status, "created": r.created_at} for r in rows]
+    return templates.TemplateResponse(request, "storyboards.html", _ctx(request, items=items))
+
+
+@router.get("/storyboard/{sb_id}", response_class=HTMLResponse)
+def storyboard_page(request: Request, sb_id: int, _: bool = Depends(require_user)):
+    from ..db.base import session_scope
+    from ..db.models import Storyboard
+    with session_scope() as s:
+        r = s.get(Storyboard, sb_id)
+        if not r:
+            raise HTTPException(404)
+        sb = {"id": r.id, "title": r.title, "concept": r.concept, "product": r.product_name,
+              "scenes": r.scenes or [], "vo_full": r.vo_full, "music_hint": r.music_hint,
+              "status": r.status, "reel_id": r.trend_reel_id}
+    return templates.TemplateResponse(request, "storyboard.html", _ctx(request, sb=sb))
+
+
+@router.post("/storyboard/{sb_id}/approve")
+def storyboard_approve(request: Request, sb_id: int, _: bool = Depends(require_user)):
+    from ..db.base import session_scope
+    from ..db.models import Storyboard
+    with session_scope() as s:
+        r = s.get(Storyboard, sb_id)
+        if r:
+            r.status = "approved"
+    return RedirectResponse(f"/storyboard/{sb_id}", status_code=303)
 
 
 # ── Фаза 3: Контент-план ──

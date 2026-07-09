@@ -64,6 +64,23 @@ class HookAnalysis(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class Storyboard(Base):
+    """Раскадровка «Сделать похожий»: механика чужого ролика на наш продукт."""
+    __tablename__ = "storyboards"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    hook_analysis_id: Mapped[int] = mapped_column(ForeignKey("hook_analyses.id"))
+    trend_reel_id: Mapped[int] = mapped_column(Integer, default=0)
+    product_id: Mapped[str] = mapped_column(String(32), default="")
+    product_name: Mapped[str] = mapped_column(String(128), default="")
+    title: Mapped[str] = mapped_column(String(255), default="")
+    concept: Mapped[str] = mapped_column(Text, default="")
+    scenes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # [{n,scene,camera,vo,duration_s}]
+    vo_full: Mapped[str] = mapped_column(Text, default="")
+    music_hint: Mapped[str] = mapped_column(String(255), default="")
+    status: Mapped[str] = mapped_column(String(16), default="draft")  # draft|approved
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
 class Idea(Base):
     """Банк идей — из разведки, плана или вручную."""
     __tablename__ = "ideas"

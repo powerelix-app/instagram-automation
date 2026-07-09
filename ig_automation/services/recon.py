@@ -491,3 +491,79 @@ def add_uploaded_video(data: bytes, filename: str = "") -> Optional[int]:
     with session_scope() as s:
         s.get(TrendReel, reel_id).local_media_path = f"/media/reels/{reel_id}.mp4"
     return reel_id
+
+
+# ── «Сделать похожий»: storyboard под наш продукт по механике референса ──
+
+class SceneOut(BaseModel):
+    n: int = Field(description="Номер сцены по порядку")
+    scene: str = Field(description="Что в кадре: композиция, продукт, окружение, свет (конкретно, для генерации)")
+    camera: str = Field(description="ОДНО движение камеры на сцену (проезд/облёт/кран/push-in/статика) и ракурс")
+    vo: str = Field(description="Закадровый текст на эту сцену (рус., может быть пустым)")
+    duration_s: float = Field(description="Длительность сцены в секундах (2-6)")
+
+
+class StoryboardOut(BaseModel):
+    title: str = Field(description="Короткое название ролика")
+    concept: str = Field(description="Концепция в 1-2 предложениях: какую механику референса переносим и как")
+    scenes: List[SceneOut] = Field(description="5-7 сцен")
+    vo_full: str = Field(description="Полный закадровый текст целиком (или пометка 'без голоса, только музыка')")
+    music_hint: str = Field(description="Какая музыка/настроение трека")
+
+
+_SIMILAR_SYSTEM = """Ты — режиссёр коротких рекламных роликов для бренда БАД POWERELIX (RU).
+Тебе дают ГЛУБОКИЙ РАЗБОР чужого вирусного ролика (хук, структура, визуальный мир, камера)
+и НАШ ПРОДУКТ. Собери storyboard НАШЕГО ролика по той же МЕХАНИКЕ (не копия: другой продукт,
+свой фирменный цвет/мир, та же драматургия и приёмы камеры).
+Правила: 9:16, 15-25 сек суммарно; в каждой сцене ОДНО движение камеры; физика реалистична
+(жидкости падают вниз, конденсат стекает по бутылке); продукт с читаемой этикеткой; юр-правила
+рекламы БАД РФ — без «лечит», только «поддерживает/способствует»; финальная сцена — пэк-шот
+с местом под текст и артикул. Если в референсе нет голоса — можно без VO (укажи это)."""
+
+
+def make_similar(analysis_id: int, product_id: str) -> Optional[int]:
+    """Storyboard нашего ролика по механике разобранного референса."""
+    from .catalog import link_line
+    from .. import products as products_mod
+    if not config.ANTHROPIC_API_KEY:
+        raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
+    with session_scope() as s:
+        a = s.get(HookAnalysis, analysis_id)
+        if not a:
+            return None
+        reel = s.get(TrendReel, a.trend_reel_id)
+        ref = (
+            f"Хук: {a.hook}\nУдержание: {a.retention_device}\nТриггер: {a.trigger}\n"
+            f"Структура: {a.structure}\nПочему зашло: {a.why_viral}\n"
+            f"Визуальный мир: {a.visual_notes or '—'}\nКамера/монтаж: {a.camera_work or '—'}\n"
+            f"Транскрипт референса: {(reel.transcript if reel else '') or '— (без речи)'}"
+        )
+        reel_id = a.trend_reel_id
+    brand = products_mod.load_brand()
+    prod = next((p for p in brand["products"] if str(p["id"]) == str(product_id)), None)
+    if not prod:
+        return None
+    pinfo = (
+        f"Продукт: {prod['name']}\nФорма: {prod.get('form','')}\n"
+        f"Пользы: {', '.join(prod.get('benefits', [])[:4])}\n"
+        f"Слоган: {prod.get('slogan','')}\nФирменный цвет: {prod.get('accent_color','')}\n"
+        f"Где купить (для пэк-шота): {link_line(str(product_id)) or 'WB'}"
+    )
+    client = anthropic.Anthropic()
+    resp = client.messages.parse(
+        model=config.CLAUDE_MODEL, max_tokens=4000, system=_SIMILAR_SYSTEM,
+        messages=[{"role": "user", "content":
+                   f"РАЗБОР РЕФЕРЕНСА:\n{ref}\n\nНАШ ПРОДУКТ:\n{pinfo}\n\nСобери storyboard."}],
+        output_format=StoryboardOut)
+    out = resp.parsed_output
+    from ..db.models import Storyboard
+    with session_scope() as s:
+        row = Storyboard(
+            hook_analysis_id=analysis_id, trend_reel_id=reel_id,
+            product_id=str(product_id), product_name=prod["name"],
+            title=out.title, concept=out.concept,
+            scenes=[sc.model_dump() for sc in out.scenes],
+            vo_full=out.vo_full, music_hint=out.music_hint)
+        s.add(row)
+        s.flush()
+        return row.id

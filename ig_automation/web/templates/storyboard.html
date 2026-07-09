@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="flex items-center justify-between mb-4">
+  <div>
+    <h1 class="text-xl font-bold">🎬 {{ sb.title }}</h1>
+    <div class="text-sm text-slate-500">Продукт: {{ sb.product }} · статус:
+      {% if sb.status == 'approved' %}<span class="text-emerald-700 font-semibold">одобрен</span>{% else %}черновик{% endif %}</div>
+  </div>
+  <div class="flex gap-2">
+    <a href="/storyboards" class="text-sm border rounded-lg px-3 py-2 hover:bg-slate-50">← Все раскадровки</a>
+    {% if sb.status != 'approved' %}
+    <form action="/storyboard/{{ sb.id }}/approve" method="post">
+      <button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-4 py-2">✅ Одобрить</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+<div class="bg-white border rounded-xl p-4 mb-4 text-sm"><b>Концепция:</b> {{ sb.concept }}</div>
+<div class="grid md:grid-cols-2 gap-3 mb-4">
+  {% for sc in sb.scenes %}
+  <div class="bg-white border rounded-xl p-4 text-sm space-y-1">
+    <div class="flex justify-between"><b>Сцена {{ sc.n }}</b><span class="text-emerald-700">{{ sc.duration_s }}с</span></div>
+    <div>{{ sc.scene }}</div>
+    <div class="text-slate-500"><b>Камера:</b> {{ sc.camera }}</div>
+    {% if sc.vo %}<div class="text-violet-800"><b>VO:</b> {{ sc.vo }}</div>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+<div class="bg-white border rounded-xl p-4 text-sm mb-4">
+  <div class="mb-2"><b>Закадровый текст целиком:</b></div>
+  <div class="whitespace-pre-wrap">{{ sb.vo_full }}</div>
+  <div class="mt-2 text-slate-500"><b>Музыка:</b> {{ sb.music_hint }}</div>
+</div>
+<div class="text-xs text-slate-400">После одобрения — генерация сцен по нашему видео-конвейеру (nano + Kling/Seedance + голос Насти).</div>
+{% endblock %}

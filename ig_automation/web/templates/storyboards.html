@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block content %}
+<h1 class="text-xl font-bold mb-4">🎬 Раскадровки</h1>
+<div class="bg-white border rounded-xl divide-y">
+  {% for it in items %}
+  <a href="/storyboard/{{ it.id }}" class="flex justify-between items-center px-4 py-3 hover:bg-slate-50 text-sm">
+    <div><b>#{{ it.id }}</b> {{ it.title }} <span class="text-slate-400">· {{ it.product }}</span></div>
+    <div>{% if it.status == 'approved' %}<span class="text-emerald-700">одобрен</span>{% else %}<span class="text-slate-400">черновик</span>{% endif %}</div>
+  </a>
+  {% else %}<div class="px-4 py-6 text-sm text-slate-400">Пока пусто — сделай разбор в Разведке и нажми «Сделать похожий»</div>{% endfor %}
+</div>
+{% endblock %}
