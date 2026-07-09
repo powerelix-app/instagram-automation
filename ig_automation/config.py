@@ -76,6 +76,13 @@ TG_TOKEN = os.getenv("CF_TG_TOKEN", "")
 TG_CHAT = os.getenv("CF_TG_CHAT", "")
 TG_RELAY = os.getenv("CF_TG_RELAY", "https://tg-relay.makc-rogozhnikov.workers.dev").rstrip("/")
 
+# ── Кросс-пост в Telegram-канал @powerelix (бот @powerelix_brand_bot — админ канала) ──
+CROSSPOST_ENABLED = os.getenv("CF_CROSSPOST", "0") == "1"
+CROSSPOST_BOT_TOKEN = os.getenv("CF_CROSSPOST_BOT_TOKEN", "")
+CROSSPOST_CHANNEL = os.getenv("CF_CROSSPOST_CHANNEL", "@powerelix")
+CROSSPOST_BUTTON_TEXT = os.getenv("CF_CROSSPOST_BUTTON_TEXT", "💊 Каталог и приложение")
+CROSSPOST_BUTTON_URL = os.getenv("CF_CROSSPOST_BUTTON_URL", "https://t.me/powerelix_brand_bot")
+
 # ── TTS для озвучки Reels (Replicate, русский — api.openai.com заблокирован с РФ-VPS) ──
 TTS_MODEL = os.getenv("CF_TTS_MODEL", "minimax/speech-02-turbo")
 TTS_VOICE = os.getenv("CF_TTS_VOICE", "Wise_Woman")

@@ -53,6 +53,7 @@ def publish(post_id: int) -> Dict:
             post.published_at = datetime.utcnow()
             post.error = ""
         log.info("publish post %s — SIMULATED (image_url=%s)", post_id, image_url)
+        _tg_crosspost_safe(post_id, simulated=True)
         return {"ok": True, "simulated": True}
 
     # ── Боевая публикация ──
@@ -77,6 +78,7 @@ def publish(post_id: int) -> Dict:
             post.published_at = datetime.utcnow()
             post.error = ""
         log.info("publish post %s — OK media_id=%s", post_id, media_id)
+        _tg_crosspost_safe(post_id)
         return {"ok": True, "media_id": media_id}
     except Exception as e:
         with session_scope() as s:
@@ -110,3 +112,20 @@ def publish_due() -> int:
     for pid in due:
         publish(pid)
     return len(due)
+
+
+def _tg_crosspost_safe(post_id: int, simulated: bool = False) -> None:
+    """Кросс-пост в TG-канал сразу после публикации в IG («одновременно»).
+    Ошибка TG никогда не ломает публикацию. В режиме симуляции IG кросс-пост
+    тоже только логируется."""
+    from . import tg_crosspost
+    try:
+        if simulated:
+            if tg_crosspost.configured():
+                log.info("tg crosspost post %s — SIMULATED (в канал не шлём)", post_id)
+            return
+        res = tg_crosspost.crosspost(post_id)
+        if not res.get("ok") and not res.get("skipped"):
+            log.warning("tg crosspost post %s: %s", post_id, res.get("error"))
+    except Exception as e:
+        log.warning("tg crosspost post %s unexpected: %s", post_id, e)
