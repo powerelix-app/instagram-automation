@@ -314,11 +314,17 @@ def add_reel_by_url(url: str) -> Optional[int]:
                 transcript=str(norm.get("transcript") or ""), topic="по ссылке",
                 relevant=True, relevance_reason="добавлен вручную", lang="",
                 media_type=norm.get("media_type", "video"),
+                images=norm.get("images") or None,
             )
             s.add(row)
             s.flush()
             reel_id = row.id
-    _ensure_video(reel_id)
+    with session_scope() as s:
+        mt = s.get(TrendReel, reel_id).media_type
+    if mt == "video":
+        _ensure_video(reel_id)
+    else:
+        _ensure_images(reel_id)
     return reel_id
 
 
@@ -430,10 +436,14 @@ def _transcribe(video_path: str) -> str:
 
 
 def deep_analyze(reel_id: int) -> Optional[int]:
-    """Глубокий разбор: mp4 -> кадры + транскрипт -> Claude vision -> hook_analyses."""
+    """Глубокий разбор: видео (кадры+транскрипт) или карусель/картинка (слайды)."""
     import base64
     if not config.ANTHROPIC_API_KEY:
         raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
+    with session_scope() as s:
+        _mt = (s.get(TrendReel, reel_id).media_type or "video")
+    if _mt in ("carousel", "image"):
+        return deep_analyze_images(reel_id)
     video = _ensure_video(reel_id)
     if not video:
         log.warning("deep_analyze %s: видео недоступно", reel_id)
@@ -511,7 +521,10 @@ class StoryboardOut(BaseModel):
     music_hint: str = Field(description="Какая музыка/настроение трека")
 
 
-_SIMILAR_SYSTEM = """Ты — режиссёр коротких рекламных роликов для бренда БАД POWERELIX (RU).
+_SIMILAR_SYSTEM = """Ты — режиссёр коротких рекламных роликов и арт-директор бренда БАД POWERELIX (RU).
+Если формат референса — carousel/image: собери вместо ролика КАРУСЕЛЬ (сцены = слайды:
+scene — что на слайде и какой текст крупно, camera — принцип вёрстки слайда, vo — подпись,
+duration_s — 0). Иначе:
 Тебе дают ГЛУБОКИЙ РАЗБОР чужого вирусного ролика (хук, структура, визуальный мир, камера)
 и НАШ ПРОДУКТ. Собери storyboard НАШЕГО ролика по той же МЕХАНИКЕ (не копия: другой продукт,
 свой фирменный цвет/мир, та же драматургия и приёмы камеры).
@@ -536,7 +549,8 @@ def make_similar(analysis_id: int, product_id: str) -> Optional[int]:
             f"Хук: {a.hook}\nУдержание: {a.retention_device}\nТриггер: {a.trigger}\n"
             f"Структура: {a.structure}\nПочему зашло: {a.why_viral}\n"
             f"Визуальный мир: {a.visual_notes or '—'}\nКамера/монтаж: {a.camera_work or '—'}\n"
-            f"Транскрипт референса: {(reel.transcript if reel else '') or '— (без речи)'}"
+            f"Транскрипт референса: {(reel.transcript if reel else '') or '— (без речи)'}\n"
+            f"Формат референса: {(reel.media_type if reel else 'video') or 'video'}"
         )
         reel_id = a.trend_reel_id
     brand = products_mod.load_brand()
@@ -564,6 +578,85 @@ def make_similar(analysis_id: int, product_id: str) -> Optional[int]:
             title=out.title, concept=out.concept,
             scenes=[sc.model_dump() for sc in out.scenes],
             vo_full=out.vo_full, music_hint=out.music_hint)
+        s.add(row)
+        s.flush()
+        return row.id
+
+
+def _fetch_bytes(url: str) -> bytes:
+    """Скачивание с фолбэком на media-fetcher (РКН на VPS)."""
+    try:
+        r = requests.get(url, timeout=(10, 120))
+        r.raise_for_status()
+        return r.content
+    except Exception:
+        return apify.fetch_via_actor(url) or b""
+
+
+def _ensure_images(reel_id: int) -> list:
+    """Слайды карусели/поста -> data/media/frames/<id>/f*.jpg (UI их уже показывает)."""
+    fdir = config.MEDIA_DIR / "frames" / str(reel_id)
+    fdir.mkdir(parents=True, exist_ok=True)
+    existing = sorted(fdir.glob("f*.jpg"))
+    if existing:
+        return [str(x) for x in existing]
+    with session_scope() as s:
+        reel = s.get(TrendReel, reel_id)
+        urls = list(reel.images or [])
+        page_url = reel.url
+    if not urls and page_url:  # ссылки протухли — перечитать
+        norm = apify.reel_by_url(page_url)
+        urls = (norm or {}).get("images") or []
+    out = []
+    for i, u in enumerate(urls[:10]):
+        data = _fetch_bytes(u)
+        if data:
+            f = fdir / f"f{i}.jpg"
+            f.write_bytes(data)
+            out.append(str(f))
+    return out
+
+
+_DEEP_IMAGE_SYSTEM = _ANALYZE_SYSTEM + """
+Это КАРУСЕЛЬ/ПОСТ-КАРТИНКА (не видео). Тебе дают слайды по порядку. Разбирай:
+хук-слайд (почему останавливает скролл), логику последовательности слайдов,
+дизайн (шрифты, цвета, сетка, как свёрстан текст), где CTA. В поле structure —
+послайдовая структура (слайд 1 → 2 → …), в camera_work — принципы вёрстки/дизайна."""
+
+
+def deep_analyze_images(reel_id: int) -> Optional[int]:
+    """Глубокий разбор карусели/картинки: слайды -> Claude vision."""
+    import base64
+    if not config.ANTHROPIC_API_KEY:
+        raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
+    slides = _ensure_images(reel_id)
+    if not slides:
+        return None
+    with session_scope() as s:
+        reel = s.get(TrendReel, reel_id)
+        info = (
+            f"Формат: {reel.media_type}, слайдов: {len(slides)}\n"
+            f"Лайки: {reel.likes}, комментарии: {reel.comments}\n"
+            f"Текст поста: {reel.caption or '—'}"
+        )
+    content = []
+    for i, f in enumerate(slides):
+        content.append({"type": "text", "text": f"Слайд {i + 1}/{len(slides)}:"})
+        content.append({"type": "image", "source": {
+            "type": "base64", "media_type": "image/jpeg",
+            "data": base64.b64encode(open(f, "rb").read()).decode()}})
+    content.append({"type": "text", "text": f"Данные поста:\n{info}\n\nРазбери по схеме."})
+    client = anthropic.Anthropic()
+    resp = client.messages.parse(
+        model=config.CLAUDE_MODEL, max_tokens=4000, system=_DEEP_IMAGE_SYSTEM,
+        messages=[{"role": "user", "content": content}], output_format=DeepHookOut)
+    out = resp.parsed_output
+    with session_scope() as s:
+        row = HookAnalysis(
+            trend_reel_id=reel_id, hook=out.hook, retention_device=out.retention_device,
+            trigger=out.trigger, structure=out.structure, why_viral=out.why_viral,
+            adapted_idea=out.adapted_idea, visual_notes=out.visual_notes,
+            camera_work=out.camera_work, is_deep=True)
         s.add(row)
         s.flush()
         return row.id

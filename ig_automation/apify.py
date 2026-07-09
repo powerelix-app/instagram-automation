@@ -107,6 +107,15 @@ def _normalize_reel(item: dict[str, Any]) -> Optional[dict[str, Any]]:
         if cands:
             thumb = cands[0].get("url", "")
 
+    # картинки поста/карусели (для разбора слайдов)
+    images: list = []
+    if isinstance(item.get("images"), list):
+        images = [u for u in item["images"] if isinstance(u, str) and u.startswith("http")]
+    if not images and isinstance(item.get("childPosts"), list):
+        images = [c.get("displayUrl") for c in item["childPosts"] if c.get("displayUrl")]
+    if not images and media_type == "image" and thumb:
+        images = [thumb]
+
     hashtags = item.get("hashtags") or _hashtags_from(caption)
     return {
         "url": url,
@@ -119,6 +128,7 @@ def _normalize_reel(item: dict[str, Any]) -> Optional[dict[str, Any]]:
         "video_url": video_url,
         "thumbnail_url": thumb or "",
         "media_type": media_type,
+        "images": images,
         "music_info": "",
         "transcript": _first(item, "transcript", "captions") or "",
     }

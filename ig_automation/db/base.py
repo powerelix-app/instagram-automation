@@ -47,6 +47,7 @@ def _migrate(engine) -> None:
             ("relevance_reason", "VARCHAR DEFAULT ''"),
             ("lang", "VARCHAR DEFAULT ''"),
             ("media_type", "VARCHAR DEFAULT ''"),
+            ("images", "JSON"),
         ],
         "hook_analyses": [
             ("visual_notes", "TEXT DEFAULT ''"),
