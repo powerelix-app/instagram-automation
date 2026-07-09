@@ -51,16 +51,17 @@ def _set(sb_id: int, **kw):
 
 # ── примитивы ──
 
-def gen_image(prompt: str, ref: Optional[Path] = None, aspect: str = "9:16") -> bytes:
+def gen_image(prompt: str, ref: Optional[Path] = None, aspect: str = "9:16",
+              style_suffix: str = "Photorealistic, raw photo, no glossy CGI look, film grain.") -> bytes:
     """Картинка через ProxyAPI gemini flash-image (референс банки — опционально)."""
     parts = []
     if ref:
         parts.append({"inline_data": {
             "mime_type": "image/png" if ref.suffix == ".png" else "image/jpeg",
             "data": base64.b64encode(ref.read_bytes()).decode()}})
-    parts.append({"text": prompt + f"\nAspect ratio {aspect}. Photorealistic, raw photo, "
-                  "no glossy CGI look, film grain. If a product bottle is present keep the "
-                  "label crisp and identical to the reference. No watermark."})
+    parts.append({"text": prompt + f"\nAspect ratio {aspect}. {style_suffix} "
+                  "If a product bottle is present keep the label crisp and identical "
+                  "to the reference. No watermark."})
     r = requests.post(
         f"https://api.proxyapi.ru/google/v1beta/models/{IMG_MODEL}:generateContent",
         headers={"Authorization": f"Bearer {PROXY_KEY}"},
@@ -149,10 +150,13 @@ def _produce_slides(sb_id: int):
     paths = []
     for i, sc in enumerate(scenes):
         _set(sb_id, gen_status=f"слайд {i + 1}/{len(scenes)}…")
-        prompt = (f"Инстаграм-слайд {i + 1} карусели ({sc.get('camera', '')}).\n"
-                  f"Что на слайде: {sc.get('scene', '')}\n"
-                  f"Крупный текст на слайде (русский, без ошибок): {sc.get('vo', '') or '—'}")
-        img = gen_image(prompt, ref=ref, aspect="4:5")
+        prompt = (f"Слайд {i + 1} Instagram-карусели.\n"
+                  f"ВИЗУАЛ: {sc.get('scene', '')}\n"
+                  f"Композиция: {sc.get('camera', '')}\n"
+                  "СТРОГО: никакого текста, букв, цифр или надписей на изображении "
+                  "(кроме оригинальной этикетки продукта). Премиальный креативный визуал, "
+                  "точно следуй описанию сцены и её стилю.")
+        img = gen_image(prompt, ref=ref, aspect="4:5", style_suffix="")
         p = out / f"slide_{i}.png"
         p.write_bytes(img)
         paths.append(f"/media/produced/{sb_id}/slide_{i}.png")
