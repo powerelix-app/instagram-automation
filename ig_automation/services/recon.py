@@ -685,7 +685,7 @@ def deep_analyze_images(reel_id: int) -> Optional[int]:
         return row.id
 
 
-def storyboard_to_post(sb_id: int) -> Optional[int]:
+def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Optional[int]:
     """Готовый storyboard (со слайдами) -> Пост: подпись про продукт + артикул + ассеты."""
     from .catalog import link_line
     from .. import products as products_mod
@@ -698,7 +698,8 @@ def storyboard_to_post(sb_id: int) -> Optional[int]:
         scenes = list(sb.scenes or [])
         sb_data = {"product_id": sb.product_id, "product_name": sb.product_name,
                    "title": sb.title, "concept": sb.concept,
-                   "outputs": list(sb.output_paths or []),
+                   "outputs": [x for i, x in enumerate(sb.output_paths or [])
+                               if selected is None or i in selected],
                    "video": sb.output_video or "", "vo_full": sb.vo_full}
 
     brand = products_mod.load_brand()

@@ -310,10 +310,12 @@ def storyboard_generate(request: Request, sb_id: int, _: bool = Depends(require_
 
 
 @router.post("/storyboard/{sb_id}/to-post")
-def storyboard_to_post(request: Request, sb_id: int, _: bool = Depends(require_user)):
-    """Storyboard со сгенерированным контентом -> пост (подпись+артикул+ассеты)."""
+async def storyboard_to_post(request: Request, sb_id: int, _: bool = Depends(require_user)):
+    """Storyboard со сгенерированным контентом -> пост (подпись+артикул+выбранные ассеты)."""
     try:
-        pid = recon.storyboard_to_post(sb_id)
+        form = await request.form()
+        sel = [int(x) for x in form.getlist("slides")] or None
+        pid = recon.storyboard_to_post(sb_id, selected=sel)
         if pid:
             return RedirectResponse(f"/post/{pid}", status_code=303)
         msg = "Сначала сгенерируй контент (слайды/ролик)"

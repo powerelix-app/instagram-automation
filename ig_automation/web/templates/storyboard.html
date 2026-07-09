@@ -43,14 +43,20 @@
 </div>
 {% elif sb.outputs %}
 <div class="bg-white border rounded-xl p-4 mb-4">
-  <div class="text-sm mb-2 flex items-center justify-between"><b>🖼 Готовые слайды:</b>
-    <form action="/storyboard/{{ sb.id }}/to-post" method="post">
+  <form action="/storyboard/{{ sb.id }}/to-post" method="post">
+    <div class="text-sm mb-2 flex items-center justify-between"><b>🖼 Готовые слайды <span class="text-slate-400 font-normal">(сними галочки с ненужных)</span>:</b>
       <button class="text-xs bg-emerald-700 hover:bg-emerald-600 text-white rounded px-3 py-1">📤 В пост (подпись + артикул)</button>
-    </form>
-  </div>
-  <div class="flex gap-2 overflow-x-auto">
-    {% for o in sb.outputs %}<a href="{{ o }}" target="_blank"><img src="{{ o }}" class="h-48 rounded border"></a>{% endfor %}
-  </div>
+    </div>
+    <div class="flex gap-2 overflow-x-auto">
+      {% for o in sb.outputs %}
+      <label class="relative shrink-0 cursor-pointer">
+        <a href="{{ o }}" target="_blank"><img src="{{ o }}" class="h-48 rounded border"></a>
+        <input type="checkbox" name="slides" value="{{ loop.index0 }}" checked
+               class="absolute top-2 left-2 w-5 h-5 accent-emerald-600">
+      </label>
+      {% endfor %}
+    </div>
+  </form>
 </div>
 {% endif %}
 <div class="bg-white border rounded-xl p-4 mb-4 text-sm"><b>Концепция:</b> {{ sb.concept }}</div>
