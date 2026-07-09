@@ -90,9 +90,23 @@ def gen_image(prompt: str, ref: Optional[Path] = None, aspect: str = "9:16",
     parts = []
     for rp in (refs or ([ref] if ref else [])):
         rp = Path(rp)
+        data = rp.read_bytes()
+        if len(data) > 400_000:  # ужимаем крупные референсы: меньше вход = меньше резерв ProxyAPI
+            import tempfile, os as _os
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as tf:
+                small = tf.name
+            subprocess.run(["ffmpeg", "-y", "-i", str(rp),
+                            "-vf", "scale='min(1024,iw)':-2", "-q:v", "4", small],
+                           capture_output=True, timeout=60)
+            if Path(small).exists() and Path(small).stat().st_size > 0:
+                data = Path(small).read_bytes()
+                _os.unlink(small)
+            parts.append({"inline_data": {"mime_type": "image/jpeg",
+                                          "data": base64.b64encode(data).decode()}})
+            continue
         parts.append({"inline_data": {
             "mime_type": "image/png" if rp.suffix == ".png" else "image/jpeg",
-            "data": base64.b64encode(rp.read_bytes()).decode()}})
+            "data": base64.b64encode(data).decode()}})
     parts.append({"text": prompt + f"\nAspect ratio {aspect}. {style_suffix} "
                   "If a product bottle is present keep the label crisp and identical "
                   "to the reference. No watermark."})
