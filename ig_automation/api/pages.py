@@ -202,6 +202,35 @@ def recon_to_idea(request: Request, reel_id: int, _: bool = Depends(require_user
     return RedirectResponse(f"/recon?msg={msg}", status_code=303)
 
 
+@router.post("/recon/add-url")
+def recon_add_url(request: Request, url: str = Form(...), _: bool = Depends(require_user)):
+    """Разбор по прямой ссылке: скачиваем ролик + сразу глубокий разбор (кадры+vision)."""
+    u = url.strip()
+    try:
+        reel_id = recon.add_reel_by_url(u)
+        if not reel_id:
+            msg = "Не удалось получить ролик (ссылка верна? пост публичный?)"
+        else:
+            recon.deep_analyze(reel_id)
+            msg = "Ролик скачан и разобран (глубокий разбор)"
+    except Exception as e:
+        log.warning("recon add-url failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/recon?topic={quote('по ссылке')}&msg={quote(msg)}", status_code=303)
+
+
+@router.post("/recon/{reel_id}/deep-analyze")
+def recon_deep_analyze(request: Request, reel_id: int, _: bool = Depends(require_user)):
+    """Глубокий разбор существующего ролика: mp4 + кадры + транскрипт + vision."""
+    try:
+        rid = recon.deep_analyze(reel_id)
+        msg = "Глубокий разбор готов" if rid else "Видео недоступно (протухла ссылка CDN)"
+    except Exception as e:
+        log.warning("recon deep failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/recon?msg={quote(msg)}", status_code=303)
+
+
 # ── Фаза 3: Контент-план ──
 
 @router.get("/plan", response_class=HTMLResponse)

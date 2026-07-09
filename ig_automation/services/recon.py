@@ -282,3 +282,189 @@ def list_reels(topic: Optional[str] = None, include_irrelevant: bool = False,
                 "media_type": r.media_type,
             })
         return out
+
+
+# ── Глубокий разбор (видео: кадры + транскрипт + vision) ──
+
+class DeepHookOut(HookOut):
+    visual_notes: str = Field(description="Визуальный стиль: цвет/свет/декорации/CGI-приёмы, что видно на кадрах")
+    camera_work: str = Field(description="Работа камеры и монтаж: движения, ракурсы, ритм склеек (по кадрам)")
+
+
+_DEEP_SYSTEM = _ANALYZE_SYSTEM + """
+Тебе также дают КАДРЫ ролика по таймлайну (слева направо) и транскрипт речи (если есть).
+Разбирай именно ВИЗУАЛ: композицию, свет, цвет, декорации, камеру, где продукт в кадре."""
+
+
+def add_reel_by_url(url: str) -> Optional[int]:
+    """Ролик по прямой ссылке -> TrendReel (сразу качаем mp4, CDN-ссылки протухают)."""
+    norm = apify.reel_by_url(url)
+    if not norm:
+        return None
+    with session_scope() as s:
+        row = s.query(TrendReel).filter(TrendReel.url == norm["url"]).first()
+        if row:
+            reel_id = row.id
+        else:
+            row = TrendReel(
+                source_actor="manual-url", url=norm["url"], username=norm["username"],
+                play_count=norm["play_count"], likes=norm["likes"], comments=norm["comments"],
+                caption=norm["caption"], hashtags=norm["hashtags"], video_url=norm["video_url"],
+                thumbnail_url=norm["thumbnail_url"], music_info=str(norm["music_info"])[:512],
+                transcript=str(norm.get("transcript") or ""), topic="по ссылке",
+                relevant=True, relevance_reason="добавлен вручную", lang="",
+                media_type=norm.get("media_type", "video"),
+            )
+            s.add(row)
+            s.flush()
+            reel_id = row.id
+    _ensure_video(reel_id)
+    return reel_id
+
+
+def _ensure_video(reel_id: int) -> str:
+    """Скачивает mp4 в data/media/reels/, пишет local_media_path. Возвращает fs-путь или ''."""
+    dest_dir = config.MEDIA_DIR / "reels"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / f"{reel_id}.mp4"
+    with session_scope() as s:
+        reel = s.get(TrendReel, reel_id)
+        if not reel:
+            return ""
+        if dest.exists() and dest.stat().st_size > 0:
+            reel.local_media_path = f"/media/reels/{reel_id}.mp4"
+            return str(dest)
+        vurl = reel.video_url
+        page_url = reel.url
+    if not vurl:
+        norm = apify.reel_by_url(page_url) if page_url else None
+        vurl = (norm or {}).get("video_url") or ""
+    if not vurl:
+        return ""
+    try:
+        r = requests.get(vurl, timeout=300)
+        r.raise_for_status()
+        dest.write_bytes(r.content)
+    except Exception as e:  # CDN протух — перечитать через Apify
+        log.warning("video dl fail (%s), retry via apify", e)
+        norm = apify.reel_by_url(page_url) if page_url else None
+        vurl2 = (norm or {}).get("video_url") or ""
+        if not vurl2:
+            return ""
+        r = requests.get(vurl2, timeout=300)
+        r.raise_for_status()
+        dest.write_bytes(r.content)
+    with session_scope() as s:
+        reel = s.get(TrendReel, reel_id)
+        reel.local_media_path = f"/media/reels/{reel_id}.mp4"
+    return str(dest)
+
+
+def _extract_frames(reel_id: int, video_path: str, n: int = 9) -> list:
+    """N кадров по таймлайну -> data/media/frames/<id>/f*.jpg. Возвращает fs-пути."""
+    import subprocess
+    fdir = config.MEDIA_DIR / "frames" / str(reel_id)
+    fdir.mkdir(parents=True, exist_ok=True)
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
+         "-of", "default=nw=1:nk=1", video_path], capture_output=True, text=True)
+    dur = float(probe.stdout or 10)
+    out = []
+    for i in range(n):
+        f = fdir / f"f{i}.jpg"
+        subprocess.run(
+            ["ffmpeg", "-y", "-ss", str(round(dur * i / n, 2)), "-i", video_path,
+             "-frames:v", "1", "-vf", "scale=400:-1", str(f)],
+            capture_output=True)
+        if f.exists():
+            out.append(str(f))
+    return out
+
+
+def _transcribe(video_path: str) -> str:
+    """Транскрипт: OpenAI Whisper -> ElevenLabs Scribe fallback. '' если речи нет/сбой."""
+    import subprocess, tempfile, os as _os
+    with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as tmp:
+        mp3 = tmp.name
+    try:
+        subprocess.run(["ffmpeg", "-y", "-i", video_path, "-vn", "-acodec",
+                        "libmp3lame", "-q:a", "5", mp3], capture_output=True)
+        text = ""
+        if config.OPENAI_API_KEY:
+            try:
+                r = requests.post(
+                    "https://api.openai.com/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+                    files={"file": ("a.mp3", open(mp3, "rb"), "audio/mpeg")},
+                    data={"model": "whisper-1", "response_format": "text"}, timeout=180)
+                if r.ok:
+                    text = r.text.strip()
+            except Exception as e:
+                log.warning("whisper fail: %s", e)
+        if not text:
+            key = _os.getenv("ELEVENLABS_API_KEY", "")
+            if key:
+                try:
+                    r = requests.post(
+                        "https://api.elevenlabs.io/v1/speech-to-text",
+                        headers={"xi-api-key": key},
+                        files={"file": ("a.mp3", open(mp3, "rb"), "audio/mpeg")},
+                        data={"model_id": "scribe_v1"}, timeout=180)
+                    if r.ok and r.headers.get("content-type", "").startswith("application/json"):
+                        text = (r.json().get("text") or "").strip()
+                except Exception as e:
+                    log.warning("scribe fail: %s", e)
+        # частые галлюцинации на чистой музыке
+        if text.lower().strip(" .!") in ("thank you for watching", "thanks for watching",
+                                         "спасибо за просмотр", "субтитры делал dimatorzok"):
+            text = ""
+        return text
+    finally:
+        try:
+            _os.unlink(mp3)
+        except OSError:
+            pass
+
+
+def deep_analyze(reel_id: int) -> Optional[int]:
+    """Глубокий разбор: mp4 -> кадры + транскрипт -> Claude vision -> hook_analyses."""
+    import base64
+    if not config.ANTHROPIC_API_KEY:
+        raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
+    video = _ensure_video(reel_id)
+    if not video:
+        log.warning("deep_analyze %s: видео недоступно", reel_id)
+        return None
+    frames = _extract_frames(reel_id, video)
+    transcript = _transcribe(video)
+    with session_scope() as s:
+        reel = s.get(TrendReel, reel_id)
+        if transcript:
+            reel.transcript = transcript
+        info = (
+            f"Просмотры: {reel.play_count}, лайки: {reel.likes}, комментарии: {reel.comments}\n"
+            f"Музыка: {reel.music_info or '—'}\n"
+            f"Текст поста: {reel.caption or '—'}\n"
+            f"Транскрипт речи: {transcript or '— (только музыка)'}"
+        )
+    content = []
+    for i, f in enumerate(frames):
+        content.append({"type": "text", "text": f"Кадр {i + 1}/{len(frames)}:"})
+        content.append({"type": "image", "source": {
+            "type": "base64", "media_type": "image/jpeg",
+            "data": base64.b64encode(open(f, "rb").read()).decode()}})
+    content.append({"type": "text", "text": f"Данные ролика:\n{info}\n\nРазбери по схеме."})
+    client = anthropic.Anthropic()
+    resp = client.messages.parse(
+        model=config.CLAUDE_MODEL, max_tokens=4000, system=_DEEP_SYSTEM,
+        messages=[{"role": "user", "content": content}], output_format=DeepHookOut)
+    out = resp.parsed_output
+    with session_scope() as s:
+        row = HookAnalysis(
+            trend_reel_id=reel_id, hook=out.hook, retention_device=out.retention_device,
+            trigger=out.trigger, structure=out.structure, why_viral=out.why_viral,
+            adapted_idea=out.adapted_idea, visual_notes=out.visual_notes,
+            camera_work=out.camera_work, is_deep=True)
+        s.add(row)
+        s.flush()
+        return row.id

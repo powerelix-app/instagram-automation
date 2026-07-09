@@ -30,6 +30,16 @@
   <span class="text-xs text-slate-400">конкуренты-БАДы, нутрициологи, фитнес — их лучшие ролики по просмотрам</span>
 </form>
 
+<form action="/recon/add-url" method="post" class="bg-white border rounded-xl p-4 mb-6 flex flex-wrap gap-3 items-end">
+  <div class="grow min-w-64">
+    <label class="block text-xs text-slate-500 mb-1">Разбор по ссылке (Reels / пост)</label>
+    <input name="url" required placeholder="https://www.instagram.com/reel/..." class="w-full border rounded-lg px-3 py-2 text-sm">
+  </div>
+  <button class="bg-slate-900 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-sm">🎬 Скачать и разобрать</button>
+  <div class="text-xs text-slate-400 basis-full">Скачает ролик, вытащит кадры и транскрипт, сделает глубокий vision-разбор (~1 мин)</div>
+</form>
+
+
 {% if topics %}
 <div class="flex items-center gap-2 flex-wrap mb-4 text-sm">
   <span class="text-slate-400">Тема:</span>
@@ -95,6 +105,7 @@
         <form action="/recon/{{ r.id }}/analyze" method="post"><button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1">🧠 Разобрать хук</button></form>
         {% else %}
         <form action="/recon/{{ r.id }}/analyze" method="post"><button class="text-xs border rounded px-3 py-1 hover:bg-slate-50">↻ Разобрать заново</button></form>
+        <form action="/recon/{{ r.id }}/deep-analyze" method="post"><button class="text-xs bg-slate-900 hover:bg-slate-700 text-white rounded px-3 py-1">🎬 Глубокий разбор</button></form>
         <form action="/recon/{{ r.id }}/to-idea" method="post"><button class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1">💡 В банк идей</button></form>
         {% endif %}
       </div>
@@ -106,6 +117,13 @@
         <div><b>Триггер:</b> {{ r.analysis.trigger }}</div>
         <div><b>Почему зашло:</b> {{ r.analysis.why_viral }}</div>
         <div class="text-emerald-800"><b>Идея под нас:</b> {{ r.analysis.adapted_idea }}</div>
+        {% if r.analysis.is_deep %}
+        <div><b>Визуальный стиль:</b> {{ r.analysis.visual_notes }}</div>
+        <div><b>Камера/монтаж:</b> {{ r.analysis.camera_work }}</div>
+        <div class="flex gap-1 overflow-x-auto pt-1">
+          {% for i in range(9) %}<img src="/media/frames/{{ r.id }}/f{{ i }}.jpg" class="h-16 rounded border" loading="lazy" onerror="this.remove()">{% endfor %}
+        </div>
+        {% endif %}
       </div>
       {% endif %}
     </div>

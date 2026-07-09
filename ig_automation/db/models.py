@@ -58,6 +58,9 @@ class HookAnalysis(Base):
     structure: Mapped[str] = mapped_column(Text, default="")
     why_viral: Mapped[str] = mapped_column(Text, default="")
     adapted_idea: Mapped[str] = mapped_column(Text, default="")
+    visual_notes: Mapped[str] = mapped_column(Text, default="")
+    camera_work: Mapped[str] = mapped_column(Text, default="")
+    is_deep: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

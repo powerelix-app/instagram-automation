@@ -48,6 +48,11 @@ def _migrate(engine) -> None:
             ("lang", "VARCHAR DEFAULT ''"),
             ("media_type", "VARCHAR DEFAULT ''"),
         ],
+        "hook_analyses": [
+            ("visual_notes", "TEXT DEFAULT ''"),
+            ("camera_work", "TEXT DEFAULT ''"),
+            ("is_deep", "BOOLEAN DEFAULT 0"),
+        ],
         "posts": [
             ("product_id", "VARCHAR DEFAULT ''"),
             ("reels_script", "TEXT"),

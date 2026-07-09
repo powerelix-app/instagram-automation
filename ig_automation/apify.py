@@ -183,3 +183,18 @@ def scrape_profile(username: str, posts_limit: int = 30) -> dict[str, Any]:
         }
     )
     return {"username": user, "details": details, "posts": posts}
+
+
+def reel_by_url(url: str) -> Optional[dict[str, Any]]:
+    """Один ролик по прямой ссылке (reel/p). Нормализованный вид или None."""
+    items = _run({
+        "directUrls": [url],
+        "resultsType": "posts",
+        "resultsLimit": 1,
+        "addParentData": False,
+    })
+    for item in items:
+        norm = _normalize_reel(item)
+        if norm:
+            return norm
+    return None
