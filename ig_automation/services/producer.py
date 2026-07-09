@@ -52,13 +52,15 @@ def _set(sb_id: int, **kw):
 # ── примитивы ──
 
 def gen_image(prompt: str, ref: Optional[Path] = None, aspect: str = "9:16",
-              style_suffix: str = "Photorealistic, raw photo, no glossy CGI look, film grain.") -> bytes:
-    """Картинка через ProxyAPI gemini flash-image (референс банки — опционально)."""
+              style_suffix: str = "Photorealistic, raw photo, no glossy CGI look, film grain.",
+              refs: Optional[list] = None) -> bytes:
+    """Картинка через ProxyAPI gemini flash-image (1+ референсов — опционально)."""
     parts = []
-    if ref:
+    for rp in (refs or ([ref] if ref else [])):
+        rp = Path(rp)
         parts.append({"inline_data": {
-            "mime_type": "image/png" if ref.suffix == ".png" else "image/jpeg",
-            "data": base64.b64encode(ref.read_bytes()).decode()}})
+            "mime_type": "image/png" if rp.suffix == ".png" else "image/jpeg",
+            "data": base64.b64encode(rp.read_bytes()).decode()}})
     parts.append({"text": prompt + f"\nAspect ratio {aspect}. {style_suffix} "
                   "If a product bottle is present keep the label crisp and identical "
                   "to the reference. No watermark."})
@@ -141,25 +143,47 @@ def gen_music(prompt: str, ms: int) -> bytes:
 # ── производство ──
 
 def _produce_slides(sb_id: int):
+    """Карусель: берём ОРИГИНАЛЬНЫЕ слайды референса и пересоздаём каждый с нашим
+    продуктом (image-to-image: слайд-референс + банка). Сцены storyboard — доп. контекст."""
     with session_scope() as s:
         sb = s.get(Storyboard, sb_id)
         scenes = list(sb.scenes or [])
-        product_id = sb.product_id
-    ref = _product_ref(product_id)
+        product_id, reel_id = sb.product_id, sb.trend_reel_id
+    bottle = _product_ref(product_id)
     out = _out_dir(sb_id)
+    # оригинальные слайды референса (скачаны при глубоком разборе)
+    ref_dir = config.MEDIA_DIR / "frames" / str(reel_id)
+    ref_slides = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
     paths = []
-    for i, sc in enumerate(scenes):
-        _set(sb_id, gen_status=f"слайд {i + 1}/{len(scenes)}…")
-        prompt = (f"Слайд {i + 1} Instagram-карусели.\n"
-                  f"ВИЗУАЛ: {sc.get('scene', '')}\n"
-                  f"Композиция: {sc.get('camera', '')}\n"
-                  "СТРОГО: никакого текста, букв, цифр или надписей на изображении "
-                  "(кроме оригинальной этикетки продукта). Премиальный креативный визуал, "
-                  "точно следуй описанию сцены и её стилю.")
-        img = gen_image(prompt, ref=ref, aspect="4:5", style_suffix="")
-        p = out / f"slide_{i}.png"
-        p.write_bytes(img)
-        paths.append(f"/media/produced/{sb_id}/slide_{i}.png")
+    if ref_slides:
+        for i, rs in enumerate(ref_slides):
+            _set(sb_id, gen_status=f"слайд {i + 1}/{len(ref_slides)} (по референсу)…")
+            hint = scenes[i].get("scene", "") if i < len(scenes) else ""
+            prompt = (
+                "ПЕРВОЕ изображение — референсный слайд. Пересоздай его МАКСИМАЛЬНО похоже: "
+                "та же композиция, ракурс, свет, стиль, креативный приём и настроение. "
+                "НО замени продукт в кадре на НАШ продукт со ВТОРОГО изображения "
+                "(бутылка POWERELIX — форма, цвет и этикетка строго как на втором изображении, "
+                "этикетка чёткая и читаемая). Цветовую гамму сцены адаптируй под наш продукт, "
+                "если это делает картинку гармоничнее.\n"
+                + (f"Контекст слайда: {hint}\n" if hint else "")
+                + "СТРОГО: никакого текста, букв или надписей на изображении, "
+                "кроме этикетки нашего продукта.")
+            img = gen_image(prompt, refs=[rs, bottle] if bottle else [rs],
+                            aspect="4:5", style_suffix="")
+            p = out / f"slide_{i}.png"
+            p.write_bytes(img)
+            paths.append(f"/media/produced/{sb_id}/slide_{i}.png")
+    else:  # фолбэк: по описаниям сцен
+        for i, sc in enumerate(scenes):
+            _set(sb_id, gen_status=f"слайд {i + 1}/{len(scenes)}…")
+            prompt = (f"Слайд {i + 1} Instagram-карусели.\nВИЗУАЛ: {sc.get('scene', '')}\n"
+                      f"Композиция: {sc.get('camera', '')}\n"
+                      "СТРОГО: без текста и надписей (кроме этикетки продукта).")
+            img = gen_image(prompt, ref=bottle, aspect="4:5", style_suffix="")
+            p = out / f"slide_{i}.png"
+            p.write_bytes(img)
+            paths.append(f"/media/produced/{sb_id}/slide_{i}.png")
     _set(sb_id, gen_status="done", output_paths=paths)
 
 
