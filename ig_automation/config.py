@@ -78,7 +78,8 @@ TG_RELAY = os.getenv("CF_TG_RELAY", "https://tg-relay.makc-rogozhnikov.workers.d
 
 # ── Кросс-пост в Telegram-канал @powerelix (бот @powerelix_brand_bot — админ канала) ──
 CROSSPOST_ENABLED = os.getenv("CF_CROSSPOST", "0") == "1"
-CROSSPOST_BOT_TOKEN = os.getenv("CF_CROSSPOST_BOT_TOKEN", "")
+CROSSPOST_ENDPOINT = os.getenv("CF_CROSSPOST_ENDPOINT", "https://bot.bandabogachey.online/powerelix-api/crosspost")
+CROSSPOST_SECRET = os.getenv("CF_CROSSPOST_SECRET", "")
 CROSSPOST_CHANNEL = os.getenv("CF_CROSSPOST_CHANNEL", "@powerelix")
 CROSSPOST_BUTTON_TEXT = os.getenv("CF_CROSSPOST_BUTTON_TEXT", "💊 Каталог и приложение")
 CROSSPOST_BUTTON_URL = os.getenv("CF_CROSSPOST_BUTTON_URL", "https://t.me/powerelix_brand_bot")
