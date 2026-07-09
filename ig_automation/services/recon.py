@@ -567,11 +567,27 @@ def make_similar(analysis_id: int, product_id: str) -> Optional[int]:
         f"Слоган: {prod.get('slogan','')}\nФирменный цвет: {prod.get('accent_color','')}\n"
         f"Где купить (для пэк-шота): {link_line(str(product_id)) or 'WB'}"
     )
+    # для каруселей/картинок показываем Claude САМИ слайды референса
+    import base64 as _b64
+    content = []
+    frames_dir = config.MEDIA_DIR / "frames" / str(reel_id)
+    frame_files = sorted(frames_dir.glob("f*.jpg")) if frames_dir.exists() else []
+    if frame_files:
+        for i, f in enumerate(frame_files):
+            content.append({"type": "text", "text": f"Слайд референса {i + 1}/{len(frame_files)}:"})
+            content.append({"type": "image", "source": {
+                "type": "base64", "media_type": "image/jpeg",
+                "data": _b64.b64encode(f.read_bytes()).decode()}})
+    content.append({"type": "text", "text":
+                    f"РАЗБОР РЕФЕРЕНСА:\n{ref}\n\nНАШ ПРОДУКТ:\n{pinfo}\n\n"
+                    + ("ВАЖНО: сцен ровно столько, сколько слайдов выше; сцена N — ТОЧНОЕ "
+                       "описание слайда N (та же композиция и действие, например «банку кладут "
+                       "в сумку»), только продукт заменён на наш. " if frame_files else "")
+                    + "Собери storyboard."})
     client = anthropic.Anthropic()
     resp = client.messages.parse(
         model=config.CLAUDE_MODEL, max_tokens=4000, system=_SIMILAR_SYSTEM,
-        messages=[{"role": "user", "content":
-                   f"РАЗБОР РЕФЕРЕНСА:\n{ref}\n\nНАШ ПРОДУКТ:\n{pinfo}\n\nСобери storyboard."}],
+        messages=[{"role": "user", "content": content}],
         output_format=StoryboardOut)
     out = resp.parsed_output
     from ..db.models import Storyboard
