@@ -233,6 +233,14 @@ def _produce_slides(sb_id: int):
                             aspect="4:5", style_suffix="")
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
+            # фирменный оверлей (шапка POWERELIX + короткий заголовок)
+            title = (scenes[i].get("slide_title") or "").strip() if i < len(scenes) else ""
+            if title:
+                try:
+                    from ..overlay import render_cover
+                    render_cover(str(p), headline=title, subtitle="", out_path=str(p))
+                except Exception as e:
+                    log.warning("overlay fail слайд %s: %s", i, e)
             paths.append(f"/media/produced/{sb_id}/slide_{i}.png")
     else:  # фолбэк: по описаниям сцен
         for i, sc in enumerate(scenes):
