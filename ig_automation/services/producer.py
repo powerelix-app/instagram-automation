@@ -39,6 +39,38 @@ def _product_ref(product_id: str) -> Optional[Path]:
         p = config.DATA_DIR / "product_refs" / f"{product_id}.{ext}"
         if p.exists():
             return p
+    return _fetch_wb_photo(product_id)
+
+
+def _fetch_wb_photo(product_id: str) -> Optional[Path]:
+    """Автозагрузка фото товара из карточки WB (по wb_url из каталога)."""
+    import re
+    from .catalog import get_link
+    link = get_link(str(product_id)) or {}
+    m = re.search(r"(\d{7,})", link.get("wb_url") or "")
+    if not m:
+        return None
+    nm = int(m.group(1))
+    vol, part = nm // 100000, nm // 1000
+    dest_dir = config.DATA_DIR / "product_refs"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    for i in range(1, 31):  # перебор basket-хостов WB
+        url = (f"https://basket-{i:02d}.wbbasket.ru/vol{vol}/part{part}/{nm}"
+               f"/images/big/1.webp")
+        try:
+            r = requests.get(url, timeout=8)
+            if r.ok and len(r.content) > 10000:
+                webp = dest_dir / f"_{product_id}.webp"
+                webp.write_bytes(r.content)
+                jpg = dest_dir / f"{product_id}.jpg"
+                subprocess.run(["ffmpeg", "-y", "-i", str(webp), str(jpg)],
+                               capture_output=True, timeout=30)
+                webp.unlink(missing_ok=True)
+                if jpg.exists():
+                    log.info("WB-фото товара %s скачано (nm=%s, basket-%02d)", product_id, nm, i)
+                    return jpg
+        except Exception:
+            continue
     return None
 
 
@@ -158,6 +190,11 @@ def _produce_slides(sb_id: int):
         scenes = list(sb.scenes or [])
         product_id, reel_id = sb.product_id, sb.trend_reel_id
     bottle = _product_ref(product_id)
+    if not bottle:
+        _set(sb_id, gen_status="error",
+             gen_error="Нет фото продукта: проверь ссылку WB в /catalog "
+                       "или положи фото в data/product_refs/<id>.jpg")
+        return
     out = _out_dir(sb_id)
     # оригинальные слайды референса (скачаны при глубоком разборе)
     ref_dir = config.MEDIA_DIR / "frames" / str(reel_id)
@@ -170,10 +207,11 @@ def _produce_slides(sb_id: int):
             prompt = (
                 "ПЕРВОЕ изображение — референсный слайд. Пересоздай его МАКСИМАЛЬНО похоже: "
                 "та же композиция, ракурс, свет, стиль, креативный приём и настроение. "
-                "НО замени продукт в кадре на НАШ продукт со ВТОРОГО изображения "
-                "(бутылка POWERELIX — форма, цвет и этикетка строго как на втором изображении, "
-                "этикетка чёткая и читаемая). Цветовую гамму сцены адаптируй под наш продукт, "
-                "если это делает картинку гармоничнее.\n"
+                "НО: ЛЮБОЙ продукт/упаковку в кадре замени на НАШ продукт со ВТОРОГО "
+                "изображения — форма банки, крышка, цвет и этикетка СТРОГО как на втором "
+                "изображении, этикетка чёткая и читаемая. ЗАПРЕЩЕНО придумывать другую "
+                "упаковку или оставлять продукт из референса. Цветовую гамму сцены адаптируй "
+                "под фирменный цвет нашего продукта.\n"
                 + (f"Контекст слайда: {hint}\n" if hint else "")
                 + "СТРОГО: никакого текста, букв или надписей на изображении, "
                 "кроме этикетки нашего продукта.")
