@@ -231,6 +231,22 @@ def recon_deep_analyze(request: Request, reel_id: int, _: bool = Depends(require
     return RedirectResponse(f"/recon?msg={quote(msg)}", status_code=303)
 
 
+@router.post("/recon/upload")
+async def recon_upload(request: Request, video: UploadFile = File(...), _: bool = Depends(require_user)):
+    """Загрузка своего видеофайла -> глубокий разбор."""
+    try:
+        data = await video.read()
+        if len(data) > 200 * 1024 * 1024:
+            raise ValueError("файл больше 200MB")
+        reel_id = recon.add_uploaded_video(data, video.filename or "")
+        recon.deep_analyze(reel_id)
+        msg = "Видео загружено и разобрано"
+    except Exception as e:
+        log.warning("recon upload failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/recon?topic={quote('загрузка')}&msg={quote(msg)}", status_code=303)
+
+
 # ── Фаза 3: Контент-план ──
 
 @router.get("/plan", response_class=HTMLResponse)

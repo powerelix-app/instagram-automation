@@ -471,3 +471,23 @@ def deep_analyze(reel_id: int) -> Optional[int]:
         s.add(row)
         s.flush()
         return row.id
+
+
+def add_uploaded_video(data: bytes, filename: str = "") -> Optional[int]:
+    """Загруженный пользователем файл -> TrendReel + сохранение в media/reels."""
+    import time
+    with session_scope() as s:
+        row = TrendReel(
+            source_actor="upload", url="", username="(файл)",
+            caption=filename or "загруженное видео", topic="загрузка",
+            relevant=True, relevance_reason="загружен вручную", media_type="video",
+        )
+        s.add(row)
+        s.flush()
+        reel_id = row.id
+    dest_dir = config.MEDIA_DIR / "reels"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    (dest_dir / f"{reel_id}.mp4").write_bytes(data)
+    with session_scope() as s:
+        s.get(TrendReel, reel_id).local_media_path = f"/media/reels/{reel_id}.mp4"
+    return reel_id

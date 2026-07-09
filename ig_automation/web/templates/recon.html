@@ -39,6 +39,15 @@
   <div class="text-xs text-slate-400 basis-full">Скачает ролик, вытащит кадры и транскрипт, сделает глубокий vision-разбор (~1 мин)</div>
 </form>
 
+<form action="/recon/upload" method="post" enctype="multipart/form-data" class="bg-white border rounded-xl p-4 mb-6 flex flex-wrap gap-3 items-end">
+  <div class="grow min-w-64">
+    <label class="block text-xs text-slate-500 mb-1">Загрузить своё видео (mp4/mov — пример стиля, референс)</label>
+    <input type="file" name="video" accept="video/*" required class="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+  </div>
+  <button class="bg-slate-900 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-sm">📤 Загрузить и разобрать</button>
+</form>
+
+
 
 {% if topics %}
 <div class="flex items-center gap-2 flex-wrap mb-4 text-sm">
