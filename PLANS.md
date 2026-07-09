@@ -18,6 +18,22 @@
 - **F. Публикация** — постинг/Reels/Stories по плану + расписание.
 
 ## 🏭 Сервис «Контент-завод» (FastAPI) — строится с 2026-06-10
+- ✅ **Кросс-пост в Telegram-канал @powerelix** (2026-07-09): после каждой
+  успешной публикации в IG контент автоматически уходит и в TG-канал
+  («одновременно с Инста», все форматы: фото → sendPhoto+кнопка,
+  карусель → sendMediaGroup, Reels → sendVideo+кнопка).
+  Архитектура: РФ-VPS не может грузить большие файлы в api.telegram.org
+  (CF-релей рвёт большие POST, URL-метод TG капризен + лимит 20МБ), поэтому
+  `services/tg_crosspost.py` шлёт **лёгкий JSON** (ссылки на публичные
+  /media/) на Aeza-endpoint `POST bot.bandabogachey.online/powerelix-api/crosspost`
+  (auth: X-Crosspost-Secret, constant-time) — не-РФ сервер скачивает медиа
+  и постит в канал напрямую (`bot/src/api/crosspost.ts` в powerelix-bot).
+  Caption: без IG-хэштегов, лимит 1024. Идемпотентность: `posts.tg_message_id`.
+  Конфиг: `CF_CROSSPOST=1`, `CF_CROSSPOST_CHANNEL=@powerelix`,
+  `CF_CROSSPOST_ENDPOINT`, `CF_CROSSPOST_SECRET` (общий с Aeza `.env`).
+  В режиме симуляции IG кросс-пост тоже не шлётся (лог). E2E проверен:
+  Reels 26МБ доставлен в личку владельца через полную цепочку.
+  ⚠️ Ограничение Bot API: у sendMediaGroup (карусели) кнопок не бывает.
 Развиваем этот репо в полноценный сервис на полке Штаба (стек как wb-promotion: FastAPI+SQLite+APScheduler+Jinja2/HTMX). План: `plans/content-factory-service/` (spec/plan/tasks). Конвейер: разведка → план → идеи → генерация → аппрув → публикация → аналитика.
 - ✅ **Фаза 1 — фундамент** (2026-06-10): `ig_automation/app.py` (FastAPI + lifespan + scheduler), `db/` (SQLAlchemy 2.0: app_state, trend_reels, hook_analyses, ideas, content_plans, posts, post_assets, post_metrics; create_all), `api/auth.py` (cookie-сессия, dev-режим без пароля), `api/pages.py` (Главная + Статус), `scheduler.py` (heartbeat + refresh токена), шаблоны `web/templates/`. Запуск: `python serve.py` (порт 8010). Проверено вживую: аккаунт @powerelix **BUSINESS** (публикация доступна), токен 57 дн, ProxyAPI поддерживает `messages.parse` (structured output, opus-4-8).
 - ✅ **Фаза 2 — Разведка** (2026-06-10): `apify.search_reels` (основной актор `data-slayer/instagram-search-reels` — отдаёт play_count+mp4; фолбэк `instagram-scraper` по хэштегу; `maxTotalChargeUsd`-предохранитель), `services/recon.py` (scrape_topic→trend_reels с дедупом и скачиванием превью; analyze→Claude разбор хука), UI `/recon`. Проверено вживую: тема «похудение» → 12 Reels с реальными просмотрами (36М/27М/24М), разбор хука адаптирует под POWERELIX.
