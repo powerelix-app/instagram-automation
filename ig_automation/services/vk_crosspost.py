@@ -45,8 +45,10 @@ def _call(method: str, **params) -> dict:
 def _upload_photo(path: Path, group_id: str) -> str:
     """Загрузка фото на стену сообщества → attachment-строка photo{owner}_{id}."""
     srv = _call("photos.getWallUploadServer", group_id=group_id)
+    mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
     with open(path, "rb") as f:
-        up = requests.post(srv["upload_url"], files={"photo": (path.name, f)}, timeout=120).json()
+        up = requests.post(srv["upload_url"],
+                           files={"photo": (path.name, f, mime)}, timeout=120).json()
     if not up.get("photo") or up["photo"] == "[]":
         raise RuntimeError(f"VK upload не принял файл {path.name}")
     saved = _call("photos.saveWallPhoto", group_id=group_id,
