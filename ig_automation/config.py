@@ -86,6 +86,12 @@ CROSSPOST_CHANNEL = os.getenv("CF_CROSSPOST_CHANNEL", "@powerelix")
 CROSSPOST_BUTTON_TEXT = os.getenv("CF_CROSSPOST_BUTTON_TEXT", "💊 Каталог и приложение")
 CROSSPOST_BUTTON_URL = os.getenv("CF_CROSSPOST_BUTTON_URL", "https://t.me/powerelix_brand_bot")
 
+# ── Кросс-пост во ВКонтакте (сообщество POWERELIX, ключ доступа сообщества) ──
+VK_TOKEN = os.getenv("CF_VK_TOKEN", "")
+VK_GROUP_ID = os.getenv("CF_VK_GROUP_ID", "")  # без минуса, напр. 233462900
+VK_BRAND_URL = os.getenv("CF_VK_BRAND_URL", "https://www.wildberries.ru/brands/312000349-powerelix")
+VK_SITE_URL = os.getenv("CF_VK_SITE_URL", "https://powerelix.online")
+
 # ── TTS для озвучки Reels (Replicate, русский — api.openai.com заблокирован с РФ-VPS) ──
 TTS_MODEL = os.getenv("CF_TTS_MODEL", "minimax/speech-02-turbo")
 TTS_VOICE = os.getenv("CF_TTS_VOICE", "Wise_Woman")

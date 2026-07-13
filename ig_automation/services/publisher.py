@@ -153,6 +153,7 @@ def publish(post_id: int) -> Dict:
             post.error = ""
         log.info("publish post %s — OK media_id=%s", post_id, media_id)
         _tg_crosspost_safe(post_id)
+        _vk_crosspost_safe(post_id)
         return {"ok": True, "media_id": media_id}
     except Exception as e:
         with session_scope() as s:
@@ -203,3 +204,16 @@ def _tg_crosspost_safe(post_id: int, simulated: bool = False) -> None:
             log.warning("tg crosspost post %s: %s", post_id, res.get("error"))
     except Exception as e:
         log.warning("tg crosspost post %s unexpected: %s", post_id, e)
+
+
+def _vk_crosspost_safe(post_id: int) -> None:
+    """Кросс-пост в сообщество VK. Ошибка VK никогда не ломает публикацию."""
+    from . import vk_crosspost
+    try:
+        if not vk_crosspost.configured():
+            return
+        res = vk_crosspost.crosspost(post_id)
+        if not res.get("ok") and not res.get("skipped"):
+            log.warning("vk crosspost post %s: %s", post_id, res.get("error"))
+    except Exception as e:
+        log.warning("vk crosspost post %s unexpected: %s", post_id, e)

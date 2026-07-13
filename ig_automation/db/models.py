@@ -137,6 +137,7 @@ class Post(Base):
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     ig_media_id: Mapped[str] = mapped_column(String(64), default="")
     tg_message_id: Mapped[str] = mapped_column(String(64), default="")  # кросс-пост в TG-канал
+    vk_post_id: Mapped[str] = mapped_column(String(64), default="")  # кросс-пост в сообщество VK
     permalink: Mapped[str] = mapped_column(String(512), default="")
     error: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
