@@ -1,7 +1,7 @@
 """Кросс-пост опубликованного контента в сообщество ВКонтакте.
 
 VK API открыт с РФ-VPS напрямую (без relay). Схема:
-  photos.getWallUploadServer → POST файла → photos.saveWallUploadPhoto →
+  photos.getWallUploadServer → POST файла → photos.saveWallPhoto →
   wall.post(owner_id=-group, from_group=1, attachments=photo{owner}_{id},...)
 До 10 фото одним постом (наши карусели влезают целиком). Ссылки в тексте
 VK делает кликабельными сам.
@@ -49,7 +49,7 @@ def _upload_photo(path: Path, group_id: str) -> str:
         up = requests.post(srv["upload_url"], files={"photo": (path.name, f)}, timeout=120).json()
     if not up.get("photo") or up["photo"] == "[]":
         raise RuntimeError(f"VK upload не принял файл {path.name}")
-    saved = _call("photos.saveWallUploadPhoto", group_id=group_id,
+    saved = _call("photos.saveWallPhoto", group_id=group_id,
                   photo=up["photo"], server=up["server"], hash=up["hash"])
     p = saved[0]
     return f"photo{p['owner_id']}_{p['id']}"
