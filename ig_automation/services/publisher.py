@@ -34,11 +34,44 @@ def _meta_reachable_url(asset_path: str) -> str:
     if not local.exists():
         return config.PUBLIC_BASE + asset_path
     try:
-        r = _rq.post(f"{config.TG_RELAY}/bot{config.TG_TOKEN}/sendDocument",
-                     data={"chat_id": config.TG_CHAT, "disable_notification": True},
-                     files={"document": (local.name, local.read_bytes())}, timeout=120)
-        r.raise_for_status()
-        file_id = r.json()["result"]["document"]["file_id"]
+        file_id = ""
+        try:  # 1) напрямую через relay (может не уметь multipart)
+            r = _rq.post(f"{config.TG_RELAY}/bot{config.TG_TOKEN}/sendDocument",
+                         data={"chat_id": config.TG_CHAT, "disable_notification": True},
+                         files={"document": (local.name, local.read_bytes())}, timeout=120)
+            r.raise_for_status()
+            file_id = r.json()["result"]["document"]["file_id"]
+        except Exception as e1:  # 2) multipart через Apify media-fetcher
+            log.info("tg relay upload fail (%s) — через media-fetcher", e1)
+            import base64 as _b64
+            import json as _json
+            from .. import apify
+            boundary = "----cfBoundary7MA4YWxkTrZu0gW"
+            data = local.read_bytes()
+            body = b""
+            for k, v in (("chat_id", str(config.TG_CHAT)),
+                         ("disable_notification", "true")):
+                body += (f"--{boundary}\r\nContent-Disposition: form-data; "
+                         f"name=\"{k}\"\r\n\r\n{v}\r\n").encode()
+            body += (f"--{boundary}\r\nContent-Disposition: form-data; "
+                     f"name=\"document\"; filename=\"{local.name}\"\r\n"
+                     f"Content-Type: image/png\r\n\r\n").encode()
+            body += data + f"\r\n--{boundary}--\r\n".encode()
+            items = apify._run_actor(apify.FETCHER_ACTOR, {
+                "url": f"https://api.telegram.org/bot{config.TG_TOKEN}/sendDocument",
+                "method": "POST",
+                "headers": {"Content-Type": f"multipart/form-data; boundary={boundary}"},
+                "body_b64": _b64.b64encode(body).decode(),
+            }, max_charge_usd=0.05, timeout=240)
+            for it in items:
+                if it.get("downloadUrl"):
+                    resp = _rq.get(it["downloadUrl"],
+                                   params={"token": config.APIFY_TOKEN}, timeout=60).json()
+                    if resp.get("ok"):
+                        file_id = resp["result"]["document"]["file_id"]
+                    break
+        if not file_id:
+            raise RuntimeError("tg upload не дал file_id")
         r2 = _rq.get(f"{config.TG_RELAY}/bot{config.TG_TOKEN}/getFile",
                      params={"file_id": file_id}, timeout=60)
         r2.raise_for_status()
