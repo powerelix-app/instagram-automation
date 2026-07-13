@@ -29,12 +29,12 @@ V = "5.199"
 
 
 def configured() -> bool:
-    return bool(config.VK_TOKEN and config.VK_GROUP_ID)
+    return bool(config.VK_USER_TOKEN and config.VK_GROUP_ID)
 
 
 def _call(method: str, **params) -> dict:
     params.setdefault("v", V)
-    params.setdefault("access_token", config.VK_TOKEN)
+    params.setdefault("access_token", config.VK_USER_TOKEN)
     r = requests.post(f"{API}/{method}", data=params, timeout=60)
     body = r.json()
     if "error" in body:

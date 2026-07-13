@@ -87,7 +87,8 @@ CROSSPOST_BUTTON_TEXT = os.getenv("CF_CROSSPOST_BUTTON_TEXT", "💊 Катало
 CROSSPOST_BUTTON_URL = os.getenv("CF_CROSSPOST_BUTTON_URL", "https://t.me/powerelix_brand_bot")
 
 # ── Кросс-пост во ВКонтакте (сообщество POWERELIX, ключ доступа сообщества) ──
-VK_TOKEN = os.getenv("CF_VK_TOKEN", "")
+VK_TOKEN = os.getenv("CF_VK_TOKEN", "")  # ключ сообщества (запас)
+VK_USER_TOKEN = os.getenv("CF_VK_USER_TOKEN", "")  # пользовательский (фото на стену умеет только он)
 VK_GROUP_ID = os.getenv("CF_VK_GROUP_ID", "")  # без минуса, напр. 233462900
 VK_BRAND_URL = os.getenv("CF_VK_BRAND_URL", "https://www.wildberries.ru/brands/312000349-powerelix")
 VK_SITE_URL = os.getenv("CF_VK_SITE_URL", "https://powerelix.online")
