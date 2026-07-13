@@ -725,10 +725,13 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
                    f"Строки со слайдов:\n{vo_lines}\n\nНапиши подпись."}],
         output_format=CaptionOut)
     out = resp.parsed_output
-    link = link_line(str(sb_data["product_id"])) or ""
+    from .catalog import get_link
+    lk = get_link(str(sb_data["product_id"])) or {}
+    nm = (lk.get("nmid") or "").strip()
     caption = out.caption.strip()
-    if link:
-        caption += f"\n\n🛒 {link}"
+    if nm:
+        # без URL (в IG не кликается), артикул хэштегом — тап открывает поиск
+        caption += f"\n\n✅ Артикул на Wildberries: #{nm}"
     caption += "\n\nБАД. Не является лекарственным средством. Есть противопоказания."
 
     with session_scope() as s:
