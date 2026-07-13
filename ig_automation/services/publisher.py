@@ -33,14 +33,15 @@ def publish(post_id: int) -> Dict:
             return {"ok": True, "already": True}
         if post.status not in ("approved", "scheduled"):
             return {"ok": False, "error": "пост не одобрен (нужен статус approved/scheduled)"}
-        asset = (
+        assets = (
             s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
-            .order_by(PostAsset.ord).first()
+            .order_by(PostAsset.ord).all()
         )
-        if not asset:
+        if not assets:
             return {"ok": False, "error": "нет картинки для публикации (сгенерируй визуал)"}
         caption = _full_caption(post.caption, post.hashtags)
-        image_url = config.PUBLIC_BASE + asset.path
+        image_urls = [config.PUBLIC_BASE + a.path for a in assets]
+        image_url = image_urls[0]
         post.status = "publishing"
 
     # ── Симуляция: ничего в IG не уходит ──
@@ -60,7 +61,21 @@ def publish(post_id: int) -> Dict:
     token = tokens.current_token()
     uid = config.IG_USER_ID or "me"
     try:
-        cid = instagram.create_image_container(image_url, caption, token, uid)
+        if len(image_urls) > 1:  # карусель: дочерние контейнеры -> общий
+            children = []
+            for u in image_urls[:10]:
+                ch = instagram.create_carousel_item(u, token, uid)
+                for _ in range(20):
+                    stc = instagram.container_status(ch, token)
+                    if stc == "FINISHED":
+                        break
+                    if stc == "ERROR":
+                        raise RuntimeError(f"IG: дочерний контейнер ERROR ({u})")
+                    time.sleep(3)
+                children.append(ch)
+            cid = instagram.create_carousel_container(children, caption, token, uid)
+        else:
+            cid = instagram.create_image_container(image_url, caption, token, uid)
         for _ in range(20):  # ждём обработку контейнера (фото обычно мгновенно)
             st = instagram.container_status(cid, token)
             if st == "FINISHED":

@@ -50,6 +50,25 @@ def create_image_container(image_url: str, caption: str, token: str, ig_user_id:
     return r.json()["id"]
 
 
+def create_carousel_item(image_url: str, token: str, ig_user_id: str) -> str:
+    """Дочерний контейнер карусели (is_carousel_item)."""
+    r = requests.post(f"{config.IG_API_BASE}/{ig_user_id}/media", data={
+        "image_url": image_url, "is_carousel_item": "true", "access_token": token,
+    }, timeout=60)
+    r.raise_for_status()
+    return r.json()["id"]
+
+
+def create_carousel_container(children: list, caption: str, token: str, ig_user_id: str) -> str:
+    """Карусель-контейнер из готовых дочерних (2-10 шт)."""
+    r = requests.post(f"{config.IG_API_BASE}/{ig_user_id}/media", data={
+        "media_type": "CAROUSEL", "children": ",".join(children),
+        "caption": caption, "access_token": token,
+    }, timeout=60)
+    r.raise_for_status()
+    return r.json()["id"]
+
+
 def container_status(creation_id: str, token: str) -> str:
     """Статус контейнера: IN_PROGRESS | FINISHED | ERROR | PUBLISHED."""
     r = requests.get(
