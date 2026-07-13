@@ -79,23 +79,32 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
     else:
         return {"ok": False, "error": "у поста нет медиа для кросс-поста"}
 
-    # Кнопки: товар на WB (если у товара есть ссылка) + каталог/приложение
-    buttons = []
+    # Ссылки — HTML-анкорами в подписи (у альбомов в TG кнопок не бывает,
+    # а всё должно быть одним постом)
+    import html as _html
+    links = []
     if product_id:
         from .catalog import get_link
         lk = get_link(str(product_id)) or {}
         if (lk.get("wb_url") or "").startswith("https://"):
-            buttons.append({"text": "🛒 Этот товар на Wildberries", "url": lk["wb_url"]})
+            links.append(f'🛒 <a href="{lk["wb_url"]}">Ссылка на Wildberries</a>')
     if config.CROSSPOST_BUTTON_TEXT and config.CROSSPOST_BUTTON_URL:
-        buttons.append({"text": config.CROSSPOST_BUTTON_TEXT,
-                        "url": config.CROSSPOST_BUTTON_URL})
+        links.append(f'<a href="{config.CROSSPOST_BUTTON_URL}">'
+                     f'{_html.escape(config.CROSSPOST_BUTTON_TEXT)}</a>')
+    links_block = ("\n\n" + "\n".join(links)) if links else ""
+    # видимый текст ссылок тоже входит в лимит 1024 — режем базовый текст с запасом
+    visible_links_len = len(re.sub(r"<[^>]+>", "", links_block))
+    max_base = _CAPTION_LIMIT - visible_links_len
+    if len(caption) > max_base:
+        caption = caption[:max_base - 1].rsplit(" ", 1)[0].rstrip() + "…"
+    caption = _html.escape(caption) + links_block
 
     payload = {
         "channel": config.CROSSPOST_CHANNEL,
         "kind": kind,
         "media_urls": urls,
         "caption": caption,
-        "buttons": buttons,
+        "parse_mode": "HTML",
     }
     try:
         r = requests.post(
