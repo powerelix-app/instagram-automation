@@ -42,19 +42,25 @@ def _call(method: str, **params) -> dict:
     return body["response"]
 
 
-def _upload_photo(path: Path, group_id: str) -> str:
-    """Загрузка фото на стену сообщества → attachment-строка photo{owner}_{id}."""
-    srv = _call("photos.getWallUploadServer", group_id=group_id)
+def _upload_photo(path: Path, group_id: str, retries: int = 3) -> str:
+    """Загрузка фото на стену сообщества → attachment-строка photo{owner}_{id}.
+    VK при серии загрузок иногда отдаёт пустой photo — ретраим с паузой."""
+    import time
     mime = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
-    with open(path, "rb") as f:
-        up = requests.post(srv["upload_url"],
-                           files={"photo": (path.name, f, mime)}, timeout=120).json()
-    if not up.get("photo") or up["photo"] == "[]":
-        raise RuntimeError(f"VK upload не принял файл {path.name}")
-    saved = _call("photos.saveWallPhoto", group_id=group_id,
-                  photo=up["photo"], server=up["server"], hash=up["hash"])
-    p = saved[0]
-    return f"photo{p['owner_id']}_{p['id']}"
+    last = ""
+    for attempt in range(retries):
+        srv = _call("photos.getWallUploadServer", group_id=group_id)
+        with open(path, "rb") as f:
+            up = requests.post(srv["upload_url"],
+                               files={"photo": (path.name, f, mime)}, timeout=120).json()
+        if up.get("photo") and up["photo"] != "[]":
+            saved = _call("photos.saveWallPhoto", group_id=group_id,
+                          photo=up["photo"], server=up["server"], hash=up["hash"])
+            p = saved[0]
+            return f"photo{p['owner_id']}_{p['id']}"
+        last = str(up)[:150]
+        time.sleep(1.5 * (attempt + 1))
+    raise RuntimeError(f"VK upload не принял файл {path.name}: {last}")
 
 
 def _vk_caption(caption: str, product_id: str) -> str:
