@@ -33,7 +33,9 @@ def configured() -> bool:
 
 def _clean_caption(caption: str) -> str:
     """IG-подпись → TG: без хэштегов, в пределах лимита, по границе слова."""
-    text = re.sub(r"#[\w\dё_]+", "", caption or "", flags=re.IGNORECASE | re.UNICODE)
+    # артикул в IG оформлен хэштегом (#WW621739) — в TG оставляем текстом
+    text = re.sub(r"(Артикул[^\n#]*)#([\w\d]+)", r"\1\2", caption or "", flags=re.IGNORECASE)
+    text = re.sub(r"#[\w\dё_]+", "", text, flags=re.IGNORECASE | re.UNICODE)
     text = re.sub(r"[ \t]+", " ", text)
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
     if len(text) > _CAPTION_LIMIT:
@@ -56,6 +58,7 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         if post.tg_message_id:
             return {"ok": True, "already": True, "tg_message_id": post.tg_message_id}
         caption = _clean_caption(post.caption)
+        product_id = post.product_id
         images = (
             s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
             .order_by(PostAsset.ord).all()
@@ -76,13 +79,23 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
     else:
         return {"ok": False, "error": "у поста нет медиа для кросс-поста"}
 
+    # Кнопки: товар на WB (если у товара есть ссылка) + каталог/приложение
+    buttons = []
+    if product_id:
+        from .catalog import get_link
+        lk = get_link(str(product_id)) or {}
+        if (lk.get("wb_url") or "").startswith("https://"):
+            buttons.append({"text": "🛒 Этот товар на Wildberries", "url": lk["wb_url"]})
+    if config.CROSSPOST_BUTTON_TEXT and config.CROSSPOST_BUTTON_URL:
+        buttons.append({"text": config.CROSSPOST_BUTTON_TEXT,
+                        "url": config.CROSSPOST_BUTTON_URL})
+
     payload = {
         "channel": config.CROSSPOST_CHANNEL,
         "kind": kind,
         "media_urls": urls,
         "caption": caption,
-        "button_text": config.CROSSPOST_BUTTON_TEXT,
-        "button_url": config.CROSSPOST_BUTTON_URL,
+        "buttons": buttons,
     }
     try:
         r = requests.post(
