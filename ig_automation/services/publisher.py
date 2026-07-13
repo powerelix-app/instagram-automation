@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import time
+from pathlib import Path
 from datetime import datetime, timezone
 from typing import Dict
 
@@ -21,6 +22,31 @@ log = logging.getLogger(__name__)
 def _full_caption(caption: str, hashtags) -> str:
     tags = " ".join(f"#{h.lstrip('#')}" for h in (hashtags or []))
     return (caption or "").strip() + ("\n\n" + tags if tags else "")
+
+
+def _meta_reachable_url(asset_path: str) -> str:
+    """URL картинки, скачиваемый краулером Meta. Наш домен за DDoS-Guard режет
+    иностранных ботов, поэтому хостим файл через Telegram (sendDocument -> file URL)."""
+    if not (config.TG_TOKEN and config.TG_CHAT):
+        return config.PUBLIC_BASE + asset_path
+    import requests as _rq
+    local = Path("data") / asset_path.lstrip("/")
+    if not local.exists():
+        return config.PUBLIC_BASE + asset_path
+    try:
+        r = _rq.post(f"{config.TG_RELAY}/bot{config.TG_TOKEN}/sendDocument",
+                     data={"chat_id": config.TG_CHAT, "disable_notification": True},
+                     files={"document": (local.name, local.read_bytes())}, timeout=120)
+        r.raise_for_status()
+        file_id = r.json()["result"]["document"]["file_id"]
+        r2 = _rq.get(f"{config.TG_RELAY}/bot{config.TG_TOKEN}/getFile",
+                     params={"file_id": file_id}, timeout=60)
+        r2.raise_for_status()
+        fp = r2.json()["result"]["file_path"]
+        return f"https://api.telegram.org/file/bot{config.TG_TOKEN}/{fp}"
+    except Exception as e:
+        log.warning("tg-хостинг не вышел (%s) — отдаю PUBLIC_BASE", e)
+        return config.PUBLIC_BASE + asset_path
 
 
 def publish(post_id: int) -> Dict:
@@ -40,7 +66,7 @@ def publish(post_id: int) -> Dict:
         if not assets:
             return {"ok": False, "error": "нет картинки для публикации (сгенерируй визуал)"}
         caption = _full_caption(post.caption, post.hashtags)
-        image_urls = [config.PUBLIC_BASE + a.path for a in assets]
+        image_urls = [_meta_reachable_url(a.path) for a in assets]
         image_url = image_urls[0]
         post.status = "publishing"
 
