@@ -30,7 +30,7 @@ IMG_MODEL = "gemini-3.1-flash-image"
 import os as _os
 # nano = nano-banana-2 на Replicate (~$0.07 ≈ 5-6₽/кадр) — в 3-4 раза дешевле
 # того же gemini flash на ProxyAPI (~20₽/кадр); ProxyAPI-gemini остаётся фолбэком.
-IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "nano,gemini,gptimage2,grok").split(","))
+IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "seedream,nano,gemini,gptimage2,grok").split(","))
 FAL_I2V = "fal-ai/kling-video/v3/standard/image-to-video"
 NASTYA_VOICE = "YjESejviApN7SHrbfnA2"
 
@@ -236,6 +236,30 @@ def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
     return _parse(r.json())
 
 
+def gen_image_seedream(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
+    """Seedream 5.0 Pro edit (fal, $0.0675/кадр до 1536px) — самый дешёвый из
+    сильных; этикетку с референсом держит на уровне gpt-image-2."""
+    from .. import scenes
+    r = requests.post("https://fal.run/bytedance/seedream/v5/pro/edit",
+                      headers={"Authorization": f"Key {config.FAL_KEY}",
+                               "Content-Type": "application/json"},
+                      json={"prompt": prompt,
+                            "image_urls": [scenes._data_url(x, 1024) for x in refs]},
+                      timeout=600)
+    r.raise_for_status()
+    url = r.json()["images"][0]["url"]
+    try:
+        img = requests.get(url, timeout=120)
+        img.raise_for_status()
+        data = img.content
+    except Exception:  # fal.media режется РКН с РФ-VPS
+        from .. import apify
+        data = apify.fetch_via_actor(url) or b""
+    if not data:
+        raise RuntimeError("seedream: результат не скачался")
+    return _fit_ratio(data, aspect)
+
+
 def gen_image_nano(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
     """nano-banana-2 (gemini 3.1 flash image). Приоритет: fal.ai (~$0.08/кадр,
     пополняется USDC из РФ) → Replicate (~$0.07, нужна зарубежная карта).
@@ -339,7 +363,9 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
         try:
             if sb_id:
                 _set(sb_id, gen_status=f"генерация ({name})…")
-            if name == "nano":
+            if name == "seedream":
+                img = gen_image_seedream(prompt, refs, aspect)
+            elif name == "nano":
                 img = gen_image_nano(prompt, refs, aspect)
             elif name == "gptimage2":
                 img = gen_image_gpt(prompt, refs, aspect)

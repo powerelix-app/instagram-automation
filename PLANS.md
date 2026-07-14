@@ -27,7 +27,7 @@
   `producer.gen_product_image` — кадры с продуктом идут по цепочке
   gpt-image-2 (ProxyAPI images/edits, чемпион по кириллице) → gemini flash →
   grok (Replicate); порядок настраивается `CF_IMAGE_CHAIN`
-  (дефолт: nano → gemini → gptimage2 → grok). Цены за кадр: nano-banana-2 на
+  (дефолт: seedream → nano → gemini → gptimage2 → grok; Seedream 5.0 Pro edit на fal = $0.0675/кадр, самый дешёвый из сильных, этикетку держит). Цены за кадр: nano-banana-2 на
   fal ~$0.08 (≈6₽, USDC из РФ, основной) / Replicate ~$0.07 / тот же gemini на
   ProxyAPI ~20₽ (только фолбэк); gpt-image-2 на fal $0.165 high (основной,
   работает с РФ-VPS) / OpenAI напрямую / ProxyAPI (дороже всех). Скачивание с
