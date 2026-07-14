@@ -207,17 +207,19 @@ def recon_to_idea(request: Request, reel_id: int, _: bool = Depends(require_user
 def recon_add_url(request: Request, url: str = Form(...), _: bool = Depends(require_user)):
     """Разбор по прямой ссылке: скачиваем ролик + сразу глубокий разбор (кадры+vision)."""
     u = url.strip()
+    topic = "по ссылке"
     try:
         reel_id = recon.add_reel_by_url(u)
         if not reel_id:
-            msg = "Не удалось получить ролик (ссылка верна? пост публичный?)"
+            msg = "Не удалось получить контент (ссылка верна? пост публичный?)"
         else:
+            topic = recon.reel_topic(reel_id) or topic
             recon.deep_analyze(reel_id)
-            msg = "Ролик скачан и разобран (глубокий разбор)"
+            msg = "Контент скачан и разобран (глубокий разбор)"
     except Exception as e:
         log.warning("recon add-url failed: %s", e)
         msg = f"Ошибка: {e}"
-    return RedirectResponse(f"/recon?topic={quote('по ссылке')}&msg={quote(msg)}", status_code=303)
+    return RedirectResponse(f"/recon?topic={quote(topic)}&msg={quote(msg)}", status_code=303)
 
 
 @router.post("/recon/{reel_id}/deep-analyze")

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import re
 from typing import List, Optional
 
 import anthropic
@@ -296,9 +297,81 @@ _DEEP_SYSTEM = _ANALYZE_SYSTEM + """
 Разбирай именно ВИЗУАЛ: композицию, свет, цвет, декорации, камеру, где продукт в кадре."""
 
 
+# ── Pinterest ──
+
+_PIN_URL_RE = re.compile(r"pinterest\.[a-z.]+/pin/(\d+)")
+
+
+def _best_pin_image(url_564: str) -> str:
+    """i.pinimg.com отдаёт разные размеры одним хэшем: пробуем originals → 736x → 564x."""
+    for size in ("originals", "736x"):
+        candidate = re.sub(r"/\d+x/", f"/{size}/", url_564, count=1)
+        if candidate != url_564:
+            try:
+                r = requests.head(candidate, timeout=8)
+                if r.status_code == 200:
+                    return candidate
+            except requests.RequestException:
+                break
+    return url_564
+
+
+def _pin_by_url(url: str) -> Optional[dict]:
+    """Pinterest-пин по ссылке (включая короткие pin.it) → норм-вид как у reel_by_url."""
+    if "pin.it/" in url:
+        try:
+            url = requests.get(url, timeout=15, allow_redirects=True).url
+        except requests.RequestException as e:
+            log.warning("pin.it redirect failed: %s", e)
+            return None
+    m = _PIN_URL_RE.search(url)
+    if not m:
+        return None
+    pin_id = m.group(1)
+    try:
+        r = requests.get(
+            "https://widgets.pinterest.com/v3/pidgets/pins/info/",
+            params={"pin_ids": pin_id}, timeout=15)
+        r.raise_for_status()
+        data = (r.json().get("data") or [None])[0] or {}
+    except Exception as e:
+        log.warning("pinterest widgets API failed for pin %s: %s", pin_id, e)
+        return None
+    if not data:
+        return None
+    images = data.get("images") or {}
+    img = (images.get("564x") or images.get("236x") or {}).get("url", "")
+    if not img:
+        return None
+    img = _best_pin_image(img)
+    pinner = data.get("pinner") or {}
+    board = data.get("board") or {}
+    caption = " · ".join(x for x in (
+        (data.get("description") or "").strip(),
+        (data.get("attribution") or {}).get("title", "") if data.get("attribution") else "",
+        f"доска: {board['name']}" if board.get("name") else "") if x)
+    return {
+        "url": f"https://www.pinterest.com/pin/{pin_id}/",
+        "username": pinner.get("user_name") or pinner.get("full_name") or "",
+        "play_count": 0,
+        "likes": int((data.get("aggregated_pin_data") or {})
+                     .get("aggregated_stats", {}).get("saves") or 0),
+        "comments": 0,
+        "caption": caption,
+        "hashtags": [],
+        "video_url": "",
+        "thumbnail_url": img,
+        "music_info": "",
+        "media_type": "image",
+        "images": [img],
+        "topic": "pinterest",
+    }
+
+
 def add_reel_by_url(url: str) -> Optional[int]:
-    """Ролик по прямой ссылке -> TrendReel (сразу качаем mp4, CDN-ссылки протухают)."""
-    norm = apify.reel_by_url(url)
+    """Ролик по прямой ссылке -> TrendReel (сразу качаем mp4, CDN-ссылки протухают).
+    Pinterest-пины (pinterest.*/pin/…, pin.it/…) тоже принимаются — как image."""
+    norm = _pin_by_url(url) if ("pinterest." in url or "pin.it/" in url) else apify.reel_by_url(url)
     if not norm:
         return None
     with session_scope() as s:
@@ -311,7 +384,8 @@ def add_reel_by_url(url: str) -> Optional[int]:
                 play_count=norm["play_count"], likes=norm["likes"], comments=norm["comments"],
                 caption=norm["caption"], hashtags=norm["hashtags"], video_url=norm["video_url"],
                 thumbnail_url=norm["thumbnail_url"], music_info=str(norm["music_info"])[:512],
-                transcript=str(norm.get("transcript") or ""), topic="по ссылке",
+                transcript=str(norm.get("transcript") or ""),
+                topic=norm.get("topic") or "по ссылке",
                 relevant=True, relevance_reason="добавлен вручную", lang="",
                 media_type=norm.get("media_type", "video"),
                 images=norm.get("images") or None,
@@ -326,6 +400,12 @@ def add_reel_by_url(url: str) -> Optional[int]:
     else:
         _ensure_images(reel_id)
     return reel_id
+
+
+def reel_topic(reel_id: int) -> str:
+    with session_scope() as s:
+        reel = s.get(TrendReel, reel_id)
+        return reel.topic if reel else ""
 
 
 def _ensure_video(reel_id: int) -> str:

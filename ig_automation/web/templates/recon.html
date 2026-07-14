@@ -32,11 +32,11 @@
 
 <form action="/recon/add-url" method="post" class="bg-white border rounded-xl p-4 mb-6 flex flex-wrap gap-3 items-end">
   <div class="grow min-w-64">
-    <label class="block text-xs text-slate-500 mb-1">Разбор по ссылке (Reels / пост)</label>
-    <input name="url" required placeholder="https://www.instagram.com/reel/..." class="w-full border rounded-lg px-3 py-2 text-sm">
+    <label class="block text-xs text-slate-500 mb-1">Разбор по ссылке (Reels / пост / Pinterest-пин)</label>
+    <input name="url" required placeholder="https://www.instagram.com/reel/... или https://pinterest.com/pin/..." class="w-full border rounded-lg px-3 py-2 text-sm">
   </div>
   <button class="bg-slate-900 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-sm">🎬 Скачать и разобрать</button>
-  <div class="text-xs text-slate-400 basis-full">Скачает ролик, вытащит кадры и транскрипт, сделает глубокий vision-разбор (~1 мин)</div>
+  <div class="text-xs text-slate-400 basis-full">Reels: кадры + транскрипт + vision-разбор (~1 мин). Пост/карусель/пин: слайды + разбор дизайна. Дальше — «Сделать похожий» под наш товар</div>
 </form>
 
 <form action="/recon/upload" method="post" enctype="multipart/form-data" class="bg-white border rounded-xl p-4 mb-6 flex flex-wrap gap-3 items-end">
