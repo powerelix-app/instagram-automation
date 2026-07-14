@@ -24,9 +24,11 @@ log = logging.getLogger(__name__)
 
 PROXY_KEY = config.ANTHROPIC_API_KEY  # ProxyAPI: единый ключ на Google/OpenAI/Anthropic
 IMG_MODEL = "gemini-3.1-flash-image"
-# Цепочка моделей для кадров с продуктом: если этикетка вышла кривой (проверяет
-# Claude-vision), пробуем следующую. gpt-image-2 — чемпион по кириллице на этикетке.
-IMG_CHAIN = ("gptimage2", "gemini", "grok")
+# Цепочка моделей для кадров с продуктом: дешёвая первой, если этикетка вышла
+# кривой (проверяет Claude-vision) — следующая. gemini на ProxyAPI = копейки;
+# gpt-image-2 — чемпион по кириллице, зовём напрямую в OpenAI (без наценки ProxyAPI).
+import os as _os
+IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "gemini,gptimage2,grok").split(","))
 FAL_I2V = "fal-ai/kling-video/v3/standard/image-to-video"
 NASTYA_VOICE = "YjESejviApN7SHrbfnA2"
 
@@ -146,22 +148,65 @@ def _fit_ratio(img: bytes, ratio: str) -> bytes:
 
 
 def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
-    """gpt-image-2 через ProxyAPI images/edits (тот же ключ). Лучший рендер
-    кириллицы на этикетке — с первого раза, без лечения патчером."""
+    """gpt-image-2 images/edits. Приоритет: OpenAI напрямую (наш ключ, без наценки),
+    при гео-блоке (РФ-VPS) — тот же запрос через Apify media-fetcher,
+    последний фолбэк — ProxyAPI (дороже). Лучший рендер кириллицы на этикетке."""
+    size = "1536x1024" if aspect in ("16:9", "3:2") else "1024x1536"
+    fields = {"model": "gpt-image-2", "prompt": prompt, "size": size, "quality": "high"}
     files = []
     for rp in refs:
         rp = Path(rp)
         mime = "image/png" if rp.suffix == ".png" else "image/jpeg"
         files.append(("image[]", (rp.name, rp.read_bytes(), mime)))
-    size = "1536x1024" if aspect in ("16:9", "3:2") else "1024x1536"
-    r = requests.post(
-        "https://api.proxyapi.ru/openai/v1/images/edits",
-        headers={"Authorization": f"Bearer {PROXY_KEY}"},
-        data={"model": "gpt-image-2", "prompt": prompt, "size": size, "quality": "high"},
-        files=files, timeout=600)
+
+    def _parse(js: dict) -> bytes:
+        return _fit_ratio(base64.b64decode(js["data"][0]["b64_json"]), aspect)
+
+    if config.OPENAI_API_KEY:
+        try:  # 1) напрямую
+            r = requests.post("https://api.openai.com/v1/images/edits",
+                              headers={"Authorization": f"Bearer {config.OPENAI_API_KEY}"},
+                              data=fields, files=files, timeout=600)
+            r.raise_for_status()
+            return _parse(r.json())
+        except requests.RequestException as e:
+            code = getattr(getattr(e, "response", None), "status_code", None)
+            if code in (402, 429):  # деньги/лимит — прокси не поможет
+                raise
+            log.warning("openai direct fail (%s) — через media-fetcher", e)
+        try:  # 2) ручной multipart через Apify media-fetcher (гео-обход)
+            import uuid
+            boundary = uuid.uuid4().hex
+            parts = []
+            for k, v in fields.items():
+                parts.append(f"--{boundary}\r\nContent-Disposition: form-data; "
+                             f"name=\"{k}\"\r\n\r\n{v}\r\n".encode())
+            for k, (name, data, mime) in files:
+                parts.append(f"--{boundary}\r\nContent-Disposition: form-data; "
+                             f"name=\"{k}\"; filename=\"{name}\"\r\n"
+                             f"Content-Type: {mime}\r\n\r\n".encode() + data + b"\r\n")
+            body = b"".join(parts) + f"--{boundary}--\r\n".encode()
+            from .. import apify
+            items = apify._run_actor(apify.FETCHER_ACTOR, {
+                "url": "https://api.openai.com/v1/images/edits", "method": "POST",
+                "headers": {"Authorization": f"Bearer {config.OPENAI_API_KEY}",
+                            "Content-Type": f"multipart/form-data; boundary={boundary}"},
+                "body_b64": base64.b64encode(body).decode(),
+            }, max_charge_usd=0.05, timeout=700)
+            for it in items:
+                if it.get("ok") and it.get("downloadUrl"):
+                    raw = requests.get(it["downloadUrl"], params={"token": config.APIFY_TOKEN},
+                                       timeout=180).content
+                    return _parse(json.loads(raw))
+            raise RuntimeError("media-fetcher не вернул ответ OpenAI")
+        except Exception as e:
+            log.warning("openai через media-fetcher fail (%s) — фолбэк ProxyAPI", e)
+    # 3) ProxyAPI (наценка, но работает отовсюду)
+    r = requests.post("https://api.proxyapi.ru/openai/v1/images/edits",
+                      headers={"Authorization": f"Bearer {PROXY_KEY}"},
+                      data=fields, files=files, timeout=600)
     r.raise_for_status()
-    img = base64.b64decode(r.json()["data"][0]["b64_json"])
-    return _fit_ratio(img, aspect)
+    return _parse(r.json())
 
 
 def _label_verdict(img: bytes, bottle: Path) -> dict:
