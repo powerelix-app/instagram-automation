@@ -624,6 +624,50 @@ def post_publish(request: Request, post_id: int,
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
 
 
+@router.get("/post/{post_id}/manual-pack")
+def post_manual_pack(request: Request, post_id: int, _: bool = Depends(require_user)):
+    """ZIP для ручной публикации: слайды по порядку + готовые подписи (IG / TG / VK)."""
+    import io
+    import zipfile
+    from ..db.models import PostAsset
+    from ..services.publisher import _full_caption
+    from ..services.tg_crosspost import _clean_caption
+    from ..services.vk_crosspost import _vk_caption
+    from fastapi.responses import Response
+
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return RedirectResponse("/posts?msg=" + quote("пост не найден"), status_code=303)
+        assets = (s.query(PostAsset)
+                  .filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
+                  .order_by(PostAsset.ord).all())
+        paths = [config.DATA_DIR / a.path.lstrip("/") for a in assets]
+        caption, hashtags, product_id = post.caption or "", post.hashtags, post.product_id
+
+    paths = [p for p in paths if p.exists()]
+    if not paths:
+        return RedirectResponse(f"/post/{post_id}?msg=" + quote("нет картинок — сгенерируй визуал"),
+                                status_code=303)
+    ig_text = _full_caption(caption, hashtags)
+    tg_text = _clean_caption(caption)
+    vk_text = _vk_caption(caption, product_id)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
+        for i, pth in enumerate(paths, 1):
+            z.writestr(f"{i:02d}{pth.suffix or '.png'}", pth.read_bytes())
+        z.writestr("подпись_instagram.txt", ig_text)
+        z.writestr("подпись_telegram.txt", tg_text)
+        z.writestr("подпись_vk.txt", vk_text)
+        z.writestr("README.txt",
+                   "Слайды выкладывать по порядку номеров.\n"
+                   "Подписи готовы под каждую площадку: IG — с хэштегами, "
+                   "TG — без хэштегов, VK — со ссылками на товар/каталог/сайт.")
+    return Response(buf.getvalue(), media_type="application/zip",
+                    headers={"Content-Disposition":
+                             f'attachment; filename="post_{post_id}_manual.zip"'})
+
+
 @router.get("/analytics", response_class=HTMLResponse)
 def analytics_page(request: Request, _: bool = Depends(require_user)):
     return templates.TemplateResponse(request, "analytics.html", _ctx(request, data=insights.overview()))
