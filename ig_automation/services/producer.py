@@ -24,6 +24,9 @@ log = logging.getLogger(__name__)
 
 PROXY_KEY = config.ANTHROPIC_API_KEY  # ProxyAPI: единый ключ на Google/OpenAI/Anthropic
 IMG_MODEL = "gemini-3.1-flash-image"
+# Цепочка моделей для кадров с продуктом: если этикетка вышла кривой (проверяет
+# Claude-vision), пробуем следующую. gpt-image-2 — чемпион по кириллице на этикетке.
+IMG_CHAIN = ("gptimage2", "gemini", "grok")
 FAL_I2V = "fal-ai/kling-video/v3/standard/image-to-video"
 NASTYA_VOICE = "YjESejviApN7SHrbfnA2"
 
@@ -121,6 +124,126 @@ def gen_image(prompt: str, ref: Optional[Path] = None, aspect: str = "9:16",
         if "inlineData" in p:
             return base64.b64decode(p["inlineData"]["data"])
     raise RuntimeError("gemini не вернул картинку")
+
+
+def _fit_ratio(img: bytes, ratio: str) -> bytes:
+    """Центр-кроп PNG/JPG-байтов под соотношение вида '4:5'."""
+    import io
+    from PIL import Image as _Im
+    rw, rh = (int(x) for x in ratio.split(":"))
+    im = _Im.open(io.BytesIO(img)).convert("RGB")
+    w, h = im.size
+    target = rw / rh
+    if abs(w / h - target) > 0.01:
+        if w / h > target:
+            nw = int(h * target); x0 = (w - nw) // 2
+            im = im.crop((x0, 0, x0 + nw, h))
+        else:
+            nh = int(w / target); y0 = (h - nh) // 2
+            im = im.crop((0, y0, w, y0 + nh))
+    buf = io.BytesIO(); im.save(buf, "PNG")
+    return buf.getvalue()
+
+
+def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
+    """gpt-image-2 через ProxyAPI images/edits (тот же ключ). Лучший рендер
+    кириллицы на этикетке — с первого раза, без лечения патчером."""
+    files = []
+    for rp in refs:
+        rp = Path(rp)
+        mime = "image/png" if rp.suffix == ".png" else "image/jpeg"
+        files.append(("image[]", (rp.name, rp.read_bytes(), mime)))
+    size = "1536x1024" if aspect in ("16:9", "3:2") else "1024x1536"
+    r = requests.post(
+        "https://api.proxyapi.ru/openai/v1/images/edits",
+        headers={"Authorization": f"Bearer {PROXY_KEY}"},
+        data={"model": "gpt-image-2", "prompt": prompt, "size": size, "quality": "high"},
+        files=files, timeout=600)
+    r.raise_for_status()
+    img = base64.b64decode(r.json()["data"][0]["b64_json"])
+    return _fit_ratio(img, aspect)
+
+
+def _label_verdict(img: bytes, bottle: Path) -> dict:
+    """Claude-vision сверяет этикетку на кадре с реальной банкой.
+    -> {ok, reason}. Ошибка проверки = ok (не блокируем производство)."""
+    import anthropic
+    from pydantic import BaseModel
+
+    class _V(BaseModel):
+        ok: bool
+        reason: str = ""
+
+    try:
+        content = [
+            {"type": "text", "text": "Кадр (проверяемый):"},
+            {"type": "image", "source": {"type": "base64", "media_type": "image/png",
+                                         "data": base64.b64encode(_fit_ratio(img, "4:5")).decode()}},
+            {"type": "text", "text": "Реальная банка (эталон):"},
+            {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                         "data": base64.b64encode(_shrink(bottle)).decode()}},
+            {"type": "text", "text":
+                "На кадре есть банка нашего продукта? Сравни её этикетку с эталоном: "
+                "логотип POWERELIX и весь читаемый русский текст должны быть БЕЗ выдуманных "
+                "букв/слов (мелкий нечитаемый текст не считается). ok=false если текст "
+                "этикетки перевран, банка другая или упаковка выдумана."},
+        ]
+        client = anthropic.Anthropic()
+        resp = client.messages.parse(
+            model=config.CLAUDE_MODEL, max_tokens=300,
+            messages=[{"role": "user", "content": content}], output_format=_V)
+        v = resp.parsed_output
+        return {"ok": v.ok, "reason": v.reason}
+    except Exception as e:
+        log.warning("label verdict failed (пропускаю проверку): %s", e)
+        return {"ok": True, "reason": f"проверка недоступна: {e}"}
+
+
+def _shrink(p: Path, max_w: int = 900) -> bytes:
+    import io
+    from PIL import Image as _Im
+    im = _Im.open(p).convert("RGB")
+    if im.width > max_w:
+        im = im.resize((max_w, int(im.height * max_w / im.width)), _Im.LANCZOS)
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=88)
+    return buf.getvalue()
+
+
+def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
+                      chain=IMG_CHAIN, sb_id: Optional[int] = None) -> bytes:
+    """Кадр с продуктом: идём по цепочке нейросетей, после каждой Claude-vision
+    проверяет этикетку; кривая этикетка -> следующая модель. Все кривые варианты
+    не выбрасываем: если ни одна не прошла, отдаём последний."""
+    bottle = Path(refs[-1])  # банка — последним референсом (конвенция)
+    last = b""
+    for name in chain:
+        try:
+            if sb_id:
+                _set(sb_id, gen_status=f"генерация ({name})…")
+            if name == "gptimage2":
+                img = gen_image_gpt(prompt, refs, aspect)
+            elif name == "gemini":
+                img = gen_image(prompt, refs=refs, aspect=aspect, style_suffix="")
+            elif name == "grok":
+                from .. import scenes
+                img = _fit_ratio(scenes._call_replicate_grok_image(prompt, image=bottle), aspect)
+            else:
+                continue
+        except SystemExit as e:  # нет баланса — просто идём дальше по цепочке
+            log.warning("модель %s недоступна: %s", name, e)
+            continue
+        except Exception as e:
+            log.warning("модель %s упала: %s", name, e)
+            continue
+        last = img
+        v = _label_verdict(img, bottle)
+        if v["ok"]:
+            log.info("этикетка ok (%s)", name)
+            return img
+        log.warning("этикетка кривая (%s): %s — пробую следующую модель", name, v["reason"])
+    if not last:
+        raise RuntimeError("ни одна модель цепочки не вернула картинку")
+    return last
 
 
 def fal_i2v(image: bytes, prompt: str, duration: int = 5) -> bytes:
@@ -229,8 +352,7 @@ def _produce_slides(sb_id: int):
                 + (f"Контекст слайда: {hint}\n" if hint else "")
                 + "СТРОГО: никакого текста, букв или надписей на изображении, "
                 "кроме этикетки нашего продукта.")
-            img = gen_image(prompt, refs=[rs, bottle] if bottle else [rs],
-                            aspect="4:5", style_suffix="")
+            img = gen_product_image(prompt, [rs, bottle], aspect="4:5", sb_id=sb_id)
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
             # фирменный оверлей (шапка POWERELIX + короткий заголовок)
@@ -248,7 +370,7 @@ def _produce_slides(sb_id: int):
             prompt = (f"Слайд {i + 1} Instagram-карусели.\nВИЗУАЛ: {sc.get('scene', '')}\n"
                       f"Композиция: {sc.get('camera', '')}\n"
                       "СТРОГО: без текста и надписей (кроме этикетки продукта).")
-            img = gen_image(prompt, ref=bottle, aspect="4:5", style_suffix="")
+            img = gen_product_image(prompt, [bottle], aspect="4:5", sb_id=sb_id)
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
             paths.append(f"/media/produced/{sb_id}/slide_{i}.png")
@@ -269,7 +391,9 @@ def _produce_video(sb_id: int):
             clips.append(cp_done)
             continue
         _set(sb_id, gen_status=f"сцена {i + 1}/{len(scenes)}: стилл…")
-        still = gen_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}", ref=ref)
+        still = (gen_product_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}",
+                                   [ref], aspect="9:16", sb_id=sb_id)
+                 if ref else gen_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}"))
         (out / f"still_{i}.png").write_bytes(still)
         _set(sb_id, gen_status=f"сцена {i + 1}/{len(scenes)}: анимация (fal)…")
         dur = int(float(sc.get("duration_s") or 4)) or 4
