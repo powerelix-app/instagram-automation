@@ -18,6 +18,11 @@
 - **F. Публикация** — постинг/Reels/Stories по плану + расписание.
 
 ## 🏭 Сервис «Контент-завод» (FastAPI) — строится с 2026-06-10
+- ✅ **Бэкапы завода** (2026-07-14): `/home/bidder/backup-cf.sh` — ежедневно 04:30
+  (cron): sqlite `.backup` content_factory.db → gzip → `gdrive:content-factory-backups/db/`
+  (ротация 14 дн) + инкрементальное зеркало `data/media`, `data/product_refs`
+  и json-конфигов в `gdrive:content-factory-backups/data/`. Первый прогон:
+  206 МБ медиа в Drive.
 - ✅ **Референсы по ссылке: Pinterest** (2026-07-14): поле «Разбор по ссылке»
   на /recon теперь принимает Pinterest-пины (`pinterest.*/pin/…` и короткие
   `pin.it/…`). Загрузчик без API-ключей: публичный widgets-эндпоинт
