@@ -307,6 +307,101 @@ def gen_image_nano(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
     return _fit_ratio(img.content, aspect)
 
 
+_MONT = Path(__file__).resolve().parents[2] / "assets" / "fonts" / "montserrat-black.ttf"
+_INTER_SB = Path(__file__).resolve().parents[2] / "assets" / "fonts" / "Inter-SemiBold.otf"
+
+
+def _overlay_spot(img_path: Path) -> str:
+    """Claude-vision: куда можно положить крупный заголовок, не перекрыв
+    продукт/этикетку/лицо. -> 'top-left'|'top-right'|'bottom-left'|'bottom-right'|'none'."""
+    import anthropic
+    from pydantic import BaseModel
+    from typing import Literal
+
+    class _Spot(BaseModel):
+        position: Literal["top-left", "top-right", "bottom-left", "bottom-right", "none"]
+        reason: str = ""
+
+    import io
+    from PIL import Image as _Im
+    _im = _Im.open(img_path).convert("RGB")
+    if _im.width > 1024:
+        _im = _im.resize((1024, int(_im.height * 1024 / _im.width)), _Im.LANCZOS)
+    _buf = io.BytesIO(); _im.save(_buf, "JPEG", quality=88)
+    content = [
+        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                     "data": base64.b64encode(_buf.getvalue()).decode()}},
+        {"type": "text", "text":
+            "Это слайд Instagram-карусели. Хотим наложить КРУПНЫЙ заголовок (2-3 строки, "
+            "занимает примерно четверть кадра). Выбери угол, где он НЕ перекроет банку "
+            "продукта, её этикетку, лицо и руки человека и важные предметы. Верхняя "
+            "полоса кадра занята маленьким логотипом — top-варианты чуть ниже него. "
+            "Если чистого угла нет — position='none' (лучше без текста, чем поверх продукта)."},
+    ]
+    client = anthropic.Anthropic()
+    resp = client.messages.parse(
+        model=config.CLAUDE_MODEL, max_tokens=200,
+        messages=[{"role": "user", "content": content}], output_format=_Spot)
+    v = resp.parsed_output
+    log.info("overlay spot: %s (%s)", v.position, v.reason)
+    return v.position
+
+
+def smart_overlay(img_path: Path, title: str) -> None:
+    """Вордмарк POWERELIX + заголовок в чистой зоне (по вердикту vision).
+    Нет чистой зоны — только вордмарк."""
+    from PIL import Image as _Im, ImageDraw, ImageFilter, ImageFont
+
+    im = _Im.open(img_path).convert("RGBA")
+    W, H = im.size
+    try:
+        pos = _overlay_spot(img_path)
+    except Exception as e:
+        log.warning("overlay spot недоступен (%s) — кладу bottom-left", e)
+        pos = "bottom-left"
+
+    f_logo = ImageFont.truetype(str(_MONT), int(H * 0.030))
+    f_big = ImageFont.truetype(str(_MONT), int(H * 0.060))
+    lh = int(H * 0.067)
+    M = int(W * 0.055)
+
+    tx = _Im.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(tx)
+    d.text((M, int(H * 0.04)), "POWERELIX", font=f_logo, fill=(255, 255, 255, 255))
+
+    if pos != "none":
+        # перенос заголовка по словам, максимум 3 строки
+        words = title.upper().split()
+        lines, cur = [], ""
+        for w_ in words:
+            t = (cur + " " + w_).strip()
+            if d.textlength(t, font=f_big) > W * 0.48 and cur:
+                lines.append(cur); cur = w_
+            else:
+                cur = t
+        lines.append(cur)
+        lines = lines[:3]
+        bh = len(lines) * lh
+        y = int(H * 0.115) if "top" in pos else int(H - H * 0.06 - bh)
+        yy = y
+        right = "right" in pos
+        for ln in lines:
+            lw = d.textlength(ln, font=f_big)
+            lx = int(W - M - lw) if right else M
+            d.text((lx, yy), ln, font=f_big, fill=(255, 255, 255, 255))
+            yy += lh
+        ax = int(W - M - W * 0.10) if right else M
+        d.rectangle([ax, yy + int(H * 0.008), ax + int(W * 0.10), yy + int(H * 0.014)],
+                    fill=(22, 255, 179, 255))
+
+    sh = tx.split()[3].filter(ImageFilter.GaussianBlur(7))
+    shadow = _Im.new("RGBA", (W, H), (0, 0, 0, 0))
+    shadow.putalpha(sh.point(lambda a: int(a * 0.6)))
+    im = _Im.alpha_composite(im, shadow)
+    im.alpha_composite(tx)
+    im.convert("RGB").save(img_path)
+
+
 def _label_verdict(img: bytes, bottle: Path) -> dict:
     """Claude-vision сверяет этикетку на кадре с реальной банкой.
     -> {ok, reason}. Ошибка проверки = ok (не блокируем производство)."""
@@ -505,12 +600,12 @@ def _produce_slides(sb_id: int):
             img = gen_product_image(prompt, [rs, bottle], aspect="4:5", sb_id=sb_id)
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
-            # фирменный оверлей (шапка POWERELIX + короткий заголовок)
+            # фирменный оверлей: Claude-vision выбирает чистую зону; если текст
+            # некуда класть (перекроет продукт/этикетку/лицо) — слайд без текста
             title = (scenes[i].get("slide_title") or "").strip() if i < len(scenes) else ""
             if title:
                 try:
-                    from ..overlay import render_cover
-                    render_cover(str(p), headline=title, subtitle="", out_path=str(p))
+                    smart_overlay(p, title)
                 except Exception as e:
                     log.warning("overlay fail слайд %s: %s", i, e)
             paths.append(f"/media/produced/{sb_id}/slide_{i}.png")
