@@ -119,8 +119,6 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
     """Генерит визуал с лицом бренда, кладёт в data/media, пишет PostAsset.
     ratio=None → по формату поста; extra → доп. подсказка к промпту (для слайдов карусели).
     Возвращает id ассета."""
-    if not config.XAI_API_KEY:
-        raise RuntimeError("Не задан XAI_API_KEY в .env (нужен для генерации визуала Grok)")
     with session_scope() as s:
         post = s.get(Post, post_id)
         if not post:
@@ -135,24 +133,21 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
         ]
         post.status = "generating"
 
-    # Референсы: лицо бренда + (если есть) реальная банка товара + ручные референсы поста.
-    refs = [brand.model_ref()]
+    # Референсы: лицо бренда + ручные референсы поста + реальная банка товара
+    # (банка последней — по ней цепочка сверяет этикетку).
     prod_ref = brand.product_ref(product)
-    if prod_ref:
-        refs.append(prod_ref)
     existing_user_refs = [p for p in user_refs if p.exists()]
-    refs += existing_user_refs
+    refs = [brand.model_ref()] + existing_user_refs + ([prod_ref] if prod_ref else [])
     scene = _scene_description(visual_idea, hook, product)
     prompt = _visual_prompt(scene, product, with_product_ref=bool(prod_ref) or bool(existing_user_refs))
     if extra:
         prompt += ". " + extra
 
     try:
-        scene_path = scenes.generate_branded(
-            prompt, refs=refs, ratio=ratio, out_name=f"post_{post_id}_{ord_}.png"
-        )
+        from . import producer
+        img = producer.gen_product_image(prompt, refs, aspect=ratio, bottle=prod_ref)
         dest = config.MEDIA_DIR / f"post_{post_id}_{ord_}.png"
-        shutil.copy(scene_path, dest)
+        dest.write_bytes(img)
         _apply_logo(dest)
     except Exception:
         with session_scope() as s:  # вернуть статус, не оставлять в «generating»
@@ -163,7 +158,7 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
 
     with session_scope() as s:
         asset = PostAsset(post_id=post_id, kind="image", path=f"/media/{dest.name}",
-                          model="grok-edit", prompt=prompt, ord=ord_)
+                          model="img-chain", prompt=prompt, ord=ord_)
         s.add(asset)
         p = s.get(Post, post_id)
         if p and p.status == "generating":
