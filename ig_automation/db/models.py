@@ -135,6 +135,8 @@ class Post(Base):
     compliance_notes: Mapped[str] = mapped_column(Text, default="")
     scheduled_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    # площадки публикации: CSV из ig,tg,vk; "" = все
+    platforms: Mapped[str] = mapped_column(String(32), default="")
     ig_media_id: Mapped[str] = mapped_column(String(64), default="")
     tg_message_id: Mapped[str] = mapped_column(String(64), default="")  # кросс-пост в TG-канал
     vk_post_id: Mapped[str] = mapped_column(String(64), default="")  # кросс-пост в сообщество VK

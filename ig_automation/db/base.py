@@ -65,6 +65,8 @@ def _migrate(engine) -> None:
             ("reels_script", "TEXT"),
             ("blogger_id", "INTEGER"),
             ("tg_message_id", "VARCHAR DEFAULT ''"),
+            ("vk_post_id", "VARCHAR DEFAULT ''"),
+            ("platforms", "VARCHAR DEFAULT ''"),
         ],
         "deals": [
             ("last_touch_at", "DATETIME"),

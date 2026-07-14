@@ -1,7 +1,7 @@
 """Страницы сервиса. Фаза 1: Главная (обзор конвейера) + Статус (аккаунт/токен/конфиг)."""
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 import logging
 from datetime import datetime
@@ -607,15 +607,18 @@ def post_unapprove(request: Request, post_id: int, _: bool = Depends(require_use
 
 
 @router.post("/post/{post_id}/publish")
-def post_publish(request: Request, post_id: int, _: bool = Depends(require_user)):
-    res = publisher.publish(post_id)
+def post_publish(request: Request, post_id: int,
+                 platforms: List[str] = Form(default=[]), _: bool = Depends(require_user)):
+    res = publisher.publish(post_id, platforms=platforms or None)
     if res.get("ok"):
         if res.get("simulated"):
             msg = "🧪 Опубликовано (симуляция — в IG не ушло)"
         elif res.get("already"):
             msg = "Уже было опубликовано"
         else:
-            msg = "✅ Опубликовано в Instagram"
+            names = {"ig": "Instagram", "tg": "Telegram", "vk": "ВКонтакте"}
+            where = ", ".join(names.get(x, x) for x in res.get("platforms", [])) or "Instagram"
+            msg = f"✅ Опубликовано: {where}"
     else:
         msg = "Ошибка публикации: " + res.get("error", "")
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
@@ -768,11 +771,12 @@ def wb_import_do(request: Request, text: str = Form(""), _: bool = Depends(requi
 
 
 @router.post("/post/{post_id}/schedule")
-def post_schedule(request: Request, post_id: int, when: str = Form(...), _: bool = Depends(require_user)):
+def post_schedule(request: Request, post_id: int, when: str = Form(...),
+                  platforms: List[str] = Form(default=[]), _: bool = Depends(require_user)):
     try:
         naive = datetime.fromisoformat(when)  # из <input type=datetime-local>, трактуем как МСК
         utc_naive = naive.replace(tzinfo=_MSK).astimezone(ZoneInfo("UTC")).replace(tzinfo=None)
-        ok = publisher.schedule(post_id, utc_naive)
+        ok = publisher.schedule(post_id, utc_naive, platforms=platforms or None)
         msg = "📅 Запланировано (по МСК)" if ok else "Сначала одобри пост"
     except Exception as e:
         msg = f"Неверная дата: {e}"

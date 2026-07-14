@@ -211,7 +211,7 @@
 
 {% if post.status in ['approved','scheduled','published','failed'] %}
 <div class="bg-white border rounded-xl p-4 mt-4">
-  <div class="font-semibold text-sm mb-2">📤 Публикация в Instagram</div>
+  <div class="font-semibold text-sm mb-2">📤 Публикация (IG / TG / VK)</div>
   {% if simulate %}
   <div class="text-xs text-sky-800 bg-sky-50 border border-sky-200 rounded px-2 py-1 mb-2">🧪 Режим симуляции: посты НЕ уходят в IG по-настоящему. Боевой постинг — <code>CF_SIMULATE_PUBLISH=0</code> в .env + restart.</div>
   {% endif %}
@@ -222,12 +222,22 @@
     {% if post.status == 'scheduled' and post.scheduled_at %}<div class="text-sm text-violet-700 mb-2">📅 Запланировано на {{ post.scheduled_at }} UTC (опубликует планировщик)</div>{% endif %}
     <div class="flex gap-3 items-end flex-wrap mt-1">
       <form action="/post/{{ post.id }}/publish" method="post">
+        <div class="flex gap-4 mb-2 text-sm">
+          <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="ig" checked> Instagram</label>
+          <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="tg" checked> Telegram</label>
+          <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="vk" checked> ВКонтакте</label>
+        </div>
         <button class="text-sm bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2">📤 Опубликовать сейчас</button>
       </form>
-      <form action="/post/{{ post.id }}/schedule" method="post" class="flex items-end gap-2">
+      <form action="/post/{{ post.id }}/schedule" method="post" class="flex items-end gap-2 flex-wrap">
         <div>
           <label class="block text-xs text-slate-500 mb-1">Запланировать (МСК)</label>
           <input type="datetime-local" name="when" required class="px-3 py-2 border rounded text-sm">
+          <div class="flex gap-3 mt-2 text-xs">
+            <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="ig" checked> IG</label>
+            <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="tg" checked> TG</label>
+            <label class="flex items-center gap-1"><input type="checkbox" name="platforms" value="vk" checked> VK</label>
+          </div>
         </div>
         <button class="text-sm border rounded px-3 py-2 hover:bg-slate-50">📅 Запланировать</button>
       </form>

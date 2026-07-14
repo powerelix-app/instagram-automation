@@ -9,7 +9,7 @@ import logging
 import time
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict
+from typing import Dict, List, Optional
 
 from .. import config, instagram
 from ..db.base import session_scope
@@ -82,13 +82,18 @@ def _meta_reachable_url(asset_path: str) -> str:
         return config.PUBLIC_BASE + asset_path
 
 
-def publish(post_id: int) -> Dict:
-    """Публикует одобренный пост. Возвращает {ok, ...}. Безопасна к повторному вызову."""
+def publish(post_id: int, platforms: Optional[list] = None) -> Dict:
+    """Публикует одобренный пост на выбранные площадки (ig/tg/vk; None или
+    сохранённые в post.platforms; пусто = все). Безопасна к повторному вызову."""
     with session_scope() as s:
         post = s.get(Post, post_id)
         if not post:
             return {"ok": False, "error": "пост не найден"}
-        if post.status == "published" and post.ig_media_id:
+        if platforms is None:
+            platforms = [x for x in (post.platforms or "").split(",") if x]
+        if not platforms:
+            platforms = ["ig", "tg", "vk"]
+        if post.status == "published":
             return {"ok": True, "already": True}
         if post.status not in ("approved", "scheduled"):
             return {"ok": False, "error": "пост не одобрен (нужен статус approved/scheduled)"}
@@ -117,6 +122,19 @@ def publish(post_id: int) -> Dict:
         return {"ok": True, "simulated": True}
 
     # ── Боевая публикация ──
+    if "ig" not in platforms:  # без Instagram: сразу кросс-посты на выбранные площадки
+        with session_scope() as s:
+            post = s.get(Post, post_id)
+            post.status = "published"
+            post.published_at = datetime.utcnow()
+            post.error = ""
+        log.info("publish post %s — IG пропущен (площадки: %s)", post_id, platforms)
+        if "tg" in platforms:
+            _tg_crosspost_safe(post_id)
+        if "vk" in platforms:
+            _vk_crosspost_safe(post_id)
+        return {"ok": True, "platforms": platforms}
+
     token = tokens.current_token()
     uid = config.IG_USER_ID or "me"
     try:
@@ -152,9 +170,11 @@ def publish(post_id: int) -> Dict:
             post.published_at = datetime.utcnow()
             post.error = ""
         log.info("publish post %s — OK media_id=%s", post_id, media_id)
-        _tg_crosspost_safe(post_id)
-        _vk_crosspost_safe(post_id)
-        return {"ok": True, "media_id": media_id}
+        if "tg" in platforms:
+            _tg_crosspost_safe(post_id)
+        if "vk" in platforms:
+            _vk_crosspost_safe(post_id)
+        return {"ok": True, "media_id": media_id, "platforms": platforms}
     except Exception as e:
         with session_scope() as s:
             post = s.get(Post, post_id)
@@ -165,13 +185,15 @@ def publish(post_id: int) -> Dict:
         return {"ok": False, "error": str(e)}
 
 
-def schedule(post_id: int, when: datetime) -> bool:
+def schedule(post_id: int, when: datetime, platforms: Optional[list] = None) -> bool:
     with session_scope() as s:
         post = s.get(Post, post_id)
         if not post or post.status not in ("approved", "scheduled", "failed"):
             return False
         post.scheduled_at = when
         post.status = "scheduled"
+        if platforms is not None:
+            post.platforms = ",".join(platforms)
         return True
 
 
