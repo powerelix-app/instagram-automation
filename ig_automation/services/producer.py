@@ -28,7 +28,9 @@ IMG_MODEL = "gemini-3.1-flash-image"
 # кривой (проверяет Claude-vision) — следующая. gemini на ProxyAPI = копейки;
 # gpt-image-2 — чемпион по кириллице, зовём напрямую в OpenAI (без наценки ProxyAPI).
 import os as _os
-IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "gemini,gptimage2,grok").split(","))
+# nano = nano-banana-2 на Replicate (~$0.07 ≈ 5-6₽/кадр) — в 3-4 раза дешевле
+# того же gemini flash на ProxyAPI (~20₽/кадр); ProxyAPI-gemini остаётся фолбэком.
+IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "nano,gemini,gptimage2,grok").split(","))
 FAL_I2V = "fal-ai/kling-video/v3/standard/image-to-video"
 NASTYA_VOICE = "YjESejviApN7SHrbfnA2"
 
@@ -162,6 +164,31 @@ def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
     def _parse(js: dict) -> bytes:
         return _fit_ratio(base64.b64decode(js["data"][0]["b64_json"]), aspect)
 
+    if config.FAL_KEY:  # 0) fal ($0.165/кадр high — дешевле OpenAI direct, из РФ работает)
+        try:
+            from .. import scenes
+            fal_size = "landscape_4_3" if aspect in ("16:9", "3:2") else "portrait_4_3"
+            payload = {"prompt": prompt, "quality": "high", "image_size": fal_size,
+                       "image_urls": [scenes._data_url(r, 1024) for r in refs]}
+            r = requests.post("https://fal.run/fal-ai/gpt-image-2/edit",
+                              headers={"Authorization": f"Key {config.FAL_KEY}",
+                                       "Content-Type": "application/json"},
+                              json=payload, timeout=600)
+            r.raise_for_status()
+            url = r.json()["images"][0]["url"]
+            try:
+                img = requests.get(url, timeout=120)
+                img.raise_for_status()
+                data = img.content
+            except Exception:
+                from .. import apify
+                data = apify.fetch_via_actor(url) or b""
+            if data:
+                return _fit_ratio(data, aspect)
+            raise RuntimeError("fal: результат не скачался")
+        except Exception as e:
+            log.warning("fal gpt-image fail (%s) — пробую OpenAI напрямую", e)
+
     if config.OPENAI_API_KEY:
         try:  # 1) напрямую
             r = requests.post("https://api.openai.com/v1/images/edits",
@@ -207,6 +234,53 @@ def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
                       data=fields, files=files, timeout=600)
     r.raise_for_status()
     return _parse(r.json())
+
+
+def gen_image_nano(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
+    """nano-banana-2 (gemini 3.1 flash image). Приоритет: fal.ai (~$0.08/кадр,
+    пополняется USDC из РФ) → Replicate (~$0.07, нужна зарубежная карта).
+    Оба в 3-4 раза дешевле того же gemini на ProxyAPI (~20₽)."""
+    from .. import scenes
+    if config.FAL_KEY:
+        try:
+            payload = {"prompt": prompt, "output_format": "png",
+                       "image_urls": [scenes._data_url(r, 1024) for r in refs]}
+            r = requests.post("https://fal.run/fal-ai/nano-banana-2/edit",
+                              headers={"Authorization": f"Key {config.FAL_KEY}",
+                                       "Content-Type": "application/json"},
+                              json=payload, timeout=300)
+            r.raise_for_status()
+            url = r.json()["images"][0]["url"]
+            try:
+                img = requests.get(url, timeout=120)
+                img.raise_for_status()
+                data = img.content
+            except Exception:  # fal.media режется РКН с РФ-VPS
+                from .. import apify
+                data = apify.fetch_via_actor(url) or b""
+            if data:
+                return _fit_ratio(data, aspect)
+            raise RuntimeError("fal: результат не скачался")
+        except Exception as e:
+            log.warning("fal nano fail (%s) — пробую Replicate", e)
+    # Replicate google/nano-banana-2
+    body = {"prompt": prompt, "image_input": [scenes._data_url(r, 1024) for r in refs],
+            "output_format": "png"}
+    url = "https://api.replicate.com/v1/models/google/nano-banana-2/predictions"
+    h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}",
+         "Content-Type": "application/json", "Prefer": "wait"}
+    r = requests.post(url, headers=h, json={"input": body}, timeout=300)
+    if r.status_code == 402:
+        raise SystemExit("Replicate: недостаточно баланса (HTTP 402).")
+    r.raise_for_status()
+    out = r.json().get("output")
+    if isinstance(out, list):
+        out = out[0] if out else None
+    if not out:
+        raise RuntimeError("replicate nano: пустой output")
+    img = requests.get(out, timeout=120)
+    img.raise_for_status()
+    return _fit_ratio(img.content, aspect)
 
 
 def _label_verdict(img: bytes, bottle: Path) -> dict:
@@ -265,7 +339,9 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
         try:
             if sb_id:
                 _set(sb_id, gen_status=f"генерация ({name})…")
-            if name == "gptimage2":
+            if name == "nano":
+                img = gen_image_nano(prompt, refs, aspect)
+            elif name == "gptimage2":
                 img = gen_image_gpt(prompt, refs, aspect)
             elif name == "gemini":
                 img = gen_image(prompt, refs=refs, aspect=aspect, style_suffix="")

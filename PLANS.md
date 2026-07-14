@@ -26,7 +26,12 @@
 - ✅ **Цепочка нейросетей + vision-контроль этикетки** (2026-07-14):
   `producer.gen_product_image` — кадры с продуктом идут по цепочке
   gpt-image-2 (ProxyAPI images/edits, чемпион по кириллице) → gemini flash →
-  grok (Replicate); порядок настраивается `CF_IMAGE_CHAIN`. gpt-image-2 зовём
+  grok (Replicate); порядок настраивается `CF_IMAGE_CHAIN`
+  (дефолт: nano → gemini → gptimage2 → grok). Цены за кадр: nano-banana-2 на
+  fal ~$0.08 (≈6₽, USDC из РФ, основной) / Replicate ~$0.07 / тот же gemini на
+  ProxyAPI ~20₽ (только фолбэк); gpt-image-2 на fal $0.165 high (основной,
+  работает с РФ-VPS) / OpenAI напрямую / ProxyAPI (дороже всех). Скачивание с
+  fal.media при РКН — через media-fetcher. gpt-image-2 зовём
   НАПРЯМУЮ в OpenAI (наш ключ, без наценки ProxyAPI; с РФ-VPS — тем же ручным
   multipart через Apify media-fetcher, фолбэк ProxyAPI). После каждой генерации
   Claude-vision сверяет этикетку с
