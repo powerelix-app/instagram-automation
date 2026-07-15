@@ -203,6 +203,13 @@ def recon_to_idea(request: Request, reel_id: int, _: bool = Depends(require_user
     return RedirectResponse(f"/recon?msg={msg}", status_code=303)
 
 
+@router.post("/recon/{reel_id}/delete")
+def recon_delete(request: Request, reel_id: int, topic: str = Form(""), _: bool = Depends(require_user)):
+    ok = recon.delete_reel(reel_id)
+    msg = "Ролик удалён" if ok else "Ролик не найден"
+    return RedirectResponse(f"/recon?topic={quote(topic)}&msg={quote(msg)}", status_code=303)
+
+
 @router.post("/recon/add-url")
 def recon_add_url(request: Request, url: str = Form(...), _: bool = Depends(require_user)):
     """Разбор по прямой ссылке: скачиваем ролик + сразу глубокий разбор (кадры+vision)."""

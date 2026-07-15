@@ -402,6 +402,26 @@ def add_reel_by_url(url: str) -> Optional[int]:
     return reel_id
 
 
+def delete_reel(reel_id: int) -> bool:
+    """Удаляет ролик разведки: разборы, кадры/видео на диске, запись."""
+    import shutil
+    with session_scope() as s:
+        reel = s.get(TrendReel, reel_id)
+        if not reel:
+            return False
+        local = reel.local_media_path
+        for a in s.query(HookAnalysis).filter(HookAnalysis.trend_reel_id == reel_id).all():
+            s.delete(a)
+        s.delete(reel)
+    try:
+        shutil.rmtree(config.MEDIA_DIR / "frames" / str(reel_id), ignore_errors=True)
+        if local:
+            (config.DATA_DIR / local.lstrip("/")).unlink(missing_ok=True)
+    except Exception as e:
+        log.warning("delete_reel %s: медиа не подчистились: %s", reel_id, e)
+    return True
+
+
 def reel_topic(reel_id: int) -> str:
     with session_scope() as s:
         reel = s.get(TrendReel, reel_id)

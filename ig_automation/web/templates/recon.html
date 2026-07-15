@@ -117,6 +117,11 @@
         <form action="/recon/{{ r.id }}/deep-analyze" method="post"><button class="text-xs bg-slate-900 hover:bg-slate-700 text-white rounded px-3 py-1">🎬 Глубокий разбор</button></form>
         <form action="/recon/{{ r.id }}/to-idea" method="post"><button class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1">💡 В банк идей</button></form>
         {% endif %}
+        <form action="/recon/{{ r.id }}/delete" method="post" class="ml-auto"
+              onsubmit="return confirm('Удалить ролик вместе с разбором?')">
+          <input type="hidden" name="topic" value="{{ sel_topic }}">
+          <button class="text-xs border border-red-200 text-red-600 rounded px-3 py-1 hover:bg-red-50" title="удалить из разведки">🗑 Удалить</button>
+        </form>
       </div>
 
       {% if r.analysis %}
