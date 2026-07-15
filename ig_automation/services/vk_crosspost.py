@@ -63,6 +63,22 @@ def _upload_photo(path: Path, group_id: str, retries: int = 3) -> str:
     raise RuntimeError(f"VK upload не принял файл {path.name}: {last}")
 
 
+def _upload_video_wallpost(path: Path, group_id: str, name: str, description: str) -> str:
+    """Загрузка видео в сообщество с авто-постом на стену (video.save wallpost=1).
+    Возвращает attachment-строку video{owner}_{id}."""
+    saved = _call("video.save", group_id=group_id, wallpost=1,
+                  name=name, description=description)
+    upload_url = saved["upload_url"]
+    with open(path, "rb") as f:
+        up = requests.post(upload_url, files={"video_file": (path.name, f, "video/mp4")},
+                           timeout=600).json()
+    if "error" in up or not (up.get("video_id") or saved.get("video_id")):
+        raise RuntimeError(f"VK video upload: {str(up)[:200]}")
+    vid = up.get("video_id") or saved.get("video_id")
+    owner = up.get("owner_id") or saved.get("owner_id") or f"-{group_id}"
+    return f"video{owner}_{vid}"
+
+
 def _vk_caption(caption: str, product_id: str) -> str:
     """IG-подпись → VK: артикул текстом, хэштеги можно оставить (в VK работают),
     внизу — ссылки на товар/каталог/сайт (VK кликает их сам)."""
@@ -94,6 +110,7 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         if post.vk_post_id:
             return {"ok": True, "already": True, "vk_post_id": post.vk_post_id}
         caption = _vk_caption(post.caption, post.product_id)
+        hook = (post.hook or post.product or "POWERELIX")[:100]
         # path хранится URL-путём вида /media/...  → локальный файл в DATA_DIR
         images: List[Path] = [
             config.DATA_DIR / a.path.lstrip("/")
@@ -101,12 +118,32 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
             .filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
             .order_by(PostAsset.ord).all()
         ]
+        video_asset = (s.query(PostAsset)
+                       .filter(PostAsset.post_id == post_id, PostAsset.kind == "video")
+                       .order_by(PostAsset.ord.desc()).first())
+        video = config.DATA_DIR / video_asset.path.lstrip("/") if video_asset else None
 
     images = [p for p in images if p.exists()]
-    if not images:
-        return {"ok": False, "error": "у поста нет локальных картинок для VK"}
-
     gid = str(config.VK_GROUP_ID).lstrip("-")
+
+    if not images and video and video.exists():  # Reels: видео на стену (video.save wallpost)
+        try:
+            res = _upload_video_wallpost(video, gid, name=hook, description=caption)
+        except Exception as e:
+            log.warning("vk video crosspost post %s failed: %s", post_id, e)
+            return {"ok": False, "error": str(e)[:300]}
+        vk_id = res
+        with session_scope() as s:
+            post = s.get(Post, post_id)
+            if post:
+                post.vk_post_id = vk_id
+        log.info("vk video crosspost post %s → %s", post_id, vk_id)
+        return {"ok": True, "vk_post_id": vk_id,
+                "url": f"https://vk.com/{vk_id}"}
+
+    if not images:
+        return {"ok": False, "error": "у поста нет локальных картинок/видео для VK"}
+
     try:
         attachments = [_upload_photo(p, gid) for p in images[:10]]
         res = _call("wall.post", owner_id=f"-{gid}", from_group=1,
