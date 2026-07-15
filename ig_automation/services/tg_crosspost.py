@@ -27,6 +27,46 @@ log = logging.getLogger(__name__)
 _CAPTION_LIMIT = 1024  # лимит подписи к медиа в Bot API
 
 
+def _tg_video_variant(public_url: str) -> str:
+    """Вертикальные 9:16 Reels Telegram в ленте кропит до ~4:5 (середина кадра).
+    Готовим TG-версию 1080x1350: ролик целиком по высоте + размытые бока.
+    Возвращает публичный URL варианта ('' — если не вышло, шлём оригинал)."""
+    import subprocess
+    if not public_url.startswith(config.PUBLIC_BASE):
+        return ""
+    rel = public_url[len(config.PUBLIC_BASE):].lstrip("/")   # media/...
+    src = config.DATA_DIR / rel
+    if not src.exists():
+        return ""
+    try:
+        import json as _json
+        probe = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=width,height", "-of", "json", str(src)],
+            capture_output=True, timeout=30)
+        st = _json.loads(probe.stdout or b"{}").get("streams") or [{}]
+        w, h = st[0].get("width", 0), st[0].get("height", 0)
+        if not h or w / h > 0.75:  # уже 4:5 и шире — не трогаем
+            return ""
+        dst = src.with_name("tg_" + src.name)
+        if not dst.exists():
+            vf = ("split[a][b];[a]scale=1080:1350:force_original_aspect_ratio=increase,"
+                  "crop=1080:1350,boxblur=24[bg];[b]scale=-2:1350[fg];"
+                  "[bg][fg]overlay=(W-w)/2:0")
+            r = subprocess.run(
+                ["ffmpeg", "-y", "-i", str(src), "-filter_complex", vf,
+                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "22",
+                 "-c:a", "copy", "-movflags", "+faststart", str(dst)],
+                capture_output=True, timeout=600)
+            if r.returncode != 0 or not dst.exists() or dst.stat().st_size == 0:
+                log.warning("tg video variant ffmpeg fail: %s", r.stderr[-200:])
+                return ""
+        return config.PUBLIC_BASE + "/" + str(dst.relative_to(config.DATA_DIR))
+    except Exception as e:
+        log.warning("tg video variant fail: %s", e)
+        return ""
+
+
 def configured() -> bool:
     return bool(config.CROSSPOST_ENABLED and config.CROSSPOST_ENDPOINT and config.CROSSPOST_SECRET)
 
@@ -70,7 +110,11 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         img_urls = [config.PUBLIC_BASE + a.path for a in images]
         vid_url = (config.PUBLIC_BASE + video.path) if video else None
 
+    vid_dims = None
     if vid_url:
+        variant = _tg_video_variant(vid_url)
+        if variant:
+            vid_url, vid_dims = variant, (1080, 1350)
         kind, urls = "video", [vid_url]
     elif len(img_urls) >= 2:
         kind, urls = "carousel", img_urls[:10]
@@ -106,6 +150,8 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         "caption": caption,
         "parse_mode": "HTML",
     }
+    if vid_dims:
+        payload["width"], payload["height"] = vid_dims
     try:
         r = requests.post(
             config.CROSSPOST_ENDPOINT,
