@@ -29,7 +29,8 @@ _CAPTION_LIMIT = 1024  # лимит подписи к медиа в Bot API
 
 def _tg_video_variant(public_url: str) -> str:
     """Вертикальные 9:16 Reels Telegram в ленте кропит до ~4:5 (середина кадра).
-    Готовим TG-версию 1080x1350: ролик целиком по высоте + размытые бока.
+    Готовим TG-версию 1080x1080 (квадрат показывается целиком на всех
+    клиентах): ролик целиком по высоте + размытые бока.
     Возвращает публичный URL варианта ('' — если не вышло, шлём оригинал)."""
     import subprocess
     if not public_url.startswith(config.PUBLIC_BASE):
@@ -46,12 +47,12 @@ def _tg_video_variant(public_url: str) -> str:
             capture_output=True, timeout=30)
         st = _json.loads(probe.stdout or b"{}").get("streams") or [{}]
         w, h = st[0].get("width", 0), st[0].get("height", 0)
-        if not h or w / h > 0.75:  # уже 4:5 и шире — не трогаем
+        if not h or w / h > 0.95:  # уже ~квадрат и шире — не трогаем
             return ""
         dst = src.with_name("tg_" + src.name)
         if not dst.exists():
-            vf = ("split[a][b];[a]scale=1080:1350:force_original_aspect_ratio=increase,"
-                  "crop=1080:1350,boxblur=24[bg];[b]scale=-2:1350[fg];"
+            vf = ("split[a][b];[a]scale=1080:1080:force_original_aspect_ratio=increase,"
+                  "crop=1080:1080,boxblur=24[bg];[b]scale=-2:1080[fg];"
                   "[bg][fg]overlay=(W-w)/2:0")
             r = subprocess.run(
                 ["ffmpeg", "-y", "-i", str(src), "-filter_complex", vf,
@@ -114,7 +115,7 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
     if vid_url:
         variant = _tg_video_variant(vid_url)
         if variant:
-            vid_url, vid_dims = variant, (1080, 1350)
+            vid_url, vid_dims = variant, (1080, 1080)
         kind, urls = "video", [vid_url]
     elif len(img_urls) >= 2:
         kind, urls = "carousel", img_urls[:10]
