@@ -312,6 +312,23 @@ def storyboard_delete(request: Request, sb_id: int, _: bool = Depends(require_us
     return RedirectResponse("/storyboards?msg=" + quote("Раскадровка удалена"), status_code=303)
 
 
+@router.post("/storyboard/{sb_id}/scenes")
+async def storyboard_scenes_save(request: Request, sb_id: int, _: bool = Depends(require_user)):
+    """Правка промптов сцен перед генерацией."""
+    from ..db.models import Storyboard
+    form = await request.form()
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if sb:
+            scenes = list(sb.scenes or [])
+            for i in range(len(scenes)):
+                v = form.get(f"scene_{i}")
+                if v is not None and v.strip():
+                    scenes[i] = {**scenes[i], "scene": v.strip()}
+            sb.scenes = scenes
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote("Сцены сохранены"), status_code=303)
+
+
 @router.post("/storyboard/{sb_id}/approve")
 def storyboard_approve(request: Request, sb_id: int, _: bool = Depends(require_user)):
     from ..db.base import session_scope

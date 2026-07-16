@@ -60,16 +60,20 @@
 </div>
 {% endif %}
 <div class="bg-white border rounded-xl p-4 mb-4 text-sm"><b>Концепция:</b> {{ sb.concept }}</div>
-<div class="grid md:grid-cols-2 gap-3 mb-4">
+<form action="/storyboard/{{ sb.id }}/scenes" method="post">
+<div class="grid md:grid-cols-2 gap-3 mb-2">
   {% for sc in sb.scenes %}
   <div class="bg-white border rounded-xl p-4 text-sm space-y-1">
     <div class="flex justify-between"><b>Сцена {{ sc.n }}</b><span class="text-emerald-700">{{ sc.duration_s }}с</span></div>
-    <div>{{ sc.scene }}</div>
+    <textarea name="scene_{{ loop.index0 }}" rows="6" class="w-full border rounded p-2 text-xs leading-snug">{{ sc.scene }}</textarea>
     <div class="text-slate-500"><b>Камера:</b> {{ sc.camera }}</div>
     {% if sc.vo %}<div class="text-violet-800"><b>VO:</b> {{ sc.vo }}</div>{% endif %}
   </div>
   {% endfor %}
 </div>
+<button class="text-xs bg-slate-900 hover:bg-slate-700 text-white rounded px-4 py-2 mb-4">💾 Сохранить промпты сцен</button>
+<span class="text-xs text-slate-400 ml-2">правь описания ДО генерации — картинки собираются именно по ним</span>
+</form>
 <div class="bg-white border rounded-xl p-4 text-sm mb-4">
   <div class="mb-2"><b>Закадровый текст целиком:</b></div>
   <div class="whitespace-pre-wrap">{{ sb.vo_full }}</div>
