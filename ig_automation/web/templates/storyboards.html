@@ -3,10 +3,15 @@
 <h1 class="text-xl font-bold mb-4">🎬 Раскадровки</h1>
 <div class="bg-white border rounded-xl divide-y">
   {% for it in items %}
-  <a href="/storyboard/{{ it.id }}" class="flex justify-between items-center px-4 py-3 hover:bg-slate-50 text-sm">
-    <div><b>#{{ it.id }}</b> {{ it.title }} <span class="text-slate-400">· {{ it.product }}</span></div>
-    <div>{% if it.status == 'approved' %}<span class="text-emerald-700">одобрен</span>{% else %}<span class="text-slate-400">черновик</span>{% endif %}</div>
-  </a>
+  <div class="flex justify-between items-center px-4 py-3 hover:bg-slate-50 text-sm">
+    <a href="/storyboard/{{ it.id }}" class="grow"><b>#{{ it.id }}</b> {{ it.title }} <span class="text-slate-400">· {{ it.product }}</span></a>
+    <div class="flex items-center gap-3">
+      {% if it.status == 'approved' %}<span class="text-emerald-700">одобрен</span>{% else %}<span class="text-slate-400">черновик</span>{% endif %}
+      <form action="/storyboard/{{ it.id }}/delete" method="post" onsubmit="return confirm('Удалить раскадровку и её слайды/видео?')">
+        <button class="text-xs border border-red-200 text-red-600 rounded px-2 py-1 hover:bg-red-50">🗑</button>
+      </form>
+    </div>
+  </div>
   {% else %}<div class="px-4 py-6 text-sm text-slate-400">Пока пусто — сделай разбор в Разведке и нажми «Сделать похожий»</div>{% endfor %}
 </div>
 {% endblock %}

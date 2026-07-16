@@ -299,6 +299,19 @@ def storyboard_page(request: Request, sb_id: int, _: bool = Depends(require_user
     return templates.TemplateResponse(request, "storyboard.html", _ctx(request, sb=sb))
 
 
+@router.post("/storyboard/{sb_id}/delete")
+def storyboard_delete(request: Request, sb_id: int, _: bool = Depends(require_user)):
+    """Удаляет раскадровку вместе со сгенерированными слайдами/видео на диске."""
+    import shutil
+    from ..db.models import Storyboard
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if sb:
+            s.delete(sb)
+    shutil.rmtree(config.DATA_DIR / "media" / "produced" / str(sb_id), ignore_errors=True)
+    return RedirectResponse("/storyboards?msg=" + quote("Раскадровка удалена"), status_code=303)
+
+
 @router.post("/storyboard/{sb_id}/approve")
 def storyboard_approve(request: Request, sb_id: int, _: bool = Depends(require_user)):
     from ..db.base import session_scope
