@@ -18,6 +18,14 @@
   <a href="/catalog" class="text-blue-600 hover:underline text-xs ml-auto">внести артикулы →</a>
 </form>
 
+<form action="/post/{{ post.id }}/model" method="post" class="mb-4 flex items-center gap-2 text-sm flex-wrap bg-white border rounded-xl p-3">
+  <span class="text-slate-500">👤 Модель в кадре:</span>
+  <select name="model_key" onchange="this.form.submit()" class="px-3 py-2 border rounded">
+    {% for m in models %}<option value="{{ m.key }}" {% if post.model_key == m.key %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
+  </select>
+  <span class="text-slate-400 text-xs">лицо бренда для генерации визуала</span>
+</form>
+
 <form action="/post/{{ post.id }}/set-blogger" method="post" class="mb-4 flex items-center gap-2 text-sm flex-wrap bg-white border rounded-xl p-3">
   <span class="text-slate-500">📣 Для кого:</span>
   <select name="blogger_id" onchange="this.form.submit()" class="px-3 py-2 border rounded">

@@ -55,6 +55,7 @@ def _migrate(engine) -> None:
             ("is_deep", "BOOLEAN DEFAULT 0"),
         ],
         "storyboards": [
+            ("model_key", "VARCHAR DEFAULT ''"),
             ("gen_status", "VARCHAR DEFAULT ''"),
             ("gen_error", "TEXT DEFAULT ''"),
             ("output_paths", "JSON"),
@@ -67,6 +68,7 @@ def _migrate(engine) -> None:
             ("tg_message_id", "VARCHAR DEFAULT ''"),
             ("vk_post_id", "VARCHAR DEFAULT ''"),
             ("platforms", "VARCHAR DEFAULT ''"),
+            ("model_key", "VARCHAR DEFAULT ''"),
         ],
         "deals": [
             ("last_touch_at", "DATETIME"),

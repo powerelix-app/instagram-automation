@@ -293,10 +293,11 @@ def storyboard_page(request: Request, sb_id: int, _: bool = Depends(require_user
         sb = {"id": r.id, "title": r.title, "concept": r.concept, "product": r.product_name,
               "scenes": r.scenes or [], "vo_full": r.vo_full, "music_hint": r.music_hint,
               "status": r.status, "reel_id": r.trend_reel_id,
+              "model_key": getattr(r, "model_key", "") or "",
               "gen_status": r.gen_status or "", "gen_error": r.gen_error or "",
               "outputs": r.output_paths or [], "video": r.output_video or "",
               "is_carousel": bool(r.scenes) and all(float(x.get("duration_s") or 0) == 0 for x in (r.scenes or []))}
-    return templates.TemplateResponse(request, "storyboard.html", _ctx(request, sb=sb))
+    return templates.TemplateResponse(request, "storyboard.html", _ctx(request, sb=sb, models=brand_svc.list_models()))
 
 
 @router.post("/storyboard/{sb_id}/delete")
@@ -310,6 +311,25 @@ def storyboard_delete(request: Request, sb_id: int, _: bool = Depends(require_us
             s.delete(sb)
     shutil.rmtree(config.DATA_DIR / "media" / "produced" / str(sb_id), ignore_errors=True)
     return RedirectResponse("/storyboards?msg=" + quote("Раскадровка удалена"), status_code=303)
+
+
+@router.post("/storyboard/{sb_id}/model")
+def storyboard_set_model(request: Request, sb_id: int, model_key: str = Form(""), _: bool = Depends(require_user)):
+    from ..db.models import Storyboard
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if sb:
+            sb.model_key = model_key
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote("Модель выбрана"), status_code=303)
+
+
+@router.post("/post/{post_id}/model")
+def post_set_model(request: Request, post_id: int, model_key: str = Form(""), _: bool = Depends(require_user)):
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if post:
+            post.model_key = model_key
+    return RedirectResponse(f"/post/{post_id}?msg=" + quote("Модель выбрана"), status_code=303)
 
 
 @router.post("/storyboard/{sb_id}/scenes")
@@ -488,7 +508,7 @@ def post_detail(request: Request, post_id: int, msg: str = "", _: bool = Depends
     return templates.TemplateResponse(
         request, "post_detail.html",
         _ctx(request, post=post, chk=chk, catalog_products=products_list(),
-             bloggers=bloggers_svc.list_bloggers(), msg=msg),
+             bloggers=bloggers_svc.list_bloggers(), models=brand_svc.list_models(), msg=msg),
     )
 
 

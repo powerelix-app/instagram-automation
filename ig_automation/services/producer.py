@@ -571,6 +571,7 @@ def _produce_slides(sb_id: int):
         sb = s.get(Storyboard, sb_id)
         scenes = list(sb.scenes or [])
         product_id, reel_id = sb.product_id, sb.trend_reel_id
+        model_key = getattr(sb, "model_key", "") or ""
     bottle = _product_ref(product_id)
     if not bottle:
         _set(sb_id, gen_status="error",
@@ -582,8 +583,8 @@ def _produce_slides(sb_id: int):
     ref_dir = config.MEDIA_DIR / "frames" / str(reel_id)
     ref_slides = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
     paths = []
-    from .brand import model_ref
-    face = model_ref()
+    from .brand import model_by_key
+    face = model_by_key(model_key)
     if ref_slides:
         for i, rs in enumerate(ref_slides):
             _set(sb_id, gen_status=f"слайд {i + 1}/{len(ref_slides)} (по референсу)…")
@@ -638,11 +639,12 @@ def _produce_video(sb_id: int):
         scenes = list(sb.scenes or [])
         product_id, vo_full, music_hint = sb.product_id, sb.vo_full, sb.music_hint
         reel_id = sb.trend_reel_id
+        model_key = getattr(sb, "model_key", "") or ""
     ref = _product_ref(product_id)
     out = _out_dir(sb_id)
     # та же база, что у слайдов: кадры референса + лицо бренда + наша банка
-    from .brand import model_ref
-    face = model_ref()
+    from .brand import model_by_key
+    face = model_by_key(model_key)
     ref_dir = config.MEDIA_DIR / "frames" / str(reel_id)
     ref_frames = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
     clips = []

@@ -61,6 +61,31 @@ def delete_asset(asset_id: int) -> None:
         s.delete(a)
 
 
+def list_models() -> list:
+    """Ростер лиц бренда: дефолт + assets/brand/models/*.png (ключ = имя файла)."""
+    out = [{"key": "", "name": "Основная (рыжая)", "path": str(model_ref())}]
+    mdir = config.ROOT / "assets" / "brand" / "models"
+    names = {"cand_blonde": "Блондинка", "cand_brunette": "Брюнетка",
+             "sport_blonde": "Спорт-блонд", "sport_caramel": "Спорт-карамель",
+             "sport_yoga": "Йога", "man_athletic": "Мужчина-атлет",
+             "man_casual": "Мужчина-кэжуал", "man_mature": "Мужчина 40+"}
+    if mdir.exists():
+        for f in sorted(mdir.glob("*.png")):
+            if f.stem.startswith("_"):
+                continue
+            out.append({"key": f.stem, "name": names.get(f.stem, f.stem), "path": str(f)})
+    return out
+
+
+def model_by_key(key: str) -> Path:
+    """Лицо по ключу ростера; пусто/не найдено -> основная модель."""
+    if key:
+        f = config.ROOT / "assets" / "brand" / "models" / f"{key}.png"
+        if f.exists():
+            return f
+    return model_ref()
+
+
 def model_ref() -> Path:
     """Активное лицо модели (последнее загруженное) или дефолтный ai_model.png."""
     with session_scope() as s:

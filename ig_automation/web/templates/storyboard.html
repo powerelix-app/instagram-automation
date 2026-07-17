@@ -60,6 +60,14 @@
 </div>
 {% endif %}
 <div class="bg-white border rounded-xl p-4 mb-4 text-sm"><b>Концепция:</b> {{ sb.concept }}</div>
+<form action="/storyboard/{{ sb.id }}/model" method="post" class="bg-white border rounded-xl p-3 mb-3 text-sm flex items-center gap-2 flex-wrap">
+  <span class="text-slate-500">👤 Модель в кадре:</span>
+  <select name="model_key" onchange="this.form.submit()" class="px-3 py-2 border rounded">
+    {% for m in models %}<option value="{{ m.key }}" {% if sb.model_key == m.key %}selected{% endif %}>{{ m.name }}</option>{% endfor %}
+  </select>
+  <span class="text-slate-400 text-xs">лицо бренда для генерации кадров (дефолт — рыжая)</span>
+</form>
+
 <form action="/storyboard/{{ sb.id }}/scenes" method="post">
 <div class="grid md:grid-cols-2 gap-3 mb-2">
   {% for sc in sb.scenes %}

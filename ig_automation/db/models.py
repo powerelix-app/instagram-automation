@@ -73,6 +73,7 @@ class Storyboard(Base):
     trend_reel_id: Mapped[int] = mapped_column(Integer, default=0)
     product_id: Mapped[str] = mapped_column(String(32), default="")
     product_name: Mapped[str] = mapped_column(String(128), default="")
+    model_key: Mapped[str] = mapped_column(String(64), default="")  # лицо бренда из ростера
     title: Mapped[str] = mapped_column(String(255), default="")
     concept: Mapped[str] = mapped_column(Text, default="")
     scenes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # [{n,scene,camera,vo,duration_s}]
@@ -137,6 +138,7 @@ class Post(Base):
     published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     # площадки публикации: CSV из ig,tg,vk; "" = все
     platforms: Mapped[str] = mapped_column(String(32), default="")
+    model_key: Mapped[str] = mapped_column(String(64), default="")  # лицо бренда из ростера
     ig_media_id: Mapped[str] = mapped_column(String(64), default="")
     tg_message_id: Mapped[str] = mapped_column(String(64), default="")  # кросс-пост в TG-канал
     vk_post_id: Mapped[str] = mapped_column(String(64), default="")  # кросс-пост в сообщество VK

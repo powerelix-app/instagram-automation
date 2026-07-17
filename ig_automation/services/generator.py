@@ -124,6 +124,7 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
         if not post:
             return None
         product, hook, visual_idea = post.product, post.hook, post.visual_idea
+        model_key = getattr(post, "model_key", "") or ""
         ratio = ratio or _FORMAT_RATIO.get(post.format, "4:5")
         ord_ = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image").count()
         # пользовательские референсы поста (банка/сцена) — kind="ref"
@@ -137,7 +138,7 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
     # (банка последней — по ней цепочка сверяет этикетку).
     prod_ref = brand.product_ref(product)
     existing_user_refs = [p for p in user_refs if p.exists()]
-    refs = [brand.model_ref()] + existing_user_refs + ([prod_ref] if prod_ref else [])
+    refs = [brand.model_by_key(model_key)] + existing_user_refs + ([prod_ref] if prod_ref else [])
     scene = _scene_description(visual_idea, hook, product)
     prompt = _visual_prompt(scene, product, with_product_ref=bool(prod_ref) or bool(existing_user_refs))
     if extra:
@@ -342,6 +343,7 @@ def generate_reels_video(post_id: int) -> Optional[int]:
         if not post:
             return None
         product, hook, visual_idea = post.product, post.hook, post.visual_idea
+        model_key = getattr(post, "model_key", "") or ""
         n = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "video").count()
         post.status = "generating"
     refs = [brand.model_ref()]
@@ -533,7 +535,7 @@ def get_post(post_id: int) -> Optional[dict]:
             "visual_idea": p.visual_idea, "cta": p.cta, "status": p.status,
             "scheduled_at": p.scheduled_at, "ig_media_id": p.ig_media_id,
             "permalink": p.permalink, "error": p.error, "reels_script": p.reels_script,
-            "blogger_id": p.blogger_id,
+            "blogger_id": p.blogger_id, "model_key": getattr(p, "model_key", "") or "",
             "assets": [{"id": a.id, "path": a.path, "model": a.model} for a in assets if a.kind == "image"],
             "refs": [{"id": a.id, "path": a.path} for a in assets if a.kind == "ref"],
             "videos": [{"id": a.id, "path": a.path} for a in assets if a.kind == "video"],
