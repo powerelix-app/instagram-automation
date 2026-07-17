@@ -341,9 +341,32 @@ def _pin_by_url(url: str) -> Optional[dict]:
         return None
     images = data.get("images") or {}
     img = (images.get("564x") or images.get("236x") or {}).get("url", "")
-    if not img:
+    if img:
+        img = _best_pin_image(img)
+
+    def _vid_from(vlist: dict) -> str:
+        """Из video_list берём лучший mp4, HLS — последним шансом."""
+        best_mp4, hls = "", ""
+        for v in (vlist or {}).values():
+            u = (v or {}).get("url") or ""
+            if u.endswith(".mp4"):
+                if (v.get("width") or 0) >= 700 or not best_mp4:
+                    best_mp4 = u
+            elif ".m3u8" in u and not hls:
+                hls = u
+        return best_mp4 or hls
+
+    video_url = _vid_from((data.get("videos") or {}).get("video_list") or {})
+    if not video_url:  # idea-пин: видео лежит в страницах story_pin_data
+        for page in ((data.get("story_pin_data") or {}).get("pages") or []):
+            for block in (page.get("blocks") or []):
+                video_url = _vid_from(((block.get("video") or {}).get("video_list")) or {})
+                if video_url:
+                    break
+            if video_url:
+                break
+    if not img and not video_url:
         return None
-    img = _best_pin_image(img)
     pinner = data.get("pinner") or {}
     board = data.get("board") or {}
     caption = " · ".join(x for x in (
@@ -359,11 +382,11 @@ def _pin_by_url(url: str) -> Optional[dict]:
         "comments": 0,
         "caption": caption,
         "hashtags": [],
-        "video_url": "",
+        "video_url": video_url,
         "thumbnail_url": img,
         "music_info": "",
-        "media_type": "image",
-        "images": [img],
+        "media_type": "video" if video_url else "image",
+        "images": [img] if (img and not video_url) else None,
         "topic": "pinterest",
     }
 
@@ -446,6 +469,19 @@ def _ensure_video(reel_id: int) -> str:
         norm = apify.reel_by_url(page_url) if page_url else None
         vurl = (norm or {}).get("video_url") or ""
     if not vurl:
+        return ""
+    if ".m3u8" in vurl:  # HLS (видео-пины Pinterest) — собираем ффмпегом
+        import subprocess
+        r = subprocess.run(["ffmpeg", "-y", "-i", vurl, "-c", "copy",
+                            "-bsf:a", "aac_adtstoasc", str(dest)],
+                           capture_output=True, timeout=600)
+        if r.returncode == 0 and dest.exists() and dest.stat().st_size > 0:
+            with session_scope() as s:
+                reel = s.get(TrendReel, reel_id)
+                if reel:
+                    reel.local_media_path = f"/media/reels/{reel_id}.mp4"
+            return str(dest)
+        log.warning("hls download fail: %s", r.stderr[-200:])
         return ""
     data = b""
     try:
