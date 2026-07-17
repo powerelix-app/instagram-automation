@@ -107,7 +107,7 @@
     <div class="flex gap-2 overflow-x-auto">
       {% for o in sb.outputs %}
       <label class="relative shrink-0 cursor-pointer">
-        <a href="{{ o }}" target="_blank"><img src="{{ o }}" class="h-48 rounded border"></a>
+        <a href="{{ o }}?r={{ range(1, 999999) | random }}" target="_blank"><img src="{{ o }}?r={{ range(1, 999999) | random }}" class="h-48 rounded border"></a>
         <input type="checkbox" name="slides" value="{{ loop.index0 }}" checked
                class="absolute top-2 left-2 w-5 h-5 accent-emerald-600">
       </label>
