@@ -770,8 +770,15 @@ def _clips_stage(sb_id: int, only: Optional[int] = None) -> None:
                       f"{sc.get('scene', '')}. Single continuous shot, no cuts, "
                       "photorealistic, natural physics, movements natural not robotic.")
         try:
-            clip = fal_i2v(sp.read_bytes(), i2v_prompt, duration=dur,
-                           engine=ctx["video_engine"], end_image=end_bytes)
+            try:
+                clip = fal_i2v(sp.read_bytes(), i2v_prompt, duration=dur,
+                               engine=ctx["video_engine"], end_image=end_bytes)
+            except ContentPolicyError:
+                # детектор лиц флачит стохастически — одна повторная попытка
+                log.warning("content policy: ретрай на том же движке")
+                _set(sb_id, gen_status=f"анимация {i + 1}/{len(scenes)}: ретрай…")
+                clip = fal_i2v(sp.read_bytes(), i2v_prompt, duration=dur,
+                               engine=ctx["video_engine"], end_image=end_bytes)
         except ContentPolicyError as e:
             if ctx["video_engine"] != "kling":  # Seedance строг к людям — Kling дожуёт
                 log.warning("%s — фолбэк на Kling", e)
