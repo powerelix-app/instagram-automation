@@ -258,6 +258,21 @@ class BrandAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class GenJob(Base):
+    """Очередь генерации. Исполняется отдельным воркер-процессом, поэтому
+    рестарт веб-сервера не убивает генерацию (в отличие от daemon-потоков)."""
+    __tablename__ = "gen_jobs"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    sb_id: Mapped[int] = mapped_column(Integer, index=True)
+    kind: Mapped[str] = mapped_column(String(16))  # produce|stills|clips|assemble
+    only: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # индекс кадра/сцены
+    status: Mapped[str] = mapped_column(String(12), default="queued", index=True)  # queued|running|done|failed
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+    started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+
+
 class PostMetric(Base):
     """Снимок метрик опубликованного поста (insights)."""
     __tablename__ = "post_metrics"

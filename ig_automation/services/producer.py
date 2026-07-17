@@ -1,6 +1,6 @@
 """Производство контента из одобренного storyboard: слайды (ProxyAPI) и ролики (fal).
 
-Фоновые задачи (threading) со статусом в Storyboard.gen_status.
+Исполняется воркером очереди (ig_automation.worker), статус в Storyboard.gen_status.
 Гео-обходы для РФ-VPS: ElevenLabs — через media-fetcher (Apify, POST-прокси).
 """
 from __future__ import annotations
@@ -9,7 +9,6 @@ import base64
 import json
 import logging
 import subprocess
-import threading
 import time
 from pathlib import Path
 from typing import Optional
@@ -938,47 +937,55 @@ def _produce_video(sb_id: int):
     _assemble_stage(sb_id)
 
 
-def run_stage(sb_id: int, stage: str, only: Optional[int] = None) -> bool:
-    """Фоновый запуск этапа: stills | clips | assemble. True = стартовало."""
+def execute_job(sb_id: int, kind: str, only: Optional[int] = None) -> None:
+    """Реальное исполнение задачи (вызывается воркером). Исключения ставят
+    статус error и пробрасываются наверх — воркер пометит job как failed."""
+    try:
+        if kind == "produce":
+            with session_scope() as s:
+                sb = s.get(Storyboard, sb_id)
+                scenes = list(sb.scenes or []) if sb else []
+            is_carousel = scenes and all(float(x.get("duration_s") or 0) == 0 for x in scenes)
+            (_produce_slides if is_carousel else _produce_video)(sb_id)
+        else:
+            fn = {"stills": _stills_stage, "clips": _clips_stage, "assemble": _assemble_stage}[kind]
+            fn(sb_id) if only is None else fn(sb_id, only)  # assemble без only
+    except Exception as e:
+        log.exception("job %s %s(%s) failed", kind, sb_id, only)
+        _set(sb_id, gen_status="error", gen_error=str(e)[:500])
+        raise
+
+
+def _busy(sb) -> bool:
+    return bool(sb and sb.gen_status and sb.gen_status not in (
+        "", "done", "error", "stills_ready", "clips_ready"))
+
+
+def _enqueue(sb_id: int, kind: str, only: Optional[int] = None) -> bool:
+    """Ставит задачу в очередь gen_jobs. True = поставлено. Защита от дублей:
+    не ставим, если раскадровка уже занята или такая же задача уже в очереди."""
+    from ..db.models import GenJob
     with session_scope() as s:
         sb = s.get(Storyboard, sb_id)
-        busy = sb and sb.gen_status and sb.gen_status not in (
-            "", "done", "error", "stills_ready", "clips_ready")
-        if not sb or busy:
+        if not sb or _busy(sb):
             return False
-        sb.gen_status = "старт…"
+        dup = s.query(GenJob).filter(
+            GenJob.sb_id == sb_id, GenJob.kind == kind,
+            GenJob.status.in_(("queued", "running"))).first()
+        if dup:
+            return False
+        s.add(GenJob(sb_id=sb_id, kind=kind, only=only, status="queued"))
+        sb.gen_status = "в очереди…"
         sb.gen_error = ""
-
-    fn = {"stills": _stills_stage, "clips": _clips_stage, "assemble": _assemble_stage}[stage]
-
-    def _run():
-        try:
-            fn(sb_id) if only is None else fn(sb_id, only)  # assemble без only
-        except Exception as e:
-            log.exception("stage %s %s failed", stage, sb_id)
-            _set(sb_id, gen_status="error", gen_error=str(e)[:500])
-
-    threading.Thread(target=_run, daemon=True).start()
+    _log(sb_id, f"задача поставлена в очередь: {kind}" + (f" (кадр {only + 1})" if only is not None else ""))
     return True
+
+
+def run_stage(sb_id: int, stage: str, only: Optional[int] = None) -> bool:
+    """Ставит этап (stills|clips|assemble) в очередь воркера. True = поставлено."""
+    return _enqueue(sb_id, stage, only)
 
 
 def produce(sb_id: int) -> bool:
-    """Запуск производства в фоне. True = стартовало."""
-    with session_scope() as s:
-        sb = s.get(Storyboard, sb_id)
-        if not sb or (sb.gen_status and sb.gen_status not in ("", "done", "error")):
-            return False
-        scenes = list(sb.scenes or [])
-        is_carousel = scenes and all(float(x.get("duration_s") or 0) == 0 for x in scenes)
-        sb.gen_status = "старт…"
-        sb.gen_error = ""
-
-    def _run():
-        try:
-            (_produce_slides if is_carousel else _produce_video)(sb_id)
-        except Exception as e:
-            log.exception("produce %s failed", sb_id)
-            _set(sb_id, gen_status="error", gen_error=str(e)[:500])
-
-    threading.Thread(target=_run, daemon=True).start()
-    return True
+    """Ставит полное производство в очередь воркера. True = поставлено."""
+    return _enqueue(sb_id, "produce")
