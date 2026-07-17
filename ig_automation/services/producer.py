@@ -962,6 +962,10 @@ def execute_job(kind: str, sb_id: Optional[int] = None,
     статус error и пробрасываются наверх — воркер пометит job как failed."""
     if kind in POST_KINDS:
         from . import generator
+        _labels = {"post_visual": "генерация визуала…",
+                   "post_carousel": "генерация карусели…",
+                   "post_reels_video": "генерация видео…"}
+        _pset(post_id, gen_status=_labels.get(kind, "генерация…"))
         try:
             if kind == "post_visual":
                 generator.generate_post_assets(post_id)
