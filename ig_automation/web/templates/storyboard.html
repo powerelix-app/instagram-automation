@@ -76,7 +76,7 @@
   </div>
   <video src="{{ sb.video }}" controls class="max-h-96 rounded-lg"></video>
 </div>
-{% elif sb.outputs %}
+{% elif sb.outputs and sb.is_carousel %}
 <div class="bg-white border rounded-xl p-4 mb-4">
   <form action="/storyboard/{{ sb.id }}/to-post" method="post">
     <div class="text-sm mb-2 flex items-center justify-between"><b>🖼 Готовые слайды <span class="text-slate-400 font-normal">(сними галочки с ненужных)</span>:</b>
