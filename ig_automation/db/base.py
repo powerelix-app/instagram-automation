@@ -70,6 +70,11 @@ def _migrate(engine) -> None:
             ("vk_post_id", "VARCHAR DEFAULT ''"),
             ("platforms", "VARCHAR DEFAULT ''"),
             ("model_key", "VARCHAR DEFAULT ''"),
+            ("gen_status", "VARCHAR DEFAULT ''"),
+            ("gen_error", "TEXT DEFAULT ''"),
+        ],
+        "gen_jobs": [
+            ("post_id", "INTEGER"),
         ],
         "deals": [
             ("last_touch_at", "DATETIME"),

@@ -8,6 +8,38 @@
   <span class="text-xs text-slate-400">{{ post.format }}{% if post.rubric %} · {{ post.rubric }}{% endif %}{% if post.product and post.product != '—' %} · {{ post.product }}{% endif %}</span>
 </div>
 
+{% if post.gen_status and post.gen_status not in ('done', 'error') %}
+<meta http-equiv="refresh" content="10">
+<div class="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4 text-sm">
+  ⏳ <b>Генерация:</b> {{ post.gen_status }} <span class="text-slate-400">(страница обновляется сама)</span>
+</div>
+{% elif post.gen_status == 'error' %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm">❌ <b>Ошибка генерации:</b> {{ post.gen_error }}</div>
+{% endif %}
+{% if post.gen_status %}
+<details class="mb-4" {% if post.gen_status and post.gen_status not in ('done','error') %}open{% endif %}>
+  <summary class="cursor-pointer text-sm text-slate-500 select-none">🖥 Логи генерации</summary>
+  <pre id="genlog" class="mt-2 bg-slate-900 text-emerald-300 text-xs rounded-lg p-3 overflow-auto"
+       style="max-height:220px; white-space:pre-wrap; word-break:break-word">загрузка…</pre>
+</details>
+<script>
+(function(){
+  var el = document.getElementById('genlog');
+  if(!el) return;
+  function tick(){
+    fetch('/media/produced/post_{{ post.id }}/gen.log?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.text() : ''; })
+      .then(function(t){
+        var atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+        el.textContent = t ? t.trim().split('\n').slice(-60).join('\n') : 'пока пусто';
+        if(atBottom) el.scrollTop = el.scrollHeight;
+      }).catch(function(){});
+  }
+  tick(); setInterval(tick, 3000);
+})();
+</script>
+{% endif %}
+
 <form action="/post/{{ post.id }}/set-product" method="post" class="mb-4 flex items-center gap-2 text-sm flex-wrap bg-white border rounded-xl p-3">
   <span class="text-slate-500">🏷️ Товар поста:</span>
   <select name="product_id" onchange="this.form.submit()" class="px-3 py-2 border rounded">

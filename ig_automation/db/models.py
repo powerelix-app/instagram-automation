@@ -145,6 +145,8 @@ class Post(Base):
     vk_post_id: Mapped[str] = mapped_column(String(64), default="")  # кросс-пост в сообщество VK
     permalink: Mapped[str] = mapped_column(String(512), default="")
     error: Mapped[str] = mapped_column(Text, default="")
+    gen_status: Mapped[str] = mapped_column(String(64), default="")  # статус фоновой генерации (воркер)
+    gen_error: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
@@ -263,9 +265,10 @@ class GenJob(Base):
     рестарт веб-сервера не убивает генерацию (в отличие от daemon-потоков)."""
     __tablename__ = "gen_jobs"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    sb_id: Mapped[int] = mapped_column(Integer, index=True)
-    kind: Mapped[str] = mapped_column(String(16))  # produce|stills|clips|assemble
-    only: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # индекс кадра/сцены
+    sb_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для раскадровок
+    post_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для постов
+    kind: Mapped[str] = mapped_column(String(20))  # produce|stills|clips|assemble|post_*
+    only: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # индекс кадра / кол-во слайдов
     status: Mapped[str] = mapped_column(String(12), default="queued", index=True)  # queued|running|done|failed
     error: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)

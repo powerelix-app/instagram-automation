@@ -937,9 +937,44 @@ def _produce_video(sb_id: int):
     _assemble_stage(sb_id)
 
 
-def execute_job(sb_id: int, kind: str, only: Optional[int] = None) -> None:
+POST_KINDS = ("post_visual", "post_carousel", "post_reels_video")
+
+
+def _pset(post_id: int, **kw) -> None:
+    """Статус фоновой генерации поста + строка в его лог."""
+    from ..db.models import Post
+    if "gen_status" in kw:
+        _log(_post_dir_id(post_id), str(kw["gen_status"]))
+    with session_scope() as s:
+        p = s.get(Post, post_id)
+        if p:
+            for k, v in kw.items():
+                setattr(p, k, v)
+
+
+def _post_dir_id(post_id: int):
+    return f"post_{post_id}"
+
+
+def execute_job(kind: str, sb_id: Optional[int] = None,
+                post_id: Optional[int] = None, only: Optional[int] = None) -> None:
     """Реальное исполнение задачи (вызывается воркером). Исключения ставят
     статус error и пробрасываются наверх — воркер пометит job как failed."""
+    if kind in POST_KINDS:
+        from . import generator
+        try:
+            if kind == "post_visual":
+                generator.generate_post_assets(post_id)
+            elif kind == "post_carousel":
+                generator.generate_carousel(post_id, slides=only or 4)
+            elif kind == "post_reels_video":
+                generator.generate_reels_video(post_id)
+            _pset(post_id, gen_status="done", gen_error="")
+        except Exception as e:
+            log.exception("post job %s post=%s failed", kind, post_id)
+            _pset(post_id, gen_status="error", gen_error=str(e)[:500])
+            raise
+        return
     try:
         if kind == "produce":
             with session_scope() as s:
@@ -954,6 +989,27 @@ def execute_job(sb_id: int, kind: str, only: Optional[int] = None) -> None:
         log.exception("job %s %s(%s) failed", kind, sb_id, only)
         _set(sb_id, gen_status="error", gen_error=str(e)[:500])
         raise
+
+
+def enqueue_post(post_id: int, kind: str, slides: Optional[int] = None) -> bool:
+    """Ставит генерацию поста в очередь воркера. True = поставлено."""
+    from ..db.models import GenJob, Post
+    with session_scope() as s:
+        p = s.get(Post, post_id)
+        if not p:
+            return False
+        busy = p.gen_status and p.gen_status not in ("", "done", "error")
+        if busy:
+            return False
+        dup = s.query(GenJob).filter(
+            GenJob.post_id == post_id, GenJob.kind == kind,
+            GenJob.status.in_(("queued", "running"))).first()
+        if dup:
+            return False
+        s.add(GenJob(post_id=post_id, kind=kind, only=slides, status="queued"))
+        p.gen_status = "в очереди…"
+        p.gen_error = ""
+    return True
 
 
 def _busy(sb) -> bool:

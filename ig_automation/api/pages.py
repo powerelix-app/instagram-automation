@@ -553,13 +553,10 @@ def post_detail(request: Request, post_id: int, msg: str = "", _: bool = Depends
 
 @router.post("/post/{post_id}/gen-visual")
 def post_gen_visual(request: Request, post_id: int, _: bool = Depends(require_user)):
-    try:
-        generator.generate_post_assets(post_id)
-        msg = "Визуал сгенерирован"
-    except Exception as e:
-        log.warning("gen visual failed: %s", e)
-        msg = f"Ошибка генерации визуала: {e}"
-    return RedirectResponse(f"/post/{post_id}?msg={msg}", status_code=303)
+    from ..services import producer
+    ok = producer.enqueue_post(post_id, "post_visual")
+    msg = "Визуал в очереди — обнови страницу через минуту" if ok else "Уже идёт генерация — подожди"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
 
 
 @router.post("/post/{post_id}/overlay")
@@ -625,12 +622,9 @@ def post_asset_delete(request: Request, post_id: int, aid: int, _: bool = Depend
 
 @router.post("/post/{post_id}/gen-carousel")
 def post_gen_carousel(request: Request, post_id: int, slides: int = Form(4), _: bool = Depends(require_user)):
-    try:
-        n = generator.generate_carousel(post_id, slides=slides)
-        msg = f"Карусель: сгенерировано слайдов {n}" if n else "Не удалось сгенерировать"
-    except Exception as e:
-        log.warning("gen carousel failed: %s", e)
-        msg = f"Ошибка генерации карусели: {e}"
+    from ..services import producer
+    ok = producer.enqueue_post(post_id, "post_carousel", slides=slides)
+    msg = f"Карусель ({slides} слайдов) в очереди — обнови страницу через 1-2 минуты" if ok else "Уже идёт генерация — подожди"
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
 
 
@@ -647,12 +641,9 @@ def post_gen_reels_script(request: Request, post_id: int, _: bool = Depends(requ
 
 @router.post("/post/{post_id}/gen-reels-video")
 def post_gen_reels_video(request: Request, post_id: int, _: bool = Depends(require_user)):
-    try:
-        generator.generate_reels_video(post_id)
-        msg = "🎬 Видео сгенерировано"
-    except Exception as e:
-        log.warning("reels video failed: %s", e)
-        msg = f"Ошибка видео: {e}"
+    from ..services import producer
+    ok = producer.enqueue_post(post_id, "post_reels_video")
+    msg = "🎬 Видео в очереди — обнови страницу через 1-2 минуты" if ok else "Уже идёт генерация — подожди"
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
 
 
