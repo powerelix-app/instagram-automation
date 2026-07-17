@@ -637,8 +637,14 @@ def _produce_video(sb_id: int):
         sb = s.get(Storyboard, sb_id)
         scenes = list(sb.scenes or [])
         product_id, vo_full, music_hint = sb.product_id, sb.vo_full, sb.music_hint
+        reel_id = sb.trend_reel_id
     ref = _product_ref(product_id)
     out = _out_dir(sb_id)
+    # та же база, что у слайдов: кадры референса + лицо бренда + наша банка
+    from .brand import model_ref
+    face = model_ref()
+    ref_dir = config.MEDIA_DIR / "frames" / str(reel_id)
+    ref_frames = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
     clips = []
     for i, sc in enumerate(scenes):
         cp_done = out / f"clip_{i}.mp4"
@@ -646,9 +652,40 @@ def _produce_video(sb_id: int):
             clips.append(cp_done)
             continue
         _set(sb_id, gen_status=f"сцена {i + 1}/{len(scenes)}: стилл…")
-        still = (gen_product_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}",
-                                   [ref], aspect="9:16", sb_id=sb_id)
-                 if ref else gen_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}"))
+        # референсный кадр видео, соответствующий сцене по таймлайну
+        rs = None
+        if ref_frames:
+            idx = round(i * (len(ref_frames) - 1) / max(1, len(scenes) - 1))
+            rs = ref_frames[min(idx, len(ref_frames) - 1)]
+        if rs:
+            prompt = (
+                "ПЕРВОЕ изображение — референсный кадр видео. Пересоздай его МАКСИМАЛЬНО "
+                "похоже: та же композиция, ракурс, свет, обстановка, ДЕЙСТВИЕ и настроение. "
+                "НО: если в кадре есть человек — замени его на НАШУ модель со ВТОРОГО "
+                "изображения (то же лицо: медные волнистые волосы, веснушки; поза и действие "
+                "как в референсе, НЕ копируй внешность человека из референса). "
+                "ЛЮБОЙ продукт/упаковку замени на НАШ продукт с ТРЕТЬЕГО изображения — "
+                "форма банки, крышка, цвет и этикетка СТРОГО как на референсе продукта, "
+                "этикетка чёткая, читаемая, повернута к камере, БАНКА ЦЕЛИКОМ В КАДРЕ. "
+                "ЗАПРЕЩЕНО придумывать другую упаковку.\n"
+                f"Контекст сцены: {sc.get('scene', '')}\n"
+                "СТРОГО: никакого текста и надписей, кроме этикетки нашего продукта. "
+                "Вертикальный кадр 9:16.")
+            refs_i = [rs] + ([face] if face else []) + ([ref] if ref else [])
+            if not face:
+                prompt = prompt.replace("со ВТОРОГО изображения", "— наша модель (медные волнистые волосы, веснушки)")
+                prompt = prompt.replace("с ТРЕТЬЕГО изображения", "со ВТОРОГО изображения")
+            still = gen_product_image(prompt, refs_i, aspect="9:16", sb_id=sb_id,
+                                      bottle=ref)
+        elif ref:
+            still = gen_product_image(
+                f"Кадр рекламного ролика.\n{sc.get('scene', '')}\n"
+                "Если есть человек — наша модель: медные волнистые волосы, веснушки "
+                + ("(лицо со второго референса). " if face else ". ")
+                + "Банка продукта строго как на референсе.",
+                ([face] if face else []) + [ref], aspect="9:16", sb_id=sb_id, bottle=ref)
+        else:
+            still = gen_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}")
         (out / f"still_{i}.png").write_bytes(still)
         _set(sb_id, gen_status=f"сцена {i + 1}/{len(scenes)}: анимация (fal)…")
         dur = int(float(sc.get("duration_s") or 4)) or 4
