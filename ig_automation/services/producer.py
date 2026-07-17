@@ -505,16 +505,31 @@ class ContentPolicyError(RuntimeError):
 
 
 def _add_face_noise(image: bytes) -> bytes:
-    """Лёгкий монохромный шум на кадр — сбивает детектор «реальных лиц» Seedance
-    (приём MidGuru), почти незаметен глазу. Возвращает PNG-байты."""
+    """Плёночный грейн на кадр — ломает пиксельные паттерны детектора «реальных
+    лиц» Seedance (гайд kod.ru), но лицо остаётся узнаваемым, а вид — «35мм-плёнка»,
+    что уместно в рекламной эстетике. Зерно яркостно-коррелировано (сильнее в тенях),
+    плюс лёгкая виньетка и тёплый грейд. Возвращает PNG-байты."""
     import io
     import numpy as np
     from PIL import Image as _Im
     im = _Im.open(io.BytesIO(image)).convert("RGB")
-    arr = np.asarray(im).astype(np.int16)
+    arr = np.asarray(im).astype(np.float32)
+    h, w = arr.shape[:2]
     rng = np.random.default_rng(12345)
-    noise = rng.integers(-10, 11, size=arr.shape[:2])[..., None]  # ±10, один слой на все каналы
-    out = np.clip(arr + noise, 0, 255).astype(np.uint8)
+    # монохромное зерно, сильнее в тенях (как настоящая плёнка)
+    lum = arr.mean(axis=2, keepdims=True) / 255.0
+    grain = rng.normal(0, 1.0, size=(h, w, 1)) * (14.0 * (1.0 - 0.6 * lum))
+    out = arr + grain
+    # лёгкая виньетка по краям
+    yy, xx = np.mgrid[0:h, 0:w]
+    cy, cx = h / 2.0, w / 2.0
+    r = np.sqrt(((yy - cy) / cy) ** 2 + ((xx - cx) / cx) ** 2)
+    vign = (1.0 - 0.18 * np.clip(r - 0.6, 0, 1))[..., None]
+    out *= vign
+    # тёплый грейд: чуть больше R, меньше B
+    out[..., 0] *= 1.03
+    out[..., 2] *= 0.98
+    out = np.clip(out, 0, 255).astype(np.uint8)
     buf = io.BytesIO()
     _Im.fromarray(out).save(buf, "PNG")
     return buf.getvalue()
