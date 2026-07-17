@@ -633,72 +633,113 @@ def _produce_slides(sb_id: int):
     _set(sb_id, gen_status="done", output_paths=paths)
 
 
-def _produce_video(sb_id: int):
+def _video_ctx(sb_id: int) -> dict:
+    """Общий контекст видео-этапов: сцены, референсы, лицо, банка."""
     with session_scope() as s:
         sb = s.get(Storyboard, sb_id)
-        scenes = list(sb.scenes or [])
-        product_id, vo_full, music_hint = sb.product_id, sb.vo_full, sb.music_hint
-        reel_id = sb.trend_reel_id
-        model_key = getattr(sb, "model_key", "") or ""
-    ref = _product_ref(product_id)
-    out = _out_dir(sb_id)
-    # та же база, что у слайдов: кадры референса + лицо бренда + наша банка
+        ctx = {"scenes": list(sb.scenes or []), "product_id": sb.product_id,
+               "vo_full": sb.vo_full, "music_hint": sb.music_hint,
+               "reel_id": sb.trend_reel_id,
+               "model_key": getattr(sb, "model_key", "") or ""}
     from .brand import model_by_key
-    face = model_by_key(model_key)
-    ref_dir = config.MEDIA_DIR / "frames" / str(reel_id)
-    ref_frames = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
-    clips = []
-    for i, sc in enumerate(scenes):
-        cp_done = out / f"clip_{i}.mp4"
-        if cp_done.exists() and cp_done.stat().st_size > 0:
-            clips.append(cp_done)
+    ctx["bottle"] = _product_ref(ctx["product_id"])
+    ctx["face"] = model_by_key(ctx["model_key"])
+    ref_dir = config.MEDIA_DIR / "frames" / str(ctx["reel_id"])
+    ctx["ref_frames"] = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
+    ctx["out"] = _out_dir(sb_id)
+    return ctx
+
+
+def _gen_scene_still(sb_id: int, i: int, ctx: dict) -> None:
+    """Стилл одной сцены: референс-кадр + лицо бренда + банка (база слайдов)."""
+    scenes, out = ctx["scenes"], ctx["out"]
+    sc = scenes[i]
+    ref, face, ref_frames = ctx["bottle"], ctx["face"], ctx["ref_frames"]
+    rs = None
+    if ref_frames:
+        idx = round(i * (len(ref_frames) - 1) / max(1, len(scenes) - 1))
+        rs = ref_frames[min(idx, len(ref_frames) - 1)]
+    if rs:
+        prompt = (
+            "ПЕРВОЕ изображение — референсный кадр видео. Пересоздай его МАКСИМАЛЬНО "
+            "похоже: та же композиция, ракурс, свет, обстановка, ДЕЙСТВИЕ и настроение. "
+            "НО: если в кадре есть человек — замени его на НАШУ модель со ВТОРОГО "
+            "изображения (поза и действие как в референсе, НЕ копируй внешность "
+            "человека из референса). "
+            "ЛЮБОЙ продукт/упаковку замени на НАШ продукт с ТРЕТЬЕГО изображения — "
+            "форма банки, крышка, цвет и этикетка СТРОГО как на референсе продукта, "
+            "этикетка чёткая, читаемая, повернута к камере, БАНКА ЦЕЛИКОМ В КАДРЕ. "
+            "ЗАПРЕЩЕНО придумывать другую упаковку.\n"
+            f"Контекст сцены: {sc.get('scene', '')}\n"
+            "СТРОГО: никакого текста и надписей, кроме этикетки нашего продукта. "
+            "Вертикальный кадр 9:16.")
+        refs_i = [rs] + ([face] if face else []) + ([ref] if ref else [])
+        if not face:
+            prompt = prompt.replace("со ВТОРОГО изображения", "— наша модель бренда")
+            prompt = prompt.replace("с ТРЕТЬЕГО изображения", "со ВТОРОГО изображения")
+        still = gen_product_image(prompt, refs_i, aspect="9:16", sb_id=sb_id, bottle=ref)
+    elif ref:
+        still = gen_product_image(
+            f"Кадр рекламного ролика.\n{sc.get('scene', '')}\n"
+            "Если есть человек — модель бренда "
+            + ("(лицо с первого референса). " if face else ". ")
+            + "Банка продукта строго как на референсе.",
+            ([face] if face else []) + [ref], aspect="9:16", sb_id=sb_id, bottle=ref)
+    else:
+        still = gen_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}")
+    (out / f"still_{i}.png").write_bytes(still)
+
+
+def _stills_stage(sb_id: int, only: Optional[int] = None) -> None:
+    """Этап 1: стиллы сцен. only=i — перегенерация одного кадра (клип сцены сбрасывается)."""
+    ctx = _video_ctx(sb_id)
+    scenes, out = ctx["scenes"], ctx["out"]
+    targets = [only] if only is not None else list(range(len(scenes)))
+    for i in targets:
+        sp = out / f"still_{i}.png"
+        if only is None and sp.exists() and sp.stat().st_size > 0:
             continue
-        _set(sb_id, gen_status=f"сцена {i + 1}/{len(scenes)}: стилл…")
-        # референсный кадр видео, соответствующий сцене по таймлайну
-        rs = None
-        if ref_frames:
-            idx = round(i * (len(ref_frames) - 1) / max(1, len(scenes) - 1))
-            rs = ref_frames[min(idx, len(ref_frames) - 1)]
-        if rs:
-            prompt = (
-                "ПЕРВОЕ изображение — референсный кадр видео. Пересоздай его МАКСИМАЛЬНО "
-                "похоже: та же композиция, ракурс, свет, обстановка, ДЕЙСТВИЕ и настроение. "
-                "НО: если в кадре есть человек — замени его на НАШУ модель со ВТОРОГО "
-                "изображения (то же лицо: медные волнистые волосы, веснушки; поза и действие "
-                "как в референсе, НЕ копируй внешность человека из референса). "
-                "ЛЮБОЙ продукт/упаковку замени на НАШ продукт с ТРЕТЬЕГО изображения — "
-                "форма банки, крышка, цвет и этикетка СТРОГО как на референсе продукта, "
-                "этикетка чёткая, читаемая, повернута к камере, БАНКА ЦЕЛИКОМ В КАДРЕ. "
-                "ЗАПРЕЩЕНО придумывать другую упаковку.\n"
-                f"Контекст сцены: {sc.get('scene', '')}\n"
-                "СТРОГО: никакого текста и надписей, кроме этикетки нашего продукта. "
-                "Вертикальный кадр 9:16.")
-            refs_i = [rs] + ([face] if face else []) + ([ref] if ref else [])
-            if not face:
-                prompt = prompt.replace("со ВТОРОГО изображения", "— наша модель (медные волнистые волосы, веснушки)")
-                prompt = prompt.replace("с ТРЕТЬЕГО изображения", "со ВТОРОГО изображения")
-            still = gen_product_image(prompt, refs_i, aspect="9:16", sb_id=sb_id,
-                                      bottle=ref)
-        elif ref:
-            still = gen_product_image(
-                f"Кадр рекламного ролика.\n{sc.get('scene', '')}\n"
-                "Если есть человек — наша модель: медные волнистые волосы, веснушки "
-                + ("(лицо со второго референса). " if face else ". ")
-                + "Банка продукта строго как на референсе.",
-                ([face] if face else []) + [ref], aspect="9:16", sb_id=sb_id, bottle=ref)
-        else:
-            still = gen_image(f"Кадр рекламного ролика.\n{sc.get('scene', '')}")
-        (out / f"still_{i}.png").write_bytes(still)
-        _set(sb_id, gen_status=f"сцена {i + 1}/{len(scenes)}: анимация (fal)…")
+        _set(sb_id, gen_status=f"кадр {i + 1}/{len(scenes)}…")
+        _gen_scene_still(sb_id, i, ctx)
+        (out / f"clip_{i}.mp4").unlink(missing_ok=True)  # кадр новый — клип устарел
+    _set(sb_id, gen_status="stills_ready",
+         output_paths=[f"/media/produced/{sb_id}/still_{i}.png" for i in range(len(scenes))
+                       if (out / f"still_{i}.png").exists()])
+
+
+def _clips_stage(sb_id: int, only: Optional[int] = None) -> None:
+    """Этап 2: анимация одобренных стиллов (Kling). only=i — переанимация одного клипа."""
+    ctx = _video_ctx(sb_id)
+    scenes, out = ctx["scenes"], ctx["out"]
+    targets = [only] if only is not None else list(range(len(scenes)))
+    for i in targets:
+        sp = out / f"still_{i}.png"
+        cp = out / f"clip_{i}.mp4"
+        if not sp.exists():
+            continue
+        if only is None and cp.exists() and cp.stat().st_size > 0:
+            continue
+        sc = scenes[i]
+        _set(sb_id, gen_status=f"анимация {i + 1}/{len(scenes)} (fal)…")
         dur = int(float(sc.get("duration_s") or 4)) or 4
-        clip = fal_i2v(still, f"{sc.get('camera', 'slow gentle camera move')}. "
+        clip = fal_i2v(sp.read_bytes(),
+                       f"{sc.get('camera', 'slow gentle camera move')}. "
                        f"{sc.get('scene', '')}. Single continuous shot, no cuts, "
                        "photorealistic, natural physics, movements natural not robotic.",
                        duration=dur)
-        cp = out / f"clip_{i}.mp4"
         cp.write_bytes(clip)
-        clips.append(cp)
-    # склейка
+    _set(sb_id, gen_status="clips_ready")
+
+
+def _assemble_stage(sb_id: int) -> None:
+    """Этап 3: склейка одобренных клипов + голос Насти + музыка -> final.mp4."""
+    ctx = _video_ctx(sb_id)
+    scenes, out = ctx["scenes"], ctx["out"]
+    vo_full, music_hint = ctx["vo_full"], ctx["music_hint"]
+    clips = [out / f"clip_{i}.mp4" for i in range(len(scenes))
+             if (out / f"clip_{i}.mp4").exists()]
+    if not clips:
+        raise RuntimeError("нет клипов для сборки — сначала анимируй кадры")
     _set(sb_id, gen_status="сборка: склейка…")
     inputs, fparts = [], []
     for i, c in enumerate(clips):
@@ -714,8 +755,6 @@ def _produce_video(sb_id: int):
     dur_s = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                                   "-of", "default=nw=1:nk=1", str(silent)],
                                  capture_output=True, text=True).stdout or 20)
-    # голос + музыка
-    audio_in, amaps = [], []
     no_vo = (not vo_full) or ("без голоса" in vo_full.lower())
     if not no_vo:
         _set(sb_id, gen_status="озвучка (Настя)…")
@@ -754,8 +793,38 @@ def _produce_video(sb_id: int):
     cmd += ["-movflags", "+faststart", str(final)]
     subprocess.run(cmd, capture_output=True, timeout=600)
     _set(sb_id, gen_status="done",
-         output_paths=[f"/media/produced/{sb_id}/still_{i}.png" for i in range(len(scenes))],
          output_video=f"/media/produced/{sb_id}/final.mp4")
+
+
+def _produce_video(sb_id: int):
+    """Полный прогон одним махом (легаси-кнопка): кадры -> анимация -> сборка."""
+    _stills_stage(sb_id)
+    _clips_stage(sb_id)
+    _assemble_stage(sb_id)
+
+
+def run_stage(sb_id: int, stage: str, only: Optional[int] = None) -> bool:
+    """Фоновый запуск этапа: stills | clips | assemble. True = стартовало."""
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        busy = sb and sb.gen_status and sb.gen_status not in (
+            "", "done", "error", "stills_ready", "clips_ready")
+        if not sb or busy:
+            return False
+        sb.gen_status = "старт…"
+        sb.gen_error = ""
+
+    fn = {"stills": _stills_stage, "clips": _clips_stage, "assemble": _assemble_stage}[stage]
+
+    def _run():
+        try:
+            fn(sb_id) if only is None else fn(sb_id, only)  # assemble без only
+        except Exception as e:
+            log.exception("stage %s %s failed", stage, sb_id)
+            _set(sb_id, gen_status="error", gen_error=str(e)[:500])
+
+    threading.Thread(target=_run, daemon=True).start()
+    return True
 
 
 def produce(sb_id: int) -> bool:

@@ -8,7 +8,7 @@ from datetime import datetime
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, File, Form, Request, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
@@ -311,6 +311,33 @@ def storyboard_delete(request: Request, sb_id: int, _: bool = Depends(require_us
             s.delete(sb)
     shutil.rmtree(config.DATA_DIR / "media" / "produced" / str(sb_id), ignore_errors=True)
     return RedirectResponse("/storyboards?msg=" + quote("Раскадровка удалена"), status_code=303)
+
+
+@router.post("/storyboard/{sb_id}/stage/{stage}")
+def storyboard_stage(request: Request, sb_id: int, stage: str, _: bool = Depends(require_user)):
+    from ..services import producer
+    if stage not in ("stills", "clips", "assemble"):
+        raise HTTPException(400)
+    ok = producer.run_stage(sb_id, stage)
+    names = {"stills": "Генерирую кадры", "clips": "Анимирую кадры", "assemble": "Собираю ролик"}
+    msg = names[stage] + "…" if ok else "Уже идёт генерация — подожди"
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(msg), status_code=303)
+
+
+@router.post("/storyboard/{sb_id}/still/{i}/regen")
+def storyboard_still_regen(request: Request, sb_id: int, i: int, _: bool = Depends(require_user)):
+    from ..services import producer
+    ok = producer.run_stage(sb_id, "stills", only=i)
+    msg = f"Перегенерирую кадр {i + 1}…" if ok else "Уже идёт генерация — подожди"
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(msg), status_code=303)
+
+
+@router.post("/storyboard/{sb_id}/clip/{i}/regen")
+def storyboard_clip_regen(request: Request, sb_id: int, i: int, _: bool = Depends(require_user)):
+    from ..services import producer
+    ok = producer.run_stage(sb_id, "clips", only=i)
+    msg = f"Переанимирую сцену {i + 1}…" if ok else "Уже идёт генерация — подожди"
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(msg), status_code=303)
 
 
 @router.post("/storyboard/{sb_id}/model")

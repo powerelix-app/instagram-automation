@@ -13,24 +13,59 @@
       <button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg px-4 py-2">✅ Одобрить</button>
     </form>
     {% else %}
-      {% if not sb.gen_status or sb.gen_status in ('done', 'error') %}
-      <form action="/storyboard/{{ sb.id }}/generate" method="post">
-        <button class="text-sm bg-violet-700 hover:bg-violet-600 text-white rounded-lg px-4 py-2">
-          {% if sb.is_carousel %}🖼 Сгенерировать слайды{% else %}🎬 Сгенерировать ролик{% endif %}
-          {% if sb.gen_status == 'done' %} заново{% endif %}
-        </button>
-      </form>
+      {% if not sb.gen_status or sb.gen_status in ('done', 'error', 'stills_ready', 'clips_ready') %}
+        {% if sb.is_carousel %}
+        <form action="/storyboard/{{ sb.id }}/generate" method="post">
+          <button class="text-sm bg-violet-700 hover:bg-violet-600 text-white rounded-lg px-4 py-2">🖼 Сгенерировать слайды{% if sb.gen_status == 'done' %} заново{% endif %}</button>
+        </form>
+        {% else %}
+        <form action="/storyboard/{{ sb.id }}/stage/stills" method="post">
+          <button class="text-sm bg-violet-700 hover:bg-violet-600 text-white rounded-lg px-4 py-2">1️⃣ Сгенерировать кадры</button>
+        </form>
+        {% endif %}
       {% endif %}
     {% endif %}
   </div>
 </div>
-{% if sb.gen_status and sb.gen_status not in ('done', 'error') %}
+{% if sb.gen_status and sb.gen_status not in ('done', 'error', 'stills_ready', 'clips_ready') %}
 <meta http-equiv="refresh" content="10">
 <div class="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4 text-sm">
   ⏳ <b>Генерация:</b> {{ sb.gen_status }} <span class="text-slate-400">(страница обновляется сама)</span>
 </div>
 {% elif sb.gen_status == 'error' %}
 <div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm">❌ <b>Ошибка:</b> {{ sb.gen_error }}</div>
+{% endif %}
+{% if not sb.is_carousel and sb.status == 'approved' %}
+<div class="bg-white border rounded-xl p-4 mb-4">
+  <div class="text-sm font-semibold mb-2">🎞 Кадры сцен <span class="text-slate-400 font-normal">(проверь каждый; ↻ — перегенерировать; потом анимируй)</span></div>
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+    {% for sc in sb.scenes %}
+    <div class="relative">
+      <img src="/media/produced/{{ sb.id }}/still_{{ loop.index0 }}.png?r={{ range(1, 999999) | random }}"
+           class="w-full rounded-lg border" onerror="this.closest('div').classList.add('opacity-30');this.replaceWith(Object.assign(document.createElement('div'),{className:'aspect-[9/16] bg-slate-100 rounded-lg flex items-center justify-center text-slate-300 text-xs',textContent:'кадр {{ loop.index }} не сгенерирован'}))">
+      <div class="absolute top-1 left-1 bg-black/60 text-white text-[11px] rounded px-1.5">{{ loop.index }}</div>
+      <form action="/storyboard/{{ sb.id }}/still/{{ loop.index0 }}/regen" method="post" class="absolute top-1 right-1">
+        <button class="bg-black/60 hover:bg-black/80 text-white rounded px-2 py-0.5 text-xs" title="перегенерировать кадр">↻</button>
+      </form>
+      <video src="/media/produced/{{ sb.id }}/clip_{{ loop.index0 }}.mp4?r={{ range(1, 999999) | random }}"
+             class="w-full rounded-lg border mt-1" controls muted preload="metadata"
+             onerror="this.remove()"></video>
+      <form action="/storyboard/{{ sb.id }}/clip/{{ loop.index0 }}/regen" method="post" class="mt-1">
+        <button class="w-full text-[11px] border rounded px-2 py-1 hover:bg-slate-50">↻ переанимировать сцену {{ loop.index }}</button>
+      </form>
+    </div>
+    {% endfor %}
+  </div>
+  <div class="flex gap-3 mt-4">
+    <form action="/storyboard/{{ sb.id }}/stage/clips" method="post">
+      <button class="text-sm bg-slate-900 hover:bg-slate-700 text-white rounded-lg px-4 py-2">2️⃣ Анимировать кадры (Kling)</button>
+    </form>
+    <form action="/storyboard/{{ sb.id }}/stage/assemble" method="post">
+      <button class="text-sm bg-emerald-700 hover:bg-emerald-600 text-white rounded-lg px-4 py-2">3️⃣ Собрать ролик (голос + музыка)</button>
+    </form>
+  </div>
+  <div class="text-[11px] text-slate-400 mt-2">Анимация пропускает сцены с готовыми клипами; перегенерация кадра сбрасывает его клип. Сборка склеивает только готовые клипы.</div>
+</div>
 {% endif %}
 {% if sb.video %}
 <div class="bg-white border rounded-xl p-4 mb-4">
