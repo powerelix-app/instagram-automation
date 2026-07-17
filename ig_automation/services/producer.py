@@ -90,7 +90,20 @@ def _fetch_wb_photo(product_id: str) -> Optional[Path]:
     return None
 
 
+def _log(sb_id: int, msg: str) -> None:
+    """Строка в живой лог раскадровки (видно в окошке на странице)."""
+    import time as _t
+    try:
+        line = _t.strftime("%H:%M:%S") + "  " + msg + "\n"
+        with (_out_dir(sb_id) / "gen.log").open("a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception:
+        pass
+
+
 def _set(sb_id: int, **kw):
+    if "gen_status" in kw:
+        _log(sb_id, str(kw["gen_status"]))
     with session_scope() as s:
         row = s.get(Storyboard, sb_id)
         for k, v in kw.items():
