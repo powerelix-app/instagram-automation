@@ -719,11 +719,16 @@ def make_similar(analysis_id: int, product_id: str) -> Optional[int]:
             content.append({"type": "image", "source": {
                 "type": "base64", "media_type": "image/jpeg",
                 "data": _b64.b64encode(f.read_bytes()).decode()}})
+    is_video = (reel.media_type if reel else "video") not in ("carousel", "image")
     content.append({"type": "text", "text":
                     f"РАЗБОР РЕФЕРЕНСА:\n{ref}\n\nНАШ ПРОДУКТ:\n{pinfo}\n\n"
-                    + ("ВАЖНО: сцен ровно столько, сколько слайдов выше; сцена N — ТОЧНОЕ "
-                       "описание слайда N (та же композиция и действие, например «банку кладут "
-                       "в сумку»), только продукт заменён на наш. " if frame_files else "")
+                    + (("Кадры выше — таймлайн референса для контекста. ВАЖНО: сцен НЕ по числу "
+                        "кадров, а по хронометражу — каждая сцена 5 секунд, всего 3-5 сцен "
+                        "(длительность референса / 5). Каждая сцена = ключевой момент механики. "
+                        if is_video else
+                        "ВАЖНО: сцен ровно столько, сколько слайдов выше; сцена N — ТОЧНОЕ "
+                        "описание слайда N (та же композиция и действие, например «банку кладут "
+                        "в сумку»), только продукт заменён на наш. ") if frame_files else "")
                     + "Собери storyboard."})
     client = anthropic.Anthropic()
     resp = client.messages.parse(
