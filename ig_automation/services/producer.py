@@ -500,6 +500,10 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
     return last
 
 
+class ContentPolicyError(RuntimeError):
+    """Движок отклонил кадр по content policy (обычно Seedance: реалистичные люди)."""
+
+
 def fal_i2v(image: bytes, prompt: str, duration: int = 5,
             engine: str = DEFAULT_VIDEO_ENGINE,
             end_image: Optional[bytes] = None) -> bytes:
@@ -540,6 +544,8 @@ def fal_i2v(image: bytes, prompt: str, duration: int = 5,
     out = requests.get(resp_url, headers={"Authorization": f"Key {config.FAL_KEY}"}, timeout=60).json()
     vurl = (out.get("video") or {}).get("url") or ""
     if not vurl:
+        if "content_policy" in str(out):
+            raise ContentPolicyError(f"движок {engine} отклонил кадр (content policy)")
         raise RuntimeError(f"fal: нет video.url в ответе: {str(out)[:200]}")
     try:
         return requests.get(vurl, timeout=(10, 300)).content
@@ -760,11 +766,20 @@ def _clips_stage(sb_id: int, only: Optional[int] = None) -> None:
         # переход first->last: конец клипа = стилл следующей сцены (бесшовные стыки)
         nxt = out / f"still_{i + 1}.png"
         end_bytes = nxt.read_bytes() if (nxt.exists() and nxt.stat().st_size > 0) else None
-        clip = fal_i2v(sp.read_bytes(),
-                       f"{sc.get('camera', 'slow gentle camera move')}. "
-                       f"{sc.get('scene', '')}. Single continuous shot, no cuts, "
-                       "photorealistic, natural physics, movements natural not robotic.",
-                       duration=dur, engine=ctx["video_engine"], end_image=end_bytes)
+        i2v_prompt = (f"{sc.get('camera', 'slow gentle camera move')}. "
+                      f"{sc.get('scene', '')}. Single continuous shot, no cuts, "
+                      "photorealistic, natural physics, movements natural not robotic.")
+        try:
+            clip = fal_i2v(sp.read_bytes(), i2v_prompt, duration=dur,
+                           engine=ctx["video_engine"], end_image=end_bytes)
+        except ContentPolicyError as e:
+            if ctx["video_engine"] != "kling":  # Seedance строг к людям — Kling дожуёт
+                log.warning("%s — фолбэк на Kling", e)
+                _set(sb_id, gen_status=f"анимация {i + 1}/{len(scenes)}: фолбэк Kling…")
+                clip = fal_i2v(sp.read_bytes(), i2v_prompt, duration=dur,
+                               engine="kling", end_image=end_bytes)
+            else:
+                raise
         cp.write_bytes(clip)
     _set(sb_id, gen_status="clips_ready")
 
