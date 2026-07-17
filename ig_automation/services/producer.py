@@ -844,10 +844,13 @@ def _assemble_stage(sb_id: int) -> None:
                       f"crop=1080:1920,setsar=1,fps=30[v{i}];")
     concat = "".join(f"[v{i}]" for i in range(len(clips)))
     silent = out / "_silent.mp4"
-    subprocess.run(["ffmpeg", "-y", *inputs, "-filter_complex",
+    rs = subprocess.run(["ffmpeg", "-y", *inputs, "-filter_complex",
                     "".join(fparts) + f"{concat}concat=n={len(clips)}:v=1:a=0[v]",
                     "-map", "[v]", "-c:v", "libx264", "-preset", "veryfast", "-crf", "21",
                     "-pix_fmt", "yuv420p", str(silent)], capture_output=True, timeout=600)
+    if rs.returncode != 0 or not silent.exists() or silent.stat().st_size < 10000:
+        err = (rs.stderr or b"").decode("utf-8", "replace")[-800:]
+        raise RuntimeError(f"склейка клипов упала: {err}")
     dur_s = float(subprocess.run(["ffprobe", "-v", "error", "-show_entries", "format=duration",
                                   "-of", "default=nw=1:nk=1", str(silent)],
                                  capture_output=True, text=True).stdout or 20)
@@ -865,14 +868,19 @@ def _assemble_stage(sb_id: int) -> None:
     cmd = ["ffmpeg", "-y", "-i", str(silent)]
     fc, amix = [], []
     idx = 1
+    has_music = (out / "music.mp3").exists()
     if (out / "vo.mp3").exists():
         cmd += ["-i", str(out / 'vo.mp3')]
-        fc.append(f"[{idx}:a]volume=1.25,adelay=300|300[vo];")
+        # раздваиваем голос: одна копия триггерит сайдчейн, вторая идёт в микс
+        if has_music:
+            fc.append(f"[{idx}:a]volume=1.25,adelay=300|300,asplit=2[vo][vokey];")
+        else:
+            fc.append(f"[{idx}:a]volume=1.25,adelay=300|300[vo];")
         idx += 1
-    if (out / "music.mp3").exists():
+    if has_music:
         cmd += ["-i", str(out / 'music.mp3')]
         if (out / "vo.mp3").exists():
-            fc.append(f"[{idx}:a]volume=0.18[m0];[m0][vo]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400[mus];")
+            fc.append(f"[{idx}:a]volume=0.18[m0];[m0][vokey]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=400[mus];")
             amix = ["[mus]", "[vo]"]
         else:
             fc.append(f"[{idx}:a]volume=0.5[mus];")
@@ -887,7 +895,10 @@ def _assemble_stage(sb_id: int) -> None:
     else:
         cmd += ["-c", "copy"]
     cmd += ["-movflags", "+faststart", str(final)]
-    subprocess.run(cmd, capture_output=True, timeout=600)
+    r = subprocess.run(cmd, capture_output=True, timeout=600)
+    if r.returncode != 0 or not final.exists() or final.stat().st_size < 10000:
+        err = (r.stderr or b"").decode("utf-8", "replace")[-800:]
+        raise RuntimeError(f"сборка final.mp4 упала: {err}")
     _set(sb_id, gen_status="done",
          output_video=f"/media/produced/{sb_id}/final.mp4")
 
