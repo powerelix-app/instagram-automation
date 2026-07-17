@@ -501,17 +501,31 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
 
 
 def fal_i2v(image: bytes, prompt: str, duration: int = 5,
-            engine: str = DEFAULT_VIDEO_ENGINE) -> bytes:
-    """Анимация кадра через fal. Вход — байты стилла; engine из VIDEO_ENGINES."""
+            engine: str = DEFAULT_VIDEO_ENGINE,
+            end_image: Optional[bytes] = None) -> bytes:
+    """Анимация кадра через fal. end_image — последний кадр (переход first→last):
+    движок интерполирует движение между двумя кадрами по промпту."""
     model = VIDEO_ENGINES.get(engine, VIDEO_ENGINES[DEFAULT_VIDEO_ENGINE])[0]
     data_uri = "data:image/png;base64," + base64.b64encode(image).decode()
+    start_key = "start_image_url" if "kling-video/v3" in model else "image_url"
+    payload = {start_key: data_uri, "prompt": prompt,
+               "duration": "10" if duration > 7 else "5", "sound": False}
+    if end_image:
+        payload["end_image_url"] = ("data:image/png;base64,"
+                                    + base64.b64encode(end_image).decode())
     r = requests.post(
         f"https://queue.fal.run/{model}",
         headers={"Authorization": f"Key {config.FAL_KEY}",
                  "Content-Type": "application/json"},
-        json={"image_url": data_uri, "prompt": prompt,
-              "duration": "10" if duration > 7 else "5", "sound": False},
-        timeout=60)
+        json=payload, timeout=60)
+    if r.status_code == 422 and end_image:  # движок не умеет end-frame — без него
+        log.warning("движок %s не принял end_image_url — анимирую без него", engine)
+        payload.pop("end_image_url", None)
+        r = requests.post(
+            f"https://queue.fal.run/{model}",
+            headers={"Authorization": f"Key {config.FAL_KEY}",
+                     "Content-Type": "application/json"},
+            json=payload, timeout=60)
     r.raise_for_status()
     req = r.json()
     status_url = req.get("status_url") or f"https://queue.fal.run/{model}/requests/{req['request_id']}/status"
@@ -663,10 +677,13 @@ def _video_ctx(sb_id: int) -> dict:
 
 
 def _gen_scene_still(sb_id: int, i: int, ctx: dict) -> None:
-    """Стилл одной сцены: референс-кадр + лицо бренда + банка (база слайдов)."""
+    """Стилл одной сцены: референс-кадр + лицо бренда + банка (база слайдов).
+    Для консистентности одежды/предметов/света добавляем предыдущий стилл."""
     scenes, out = ctx["scenes"], ctx["out"]
     sc = scenes[i]
     ref, face, ref_frames = ctx["bottle"], ctx["face"], ctx["ref_frames"]
+    prev = out / f"still_{i - 1}.png" if i > 0 else None
+    prev = prev if (prev and prev.exists() and prev.stat().st_size > 0) else None
     rs = None
     if ref_frames:
         idx = round(i * (len(ref_frames) - 1) / max(1, len(scenes) - 1))
@@ -689,6 +706,12 @@ def _gen_scene_still(sb_id: int, i: int, ctx: dict) -> None:
         if not face:
             prompt = prompt.replace("со ВТОРОГО изображения", "— наша модель бренда")
             prompt = prompt.replace("с ТРЕТЬЕГО изображения", "со ВТОРОГО изображения")
+        if prev:
+            refs_i.append(prev)
+            prompt += ("\nПОСЛЕДНЕЕ изображение — предыдущий кадр ЭТОГО ЖЕ ролика: "
+                       "одежда и причёска модели, предметы на столе/фоне, цвет света "
+                       "и цветокоррекция ДОЛЖНЫ полностью совпадать с ним "
+                       "(меняется только действие по сцене).")
         still = gen_product_image(prompt, refs_i, aspect="9:16", sb_id=sb_id, bottle=ref)
     elif ref:
         still = gen_product_image(
@@ -734,11 +757,14 @@ def _clips_stage(sb_id: int, only: Optional[int] = None) -> None:
         sc = scenes[i]
         _set(sb_id, gen_status=f"анимация {i + 1}/{len(scenes)} (fal)…")
         dur = int(float(sc.get("duration_s") or 4)) or 4
+        # переход first->last: конец клипа = стилл следующей сцены (бесшовные стыки)
+        nxt = out / f"still_{i + 1}.png"
+        end_bytes = nxt.read_bytes() if (nxt.exists() and nxt.stat().st_size > 0) else None
         clip = fal_i2v(sp.read_bytes(),
                        f"{sc.get('camera', 'slow gentle camera move')}. "
                        f"{sc.get('scene', '')}. Single continuous shot, no cuts, "
                        "photorealistic, natural physics, movements natural not robotic.",
-                       duration=dur, engine=ctx["video_engine"])
+                       duration=dur, engine=ctx["video_engine"], end_image=end_bytes)
         cp.write_bytes(clip)
     _set(sb_id, gen_status="clips_ready")
 
