@@ -31,7 +31,16 @@ import os as _os
 # nano = nano-banana-2 на Replicate (~$0.07 ≈ 5-6₽/кадр) — в 3-4 раза дешевле
 # того же gemini flash на ProxyAPI (~20₽/кадр); ProxyAPI-gemini остаётся фолбэком.
 IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "seedream,nano,gemini,gptimage2,grok").split(","))
-FAL_I2V = "fal-ai/kling-video/v3/standard/image-to-video"
+# Движки анимации (все на fal, единая касса). Дефолт — Seedance 2.0.
+VIDEO_ENGINES = {
+    "seedance":      ("bytedance/seedance-2.0/image-to-video",      "Seedance 2.0"),
+    "seedance_fast": ("bytedance/seedance-2.0/fast/image-to-video", "Seedance 2.0 fast (черновики)"),
+    "kling":         ("fal-ai/kling-video/v3/standard/image-to-video", "Kling 3.0"),
+    "grok":          ("xai/grok-imagine-video/image-to-video",      "Grok Imagine"),
+    "omni":          ("google/gemini-omni-flash/image-to-video",    "Gemini Omni Flash"),
+}
+DEFAULT_VIDEO_ENGINE = "seedance"
+FAL_I2V = VIDEO_ENGINES["kling"][0]
 NASTYA_VOICE = "YjESejviApN7SHrbfnA2"
 
 
@@ -491,11 +500,13 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
     return last
 
 
-def fal_i2v(image: bytes, prompt: str, duration: int = 5) -> bytes:
-    """Анимация кадра через fal (Kling v3 i2v). Вход — байты стилла."""
+def fal_i2v(image: bytes, prompt: str, duration: int = 5,
+            engine: str = DEFAULT_VIDEO_ENGINE) -> bytes:
+    """Анимация кадра через fal. Вход — байты стилла; engine из VIDEO_ENGINES."""
+    model = VIDEO_ENGINES.get(engine, VIDEO_ENGINES[DEFAULT_VIDEO_ENGINE])[0]
     data_uri = "data:image/png;base64," + base64.b64encode(image).decode()
     r = requests.post(
-        f"https://queue.fal.run/{FAL_I2V}",
+        f"https://queue.fal.run/{model}",
         headers={"Authorization": f"Key {config.FAL_KEY}",
                  "Content-Type": "application/json"},
         json={"image_url": data_uri, "prompt": prompt,
@@ -503,8 +514,8 @@ def fal_i2v(image: bytes, prompt: str, duration: int = 5) -> bytes:
         timeout=60)
     r.raise_for_status()
     req = r.json()
-    status_url = req.get("status_url") or f"https://queue.fal.run/{FAL_I2V}/requests/{req['request_id']}/status"
-    resp_url = req.get("response_url") or f"https://queue.fal.run/{FAL_I2V}/requests/{req['request_id']}"
+    status_url = req.get("status_url") or f"https://queue.fal.run/{model}/requests/{req['request_id']}/status"
+    resp_url = req.get("response_url") or f"https://queue.fal.run/{model}/requests/{req['request_id']}"
     for _ in range(120):  # до ~10 мин
         time.sleep(5)
         st = requests.get(status_url, headers={"Authorization": f"Key {config.FAL_KEY}"}, timeout=30).json()
@@ -640,7 +651,8 @@ def _video_ctx(sb_id: int) -> dict:
         ctx = {"scenes": list(sb.scenes or []), "product_id": sb.product_id,
                "vo_full": sb.vo_full, "music_hint": sb.music_hint,
                "reel_id": sb.trend_reel_id,
-               "model_key": getattr(sb, "model_key", "") or ""}
+               "model_key": getattr(sb, "model_key", "") or "",
+               "video_engine": getattr(sb, "video_engine", "") or DEFAULT_VIDEO_ENGINE}
     from .brand import model_by_key
     ctx["bottle"] = _product_ref(ctx["product_id"])
     ctx["face"] = model_by_key(ctx["model_key"])
@@ -726,7 +738,7 @@ def _clips_stage(sb_id: int, only: Optional[int] = None) -> None:
                        f"{sc.get('camera', 'slow gentle camera move')}. "
                        f"{sc.get('scene', '')}. Single continuous shot, no cuts, "
                        "photorealistic, natural physics, movements natural not robotic.",
-                       duration=dur)
+                       duration=dur, engine=ctx["video_engine"])
         cp.write_bytes(clip)
     _set(sb_id, gen_status="clips_ready")
 

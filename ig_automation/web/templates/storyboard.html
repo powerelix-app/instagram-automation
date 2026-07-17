@@ -103,6 +103,14 @@
   <span class="text-slate-400 text-xs">лицо бренда для генерации кадров (дефолт — рыжая)</span>
 </form>
 
+<form action="/storyboard/{{ sb.id }}/engine" method="post" class="bg-white border rounded-xl p-3 mb-3 text-sm flex items-center gap-2 flex-wrap">
+  <span class="text-slate-500">🎥 Движок анимации:</span>
+  <select name="video_engine" onchange="this.form.submit()" class="px-3 py-2 border rounded">
+    {% for e in video_engines %}<option value="{{ e.key }}" {% if (sb.video_engine or 'seedance') == e.key %}selected{% endif %}>{{ e.name }}</option>{% endfor %}
+  </select>
+  <span class="text-slate-400 text-xs">дефолт — Seedance 2.0; Kling/Grok/Omni — для тестов</span>
+</form>
+
 <form action="/storyboard/{{ sb.id }}/scenes" method="post">
 <div class="grid md:grid-cols-2 gap-3 mb-2">
   {% for sc in sb.scenes %}

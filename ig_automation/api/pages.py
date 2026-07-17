@@ -294,10 +294,12 @@ def storyboard_page(request: Request, sb_id: int, _: bool = Depends(require_user
               "scenes": r.scenes or [], "vo_full": r.vo_full, "music_hint": r.music_hint,
               "status": r.status, "reel_id": r.trend_reel_id,
               "model_key": getattr(r, "model_key", "") or "",
+              "video_engine": getattr(r, "video_engine", "") or "",
               "gen_status": r.gen_status or "", "gen_error": r.gen_error or "",
               "outputs": r.output_paths or [], "video": r.output_video or "",
               "is_carousel": bool(r.scenes) and all(float(x.get("duration_s") or 0) == 0 for x in (r.scenes or []))}
-    return templates.TemplateResponse(request, "storyboard.html", _ctx(request, sb=sb, models=brand_svc.list_models()))
+    return templates.TemplateResponse(request, "storyboard.html", _ctx(request, sb=sb, models=brand_svc.list_models(),
+             video_engines=[{"key": k, "name": v[1]} for k, v in __import__("ig_automation.services.producer", fromlist=["x"]).VIDEO_ENGINES.items()]))
 
 
 @router.post("/storyboard/{sb_id}/delete")
@@ -311,6 +313,16 @@ def storyboard_delete(request: Request, sb_id: int, _: bool = Depends(require_us
             s.delete(sb)
     shutil.rmtree(config.DATA_DIR / "media" / "produced" / str(sb_id), ignore_errors=True)
     return RedirectResponse("/storyboards?msg=" + quote("Раскадровка удалена"), status_code=303)
+
+
+@router.post("/storyboard/{sb_id}/engine")
+def storyboard_set_engine(request: Request, sb_id: int, video_engine: str = Form(""), _: bool = Depends(require_user)):
+    from ..db.models import Storyboard
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if sb:
+            sb.video_engine = video_engine
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote("Движок анимации выбран"), status_code=303)
 
 
 @router.post("/storyboard/{sb_id}/stage/{stage}")
