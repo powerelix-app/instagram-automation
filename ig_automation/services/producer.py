@@ -766,9 +766,16 @@ def _clips_stage(sb_id: int, only: Optional[int] = None) -> None:
         # переход first->last: конец клипа = стилл следующей сцены (бесшовные стыки)
         nxt = out / f"still_{i + 1}.png"
         end_bytes = nxt.read_bytes() if (nxt.exists() and nxt.stat().st_size > 0) else None
-        i2v_prompt = (f"{sc.get('camera', 'slow gentle camera move')}. "
-                      f"{sc.get('scene', '')}. Single continuous shot, no cuts, "
-                      "photorealistic, natural physics, movements natural not robotic.")
+        # Seedance мягче модерирует русские промпты (и сцены у нас русские)
+        if ctx["video_engine"].startswith("seedance"):
+            i2v_prompt = (f"{sc.get('camera', 'медленное плавное движение камеры')}. "
+                          f"{sc.get('scene', '')}. Один непрерывный кадр без склеек, "
+                          "фотореалистично, естественная физика, движения плавные и "
+                          "натуральные, не роботичные.")
+        else:
+            i2v_prompt = (f"{sc.get('camera', 'slow gentle camera move')}. "
+                          f"{sc.get('scene', '')}. Single continuous shot, no cuts, "
+                          "photorealistic, natural physics, movements natural not robotic.")
         try:
             try:
                 clip = fal_i2v(sp.read_bytes(), i2v_prompt, duration=dur,
