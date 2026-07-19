@@ -642,6 +642,18 @@ async def post_ref_upload(request: Request, post_id: int, file: UploadFile = Fil
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
 
 
+@router.post("/post/{post_id}/ref-url")
+def post_ref_url(request: Request, post_id: int, url: str = Form(...), _: bool = Depends(require_user)):
+    """Как в разведке: скачивает настоящий пин/пост по ссылке и добавляет как референс поста."""
+    try:
+        generator.add_post_ref_by_url(post_id, url.strip())
+        msg = "Референс скачан — генерация пересоздаст его точь-в-точь под наш продукт/модель"
+    except Exception as e:
+        log.warning("ref-url failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
 @router.post("/post/{post_id}/asset/{aid}/delete")
 def post_asset_delete(request: Request, post_id: int, aid: int, _: bool = Depends(require_user)):
     generator.delete_post_asset(aid)

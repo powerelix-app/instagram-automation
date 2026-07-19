@@ -147,11 +147,16 @@
           {% endfor %}
         </div>
         {% endif %}
-        <form action="/post/{{ post.id }}/ref-upload" method="post" enctype="multipart/form-data" class="flex items-center gap-2">
+        <form action="/post/{{ post.id }}/ref-upload" method="post" enctype="multipart/form-data" class="flex items-center gap-2 mb-2">
           <input type="file" name="file" accept="image/*" required class="text-xs">
-          <button class="text-xs border rounded px-2 py-1 hover:bg-slate-50">+ референс</button>
+          <button class="text-xs border rounded px-2 py-1 hover:bg-slate-50">+ файлом</button>
         </form>
-        <div class="text-[11px] text-slate-400 mt-1">Своя банка или картинка обстановки → генерация учтёт их (+ лицо бренда и привязанный товар).</div>
+        <form action="/post/{{ post.id }}/ref-url" method="post" class="flex items-center gap-2">
+          <input type="url" name="url" placeholder="ссылка на пин Pinterest / пост IG…" required
+                 class="text-xs border rounded px-2 py-1 flex-1">
+          <button class="text-xs border rounded px-2 py-1 hover:bg-slate-50">🔗 по ссылке</button>
+        </form>
+        <div class="text-[11px] text-slate-400 mt-1">Как в разведке: скачиваем НАСТОЯЩЕЕ фото по ссылке и пересоздаём его точь-в-точь под наш продукт/модель. Без референса генерация сочиняет сцену текстом — менее предсказуемо.</div>
       </div>
     </div>
   </div>
