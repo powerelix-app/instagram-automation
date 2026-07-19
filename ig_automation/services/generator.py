@@ -485,6 +485,7 @@ def suggest_overlay_text(post_id: int) -> dict:
         post = s.get(Post, post_id)
         if not post:
             return {"headline": "", "subtitle": "", "tag": overlay.DEFAULT_TAG, "disclaimer": ""}
+        is_carousel = post.format == "carousel"
         brief = (
             f"Хук: {post.hook or '—'}\nИдея визуала: {post.visual_idea or '—'}\n"
             f"Рубрика: {post.rubric or '—'}\nПродукт: {post.product or '—'}"
@@ -494,6 +495,11 @@ def suggest_overlay_text(post_id: int) -> dict:
         ctx = products.one_context(pid)
         if ctx:
             brief += "\n\n" + ctx
+    if not is_carousel:
+        # одиночная картинка (пост/Reels) — свайпать/сохранять карусель некуда,
+        # только цепляющий заголовок + короткая выгода, без "ЛИСТАЙ"/"СОХРАНИ"
+        brief += ("\n\nЭто ОДИНОЧНАЯ картинка (не карусель, публикуется как Reels/фото). "
+                  "Тег-призыв НЕ нужен вообще — оставь его пустой строкой.")
     client = anthropic.Anthropic()
     resp = client.messages.parse(
         model=config.CLAUDE_MODEL, max_tokens=600, system=_OVERLAY_SYSTEM,
@@ -502,7 +508,7 @@ def suggest_overlay_text(post_id: int) -> dict:
     )
     o = resp.parsed_output
     return {"headline": o.headline, "subtitle": o.subtitle,
-            "tag": o.tag or overlay.DEFAULT_TAG, "disclaimer": o.disclaimer}
+            "tag": (o.tag or overlay.DEFAULT_TAG) if is_carousel else "", "disclaimer": o.disclaimer}
 
 
 def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,
@@ -528,8 +534,11 @@ def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,
         txt = suggest_overlay_text(post_id)
         headline, subtitle, tag, disclaimer = txt["headline"], txt["subtitle"], txt["tag"], txt["disclaimer"]
     dest = config.MEDIA_DIR / f"post_{post_id}_txt{ord_}.png"
+    # tag=None (никто не задавал) -> дефолт; tag="" (осознанно пусто, напр. для
+    # одиночной картинки без "ЛИСТАЙ/СОХРАНИ") -> оставляем пустым, не подменяем.
     overlay.render_cover(src_path, headline=headline or "", subtitle=subtitle or "",
-                         tag=tag or overlay.DEFAULT_TAG, disclaimer=disclaimer or "",
+                         tag=(tag if tag is not None else overlay.DEFAULT_TAG),
+                         disclaimer=disclaimer or "",
                          out_path=str(dest), ratio=img_ratio)
     with session_scope() as s:
         a = PostAsset(post_id=post_id, kind="image", path=f"/media/{dest.name}", model="overlay",
