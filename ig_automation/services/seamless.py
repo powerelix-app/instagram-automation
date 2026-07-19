@@ -143,7 +143,25 @@ def execute(cid: int) -> None:
         "банок, людей. Без текста, без букв, без надписей, без водяных знаков. Фотореализм, "
         "рекламное качество."
     )
-    refs = [ref_path] if ref_path else []
+    tmp_dir = config.MEDIA_DIR / "seamless" / f"{cid}_tmp"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+
+    if ref_path:
+        refs = [ref_path]
+    else:
+        # gen_image_gpt всегда бьёт в images/edits (по всей цепочке фолбэков) —
+        # эндпоинту нужна хотя бы одна входная картинка. Без референса стиля
+        # подсовываем пустую градиентную затравку — edit-модель дорисует поверх
+        # неё полноценную сцену по промпту, как обычный text-to-image.
+        seed = Image.new("RGB", (1536, 1024))
+        top, bot = (18, 40, 30), (8, 16, 12)
+        for y in range(1024):
+            t = y / 1024
+            seed.paste(tuple(int(top[i] + (bot[i] - top[i]) * t) for i in range(3)), (0, y, 1536, y + 1))
+        seed_path = tmp_dir / "seed.png"
+        seed.save(seed_path)
+        refs = [seed_path]
+
     try:
         bg_bytes = producer.gen_image_gpt(bg_prompt, refs, aspect="16:9")  # 1536x1024
     except Exception as e:
@@ -153,8 +171,6 @@ def execute(cid: int) -> None:
     bg = Image.open(io.BytesIO(bg_bytes)).convert("RGB")
     slide_w, slide_h = 1080, 1350  # 4:5
     strip_w = bg.width // n
-    tmp_dir = config.MEDIA_DIR / "seamless" / f"{cid}_tmp"
-    tmp_dir.mkdir(parents=True, exist_ok=True)
     out_paths = []
 
     for i in range(n):
