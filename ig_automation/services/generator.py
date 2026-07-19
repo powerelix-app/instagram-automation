@@ -17,10 +17,20 @@ from ..db.models import Post, PostAsset
 log = logging.getLogger(__name__)
 
 # Стилевая подпись бренда в каждый визуал-промпт — чтобы кадр был «в духе» POWERELIX.
-_BRAND_STYLE = (
-    "молодая привлекательная девушка — то же лицо что на референсе лица, та же внешность; "
-    "естественный свет, чистая современная эстетика здоровья и энергии"
-)
+# Пол/возраст берём из выбранной модели ростера (см. brand.list_models), а не зашиваем —
+# иначе текст «девушка» конфликтует с мужским референсом лица и модель начинает
+# фантазировать случайных людей вместо привязки к фото.
+_STYLE_TAIL = "естественный свет, чистая современная эстетика здоровья и энергии"
+
+
+def _person_phrase(model_key: str) -> str:
+    if (model_key or "").startswith("man_"):
+        return "мужчина — то же лицо что на референсе лица, та же внешность"
+    return "девушка — то же лицо что на референсе лица, та же внешность"
+
+
+def _brand_style(model_key: str = "") -> str:
+    return f"{_person_phrase(model_key)}; {_STYLE_TAIL}"
 
 
 # ── Визуал ──
@@ -71,18 +81,19 @@ def _scene_description(visual_idea: str, hook: str, product: str) -> str:
         return _clean_scene(raw)
 
 
-def _visual_prompt(scene: str, product: str, with_product_ref: bool) -> str:
+def _visual_prompt(scene: str, product: str, with_product_ref: bool, model_key: str = "") -> str:
     parts: List[str] = ["профессиональная чистая лайфстайл-фотография для Instagram, фотореализм, реалистичная"]
     if scene:
         parts.append(scene)
     if with_product_ref:
         parts.append(
-            "на прикреплённом референсе — реальная банка добавки; в кадре ТА ЖЕ банка в руках у девушки, "
+            "на прикреплённом референсе — реальная банка добавки; в кадре ТА ЖЕ банка в руках у "
+            f"{_person_phrase(model_key).split(' — ')[0]} с референса лица, "
             "повтори форму и этикетку точно как на референсе, не искажай и не дорисовывай текст на этикетке"
         )
     elif product and product not in ("", "—"):
         parts.append(f"уместно показать баночку добавки {product}")
-    parts.append(_BRAND_STYLE)
+    parts.append(_brand_style(model_key))
     parts.append(
         "КАТЕГОРИЧЕСКИ БЕЗ ТЕКСТА В КАДРЕ: никаких букв, цифр, слов, надписей, плашек, подписей, "
         "логотипов, заголовков, субтитров, водяных знаков; no text, no letters, no numbers, no words, "
@@ -140,7 +151,8 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
     existing_user_refs = [p for p in user_refs if p.exists()]
     refs = [brand.model_by_key(model_key)] + existing_user_refs + ([prod_ref] if prod_ref else [])
     scene = _scene_description(visual_idea, hook, product)
-    prompt = _visual_prompt(scene, product, with_product_ref=bool(prod_ref) or bool(existing_user_refs))
+    prompt = _visual_prompt(scene, product, with_product_ref=bool(prod_ref) or bool(existing_user_refs),
+                            model_key=model_key)
     if extra:
         prompt += ". " + extra
 
@@ -346,12 +358,12 @@ def generate_reels_video(post_id: int) -> Optional[int]:
         model_key = getattr(post, "model_key", "") or ""
         n = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "video").count()
         post.status = "generating"
-    refs = [brand.model_ref()]
+    refs = [brand.model_by_key(model_key)]
     pr = brand.product_ref(product)
     if pr:
         refs.append(pr)
     scene = _scene_description(visual_idea, hook, product)
-    prompt = _visual_prompt(scene, product, with_product_ref=bool(pr))
+    prompt = _visual_prompt(scene, product, with_product_ref=bool(pr), model_key=model_key)
     try:
         hero = scenes.generate_branded(prompt, refs=refs, ratio="9:16", out_name=f"reelhero_{post_id}_{n}.png")
         hero_media = config.MEDIA_DIR / f"reelhero_{post_id}_{n}.png"
