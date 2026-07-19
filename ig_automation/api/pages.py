@@ -1,7 +1,7 @@
 """Страницы сервиса. Фаза 1: Главная (обзор конвейера) + Статус (аккаунт/токен/конфиг)."""
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import logging
 from datetime import datetime
@@ -978,12 +978,17 @@ def compare_page(request: Request, msg: str = "", _: bool = Depends(require_user
 
 
 @router.post("/compare/new")
-async def compare_new(request: Request, file: UploadFile = File(...),
-                      product_ids: List[str] = Form(...), title: str = Form(""),
+async def compare_new(request: Request, file: Optional[UploadFile] = File(None),
+                      url: str = Form(""), product_ids: List[str] = Form(...), title: str = Form(""),
                       _: bool = Depends(require_user)):
     try:
-        data = await file.read()
-        cid = comparison_svc.create(data, file.filename or "ref.jpg", product_ids, title)
+        if file is not None and file.filename:
+            data = await file.read()
+            cid = comparison_svc.create(data, file.filename or "ref.jpg", product_ids, title)
+        elif url.strip():
+            cid = comparison_svc.create_by_url(url, product_ids, title)
+        else:
+            raise ValueError("дай файл или ссылку на референс")
         comparison_svc.enqueue(cid)
         msg = "Собираю сравнение — обнови страницу через минуту-две"
     except Exception as e:

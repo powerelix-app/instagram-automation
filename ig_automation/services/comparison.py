@@ -60,6 +60,19 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
         return cid
 
 
+def create_by_url(url: str, product_ids: List[str], title: str = "") -> int:
+    """Тот же механизм, что в разведке: скачивает референс по ссылке
+    (Pinterest пин / IG-пост) вместо загрузки файла руками."""
+    from . import recon
+    reel_id = recon.add_reel_by_url(url.strip())
+    if not reel_id:
+        raise ValueError("не удалось разобрать ссылку — проверь URL Pinterest/IG")
+    frames = sorted((config.MEDIA_DIR / "frames" / str(reel_id)).glob("f*.jpg"))
+    if not frames:
+        raise ValueError("не удалось скачать изображение по ссылке")
+    return create(frames[0].read_bytes(), frames[0].name, product_ids, title)
+
+
 def list_all() -> List[dict]:
     with session_scope() as s:
         rows = s.query(Comparison).order_by(Comparison.id.desc()).all()
