@@ -496,10 +496,12 @@ def suggest_overlay_text(post_id: int) -> dict:
         if ctx:
             brief += "\n\n" + ctx
     if not is_carousel:
-        # одиночная картинка (пост/Reels) — свайпать/сохранять карусель некуда,
-        # только цепляющий заголовок + короткая выгода, без "ЛИСТАЙ"/"СОХРАНИ"
+        # одиночная картинка (пост/Reels) — как раньше: ТОЛЬКО жирный заголовок-крючок.
+        # Ни подзаголовка, ни тега, ни дисклеймера на самой картинке — дисклеймер
+        # и так есть в тексте подписи поста, дублировать на фото не нужно.
         brief += ("\n\nЭто ОДИНОЧНАЯ картинка (не карусель, публикуется как Reels/фото). "
-                  "Тег-призыв НЕ нужен вообще — оставь его пустой строкой.")
+                  "Нужен ТОЛЬКО заголовок-крючок. Подзаголовок, тег и дисклеймер НЕ нужны — "
+                  "оставь их пустыми строками.")
     client = anthropic.Anthropic()
     resp = client.messages.parse(
         model=config.CLAUDE_MODEL, max_tokens=600, system=_OVERLAY_SYSTEM,
@@ -507,8 +509,10 @@ def suggest_overlay_text(post_id: int) -> dict:
         output_format=OverlayText,
     )
     o = resp.parsed_output
+    if not is_carousel:
+        return {"headline": o.headline, "subtitle": "", "tag": "", "disclaimer": ""}
     return {"headline": o.headline, "subtitle": o.subtitle,
-            "tag": (o.tag or overlay.DEFAULT_TAG) if is_carousel else "", "disclaimer": o.disclaimer}
+            "tag": o.tag or overlay.DEFAULT_TAG, "disclaimer": o.disclaimer}
 
 
 def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,
