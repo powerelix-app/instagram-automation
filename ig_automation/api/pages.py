@@ -770,7 +770,6 @@ def post_manual_pack(request: Request, post_id: int, _: bool = Depends(require_u
     """ZIP для ручной публикации: слайды по порядку + готовые подписи (IG / TG / VK)."""
     import io
     import zipfile
-    from ..db.models import PostAsset
     from ..services.publisher import _full_caption
     from ..services.tg_crosspost import _clean_caption
     from ..services.vk_crosspost import _vk_caption
@@ -780,12 +779,9 @@ def post_manual_pack(request: Request, post_id: int, _: bool = Depends(require_u
         post = s.get(Post, post_id)
         if not post:
             return RedirectResponse("/posts?msg=" + quote("пост не найден"), status_code=303)
-        assets = (s.query(PostAsset)
-                  .filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
-                  .order_by(PostAsset.ord).all())
-        paths = [config.DATA_DIR / a.path.lstrip("/") for a in assets]
         caption, hashtags, product_id = post.caption or "", post.hashtags, post.product_id
 
+    paths = [config.DATA_DIR / a.path.lstrip("/") for a in generator.get_publish_assets(post_id)]
     paths = [p for p in paths if p.exists()]
     if not paths:
         return RedirectResponse(f"/post/{post_id}?msg=" + quote("нет картинок — сгенерируй визуал"),
