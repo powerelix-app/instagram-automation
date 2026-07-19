@@ -274,7 +274,9 @@ def generate_carousel(post_id: int, slides: int = 4) -> int:
 
 class TextOut(BaseModel):
     caption: str = Field(description="Готовая подпись к посту на русском, с эмодзи и абзацами, без хэштегов в конце")
-    hashtags: List[str] = Field(description="8-15 релевантных хэштегов на русском без решёток")
+    hashtags: List[str] = Field(description="РОВНО 5 самых релевантных хэштегов на русском без "
+                                "решёток — Instagram сейчас режет охват по большему числу тегов, "
+                                "меньше и точнее работает лучше, чем длинный список")
     cta: str = Field(description="Короткий призыв к действию")
 
 

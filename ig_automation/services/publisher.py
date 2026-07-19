@@ -20,7 +20,9 @@ log = logging.getLogger(__name__)
 
 
 def _full_caption(caption: str, hashtags) -> str:
-    tags = " ".join(f"#{h.lstrip('#')}" for h in (hashtags or []))
+    # Instagram режет охват постов с длинным хвостом тегов — берём только первые 5,
+    # даже если в БД у старого поста их сохранилось больше.
+    tags = " ".join(f"#{h.lstrip('#')}" for h in (hashtags or [])[:5])
     return (caption or "").strip() + ("\n\n" + tags if tags else "")
 
 
