@@ -139,9 +139,11 @@ def status(request: Request, _: bool = Depends(require_user)):
 # ── Фаза 2: Разведка ──
 
 @router.get("/recon", response_class=HTMLResponse)
-def recon_page(request: Request, topic: str = "", show: str = "", lang: str = "", msg: str = "", _: bool = Depends(require_user)):
+def recon_page(request: Request, topic: str = "", show: str = "", lang: str = "", sort: str = "",
+              msg: str = "", _: bool = Depends(require_user)):
     topics = recon.list_topics()
     include = show == "all"  # показать отсеянные AI-фильтром
+    sel_sort = sort if sort in ("views", "new", "old") else "views"
     # "" → последняя тема; "__all__" → все темы вперемешку
     if topic == "__all__":
         sel, filt = "__all__", None
@@ -152,8 +154,8 @@ def recon_page(request: Request, topic: str = "", show: str = "", lang: str = ""
         request, "recon.html",
         _ctx(
             request,
-            reels=recon.list_reels(filt, include_irrelevant=include, lang=lang),
-            topics=topics, sel_topic=sel, show_all=include, sel_lang=lang,
+            reels=recon.list_reels(filt, include_irrelevant=include, lang=lang, sort=sel_sort),
+            topics=topics, sel_topic=sel, show_all=include, sel_lang=lang, sel_sort=sel_sort,
             irrelevant_count=recon.count_irrelevant(filt), msg=msg,
             products=catalog_svc.all_with_links(),
         ),

@@ -61,13 +61,24 @@
 </div>
 {% endif %}
 
-<div class="flex items-center gap-2 flex-wrap mb-4 text-sm">
+<div class="flex items-center gap-2 flex-wrap mb-2 text-sm">
   <span class="text-slate-400">Язык:</span>
-  <a href="/recon?topic={{ sel_topic|urlencode }}{% if show_all %}&show=all{% endif %}"
+  <a href="/recon?topic={{ sel_topic|urlencode }}{% if show_all %}&show=all{% endif %}{% if sel_sort != 'views' %}&sort={{ sel_sort }}{% endif %}"
      class="px-2.5 py-1 rounded-full {% if not sel_lang %}bg-slate-800 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">🌐 все</a>
-  <a href="/recon?topic={{ sel_topic|urlencode }}&lang=ru{% if show_all %}&show=all{% endif %}"
+  <a href="/recon?topic={{ sel_topic|urlencode }}&lang=ru{% if show_all %}&show=all{% endif %}{% if sel_sort != 'views' %}&sort={{ sel_sort }}{% endif %}"
      class="px-2.5 py-1 rounded-full {% if sel_lang == 'ru' %}bg-blue-600 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">🇷🇺 русские</a>
   <span class="text-xs text-slate-400">иностранные — для механик; основа — русские</span>
+</div>
+
+<div class="flex items-center gap-2 flex-wrap mb-4 text-sm">
+  <span class="text-slate-400">Сортировка:</span>
+  <a href="/recon?topic={{ sel_topic|urlencode }}{% if show_all %}&show=all{% endif %}{% if sel_lang %}&lang={{ sel_lang }}{% endif %}"
+     class="px-2.5 py-1 rounded-full {% if sel_sort == 'views' %}bg-slate-800 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">🔥 по просмотрам</a>
+  <a href="/recon?topic={{ sel_topic|urlencode }}&sort=new{% if show_all %}&show=all{% endif %}{% if sel_lang %}&lang={{ sel_lang }}{% endif %}"
+     class="px-2.5 py-1 rounded-full {% if sel_sort == 'new' %}bg-slate-800 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">🆕 новые сверху</a>
+  <a href="/recon?topic={{ sel_topic|urlencode }}&sort=old{% if show_all %}&show=all{% endif %}{% if sel_lang %}&lang={{ sel_lang }}{% endif %}"
+     class="px-2.5 py-1 rounded-full {% if sel_sort == 'old' %}bg-slate-800 text-white{% else %}bg-slate-100 text-slate-600 hover:bg-slate-200{% endif %}">🕓 старые сверху</a>
+  <span class="text-xs text-slate-400">у пинов/ручных ссылок просмотров нет — для них удобнее «новые сверху»</span>
 </div>
 
 {% if irrelevant_count and not show_all %}

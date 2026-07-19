@@ -249,11 +249,20 @@ def count_irrelevant(topic: Optional[str] = None) -> int:
         return q.count()
 
 
+_SORT_COLUMNS = {
+    "views": lambda: TrendReel.play_count.desc(),
+    "new": lambda: TrendReel.id.desc(),
+    "old": lambda: TrendReel.id.asc(),
+}
+
+
 def list_reels(topic: Optional[str] = None, include_irrelevant: bool = False,
-               lang: str = "") -> List[dict]:
-    """Список роликов для UI, по убыванию просмотров. По умолчанию — только
-    релевантные нише (AI-фильтр); include_irrelevant=True показывает и отсеянные;
-    lang="ru" → только русскоязычные."""
+               lang: str = "", sort: str = "views") -> List[dict]:
+    """Список роликов для UI. По умолчанию — по убыванию просмотров (sort="views");
+    "new" — новые сверху, "old" — старые сверху (полезно для Pinterest-пинов и
+    роликов по прямой ссылке, у которых просмотров нет — они иначе сваливаются
+    в кучу без порядка). Только релевантные нише (AI-фильтр); include_irrelevant=True
+    показывает и отсеянные; lang="ru" → только русскоязычные."""
     with session_scope() as s:
         q = s.query(TrendReel)
         if topic:
@@ -262,7 +271,8 @@ def list_reels(topic: Optional[str] = None, include_irrelevant: bool = False,
             q = q.filter(TrendReel.relevant.is_(True))
         if lang:
             q = q.filter(TrendReel.lang == lang)
-        reels = q.order_by(TrendReel.play_count.desc()).all()
+        order = _SORT_COLUMNS.get(sort, _SORT_COLUMNS["views"])()
+        reels = q.order_by(order).all()
         analyzed_ids = {a.trend_reel_id for a in s.query(HookAnalysis.trend_reel_id).all()}
         out = []
         for r in reels:
