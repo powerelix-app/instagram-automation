@@ -18,7 +18,9 @@
     </select>
     <select name="model_key" class="text-sm border rounded px-3 py-2">
       <option value="">— без человека (только банка) —</option>
-      {% for m in models %}<option value="{{ m.key }}">👤 {{ m.name }}</option>{% endfor %}
+      {# у основной модели ключ пустой — коллизия с «без человека»; шлём sentinel
+         "default", model_by_key() на неизвестный ключ падает на основную #}
+      {% for m in models %}<option value="{{ m.key or 'default' }}">👤 {{ m.name }}</option>{% endfor %}
     </select>
   </div>
   <textarea name="theme" rows="2" placeholder="Описание сцены/настроения фона (напр. «мягкий градиент лайм→мята, плавные волны света»). Можно оставить пустым, если приложен референс."
