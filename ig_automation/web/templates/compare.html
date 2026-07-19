@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Сравнение{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-1">⚖️ Сравнение</h1>
+<p class="text-slate-500 mb-5 text-sm">Кидаешь референс (напр. с Pinterest — сравнительная инфографика «N товаров в одном кадре»),
+  отмечаешь наши товары — заводит фото под референс и накладывает чек-листы пользы + артикулы WB поверх (текст не AI, отдельным слоем — не коверкает буквы).</p>
+
+{% if msg %}<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-2 mb-4 text-sm">{{ msg }}</div>{% endif %}
+
+<form action="/compare/new" method="post" enctype="multipart/form-data" class="bg-white border rounded-xl p-4 mb-6 space-y-3">
+  <div class="flex items-center gap-3 flex-wrap">
+    <input type="file" name="file" accept="image/*" required class="text-sm border rounded px-3 py-2">
+    <input type="text" name="title" placeholder="название (необязательно)" class="text-sm border rounded px-3 py-2 flex-1 min-w-[180px]">
+  </div>
+  <div>
+    <div class="text-xs text-slate-500 mb-1">Товары в сравнение (2–6, порядок = слева направо):</div>
+    <div class="flex flex-wrap gap-2">
+      {% for p in products %}
+      <label class="flex items-center gap-1.5 text-sm border rounded-full px-3 py-1.5 hover:bg-slate-50 cursor-pointer">
+        <input type="checkbox" name="product_ids" value="{{ p.id }}"> {{ p.name }}
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  <button class="bg-slate-900 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-sm">🎨 Собрать сравнение</button>
+</form>
+
+{% if not items %}
+<div class="text-slate-400 text-sm">Пока пусто.</div>
+{% endif %}
+
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  {% for it in items %}
+  <a href="/compare/{{ it.id }}" class="block bg-white border rounded-xl overflow-hidden hover:border-blue-300">
+    <div class="aspect-[4/5] bg-slate-100 flex items-center justify-center">
+      {% if it.output_path %}<img src="{{ it.output_path }}" class="w-full h-full object-cover">
+      {% elif it.ref_path %}<img src="{{ it.ref_path }}" class="w-full h-full object-cover opacity-60">
+      {% else %}<span class="text-3xl text-slate-300">🖼️</span>{% endif %}
+    </div>
+    <div class="p-2">
+      <div class="text-[10px] mb-1">
+        <span class="rounded px-1.5 py-0.5 {% if it.gen_status == 'done' %}bg-emerald-100 text-emerald-700{% elif it.gen_status == 'error' %}bg-red-100 text-red-700{% elif it.gen_status %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-600{% endif %}">{{ it.gen_status or "новое" }}</span>
+      </div>
+      <div class="text-xs font-medium line-clamp-2">{{ it.title or (it.product_ids|length ~ " товара") }}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

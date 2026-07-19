@@ -77,6 +77,7 @@ def _migrate(engine) -> None:
         ],
         "gen_jobs": [
             ("post_id", "INTEGER"),
+            ("comparison_id", "INTEGER"),
         ],
         "deals": [
             ("last_touch_at", "DATETIME"),

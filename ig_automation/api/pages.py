@@ -21,6 +21,7 @@ from ..services import catalog as catalog_svc
 from ..services import ideas as ideas_svc
 from ..services import bloggers as bloggers_svc
 from ..services import compliance, generator, insights, planner, publisher, recon, reels, tokens
+from ..services import comparison as comparison_svc
 from .auth import auth_disabled, require_user
 
 log = logging.getLogger(__name__)
@@ -964,3 +965,50 @@ def post_schedule(request: Request, post_id: int, when: str = Form(...),
     except Exception as e:
         msg = f"Неверная дата: {e}"
     return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
+# ── Сравнение (N товаров в один кадр по референсу) ──
+
+@router.get("/compare", response_class=HTMLResponse)
+def compare_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(
+        request, "compare.html",
+        _ctx(request, items=comparison_svc.list_all(), products=catalog_svc.all_with_links(), msg=msg),
+    )
+
+
+@router.post("/compare/new")
+async def compare_new(request: Request, file: UploadFile = File(...),
+                      product_ids: List[str] = Form(...), title: str = Form(""),
+                      _: bool = Depends(require_user)):
+    try:
+        data = await file.read()
+        cid = comparison_svc.create(data, file.filename or "ref.jpg", product_ids, title)
+        comparison_svc.enqueue(cid)
+        msg = "Собираю сравнение — обнови страницу через минуту-две"
+    except Exception as e:
+        log.warning("compare create failed: %s", e)
+        msg = f"Ошибка: {e}"
+        return RedirectResponse(f"/compare?msg={quote(msg)}", status_code=303)
+    return RedirectResponse(f"/compare/{cid}?msg={quote(msg)}", status_code=303)
+
+
+@router.get("/compare/{cid}", response_class=HTMLResponse)
+def compare_detail(request: Request, cid: int, msg: str = "", _: bool = Depends(require_user)):
+    item = comparison_svc.get(cid)
+    if not item:
+        return RedirectResponse("/compare?msg=" + quote("не найдено"), status_code=303)
+    return templates.TemplateResponse(request, "compare_detail.html", _ctx(request, item=item, msg=msg))
+
+
+@router.post("/compare/{cid}/regenerate")
+def compare_regenerate(request: Request, cid: int, _: bool = Depends(require_user)):
+    ok = comparison_svc.enqueue(cid)
+    msg = "Перегенерирую — обнови через минуту-две" if ok else "Уже идёт генерация — подожди"
+    return RedirectResponse(f"/compare/{cid}?msg=" + quote(msg), status_code=303)
+
+
+@router.post("/compare/{cid}/delete")
+def compare_delete(request: Request, cid: int, _: bool = Depends(require_user)):
+    comparison_svc.delete(cid)
+    return RedirectResponse("/compare?msg=" + quote("Удалено"), status_code=303)

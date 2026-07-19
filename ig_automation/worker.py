@@ -38,7 +38,7 @@ def _take_next():
             return None
         j.status = "running"
         j.started_at = datetime.utcnow()
-        return (j.id, j.sb_id, j.post_id, j.kind, j.only)
+        return (j.id, j.sb_id, j.post_id, j.comparison_id, j.kind, j.only)
 
 
 def _finish(job_id: int, status: str, error: str = "") -> None:
@@ -61,10 +61,14 @@ def run() -> None:
         if not job:
             time.sleep(POLL_SEC)
             continue
-        job_id, sb_id, post_id, kind, only = job
-        log.info("job %s: %s sb=%s post=%s only=%s", job_id, kind, sb_id, post_id, only)
+        job_id, sb_id, post_id, comparison_id, kind, only = job
+        log.info("job %s: %s sb=%s post=%s cmp=%s only=%s", job_id, kind, sb_id, post_id, comparison_id, only)
         try:
-            producer.execute_job(kind, sb_id=sb_id, post_id=post_id, only=only)
+            if kind == "comparison":
+                from .services import comparison
+                comparison.execute(comparison_id)
+            else:
+                producer.execute_job(kind, sb_id=sb_id, post_id=post_id, only=only)
             _finish(job_id, "done")
             log.info("job %s done", job_id)
         except Exception as e:  # execute_job уже поставил status=error раскадровке

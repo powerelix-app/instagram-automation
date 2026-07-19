@@ -167,6 +167,21 @@ class PostAsset(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class Comparison(Base):
+    """«Сделай похожий» для сравнительных инфографик (N товаров в один кадр):
+    грузишь референс (напр. с Pinterest), выбираешь наши товары — заводит фото
+    под референс и накладывает чек-листы/артикулы поверх (не AI-текстом, Pillow)."""
+    __tablename__ = "comparisons"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    title: Mapped[str] = mapped_column(String(128), default="")
+    ref_path: Mapped[str] = mapped_column(String(512), default="")
+    product_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # ["5","2","11"]
+    gen_status: Mapped[str] = mapped_column(String(64), default="")
+    gen_error: Mapped[str] = mapped_column(Text, default="")
+    output_path: Mapped[str] = mapped_column(String(512), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
 class Blogger(Base):
     """UGC-блогер для охвата (движок Б). Источник нишевого контента/рекламы."""
     __tablename__ = "bloggers"
@@ -271,7 +286,8 @@ class GenJob(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     sb_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для раскадровок
     post_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для постов
-    kind: Mapped[str] = mapped_column(String(20))  # produce|stills|clips|assemble|post_*
+    comparison_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для сравнений
+    kind: Mapped[str] = mapped_column(String(20))  # produce|stills|clips|assemble|post_*|comparison
     only: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # индекс кадра / кол-во слайдов
     status: Mapped[str] = mapped_column(String(12), default="queued", index=True)  # queued|running|done|failed
     error: Mapped[str] = mapped_column(Text, default="")

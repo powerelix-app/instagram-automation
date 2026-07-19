@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Сравнение #{{ item.id }}{% endblock %}
+{% block content %}
+<a href="/compare" class="text-blue-600 text-sm hover:underline">← К сравнениям</a>
+<div class="flex items-center gap-2 mt-2 mb-4 flex-wrap">
+  <h1 class="text-2xl font-semibold">⚖️ Сравнение #{{ item.id }}</h1>
+  <span class="text-xs rounded px-2 py-0.5 {% if item.gen_status == 'done' %}bg-emerald-100 text-emerald-700{% elif item.gen_status == 'error' %}bg-red-100 text-red-700{% else %}bg-amber-100 text-amber-700{% endif %}">{{ item.gen_status or "новое" }}</span>
+</div>
+
+{% if msg %}<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-2 mb-4 text-sm">{{ msg }}</div>{% endif %}
+{% if item.gen_status and item.gen_status not in ('done', 'error') %}
+<meta http-equiv="refresh" content="10">
+<div class="bg-violet-50 border border-violet-200 rounded-xl p-4 mb-4 text-sm">⏳ {{ item.gen_status }} <span class="text-slate-400">(страница обновляется сама)</span></div>
+{% elif item.gen_status == 'error' %}
+<div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm">❌ <b>Ошибка:</b> {{ item.gen_error }}</div>
+{% endif %}
+
+<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+  <div class="bg-white border rounded-xl p-3">
+    <div class="text-xs text-slate-500 mb-2">📎 Референс</div>
+    {% if item.ref_path %}<img src="{{ item.ref_path }}" class="w-full rounded border">{% endif %}
+  </div>
+  <div class="bg-white border rounded-xl p-3">
+    <div class="text-xs text-slate-500 mb-2">✅ Результат</div>
+    {% if item.output_path %}
+      <img src="{{ item.output_path }}?r={{ range(1, 999999) | random }}" class="w-full rounded border">
+      <a href="{{ item.output_path }}" download class="text-xs text-blue-600 hover:underline mt-2 inline-block">⬇️ скачать</a>
+    {% else %}
+      <div class="aspect-[4/5] bg-slate-100 rounded flex items-center justify-center text-slate-300 text-sm">пока нет</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="mt-4 flex items-center gap-3">
+  <form action="/compare/{{ item.id }}/regenerate" method="post">
+    <button class="text-sm bg-violet-600 hover:bg-violet-500 text-white rounded px-4 py-2">🔄 Перегенерировать</button>
+  </form>
+  <form action="/compare/{{ item.id }}/delete" method="post" onsubmit="return confirm('Удалить безвозвратно?')">
+    <button class="text-sm border rounded px-4 py-2 hover:bg-slate-50 text-red-600">🗑 Удалить</button>
+  </form>
+</div>
+{% endblock %}
