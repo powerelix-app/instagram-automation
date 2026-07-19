@@ -80,6 +80,10 @@ def _migrate(engine) -> None:
             ("comparison_id", "INTEGER"),
             ("seamless_id", "INTEGER"),
         ],
+        "seamless_carousels": [
+            ("model_key", "VARCHAR DEFAULT ''"),
+            ("slide_scenes", "JSON"),
+        ],
         "deals": [
             ("last_touch_at", "DATETIME"),
             ("next_followup_at", "DATETIME"),

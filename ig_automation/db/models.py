@@ -191,6 +191,8 @@ class SeamlessCarousel(Base):
     product_id: Mapped[str] = mapped_column(String(32), default="")
     slides_n: Mapped[int] = mapped_column(Integer, default=5)
     theme: Mapped[str] = mapped_column(Text, default="")  # описание сцены/настроения фона
+    model_key: Mapped[str] = mapped_column(String(64), default="")  # лицо бренда в кадре ("" = без человека)
+    slide_scenes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # действия по слайдам
     ref_path: Mapped[str] = mapped_column(String(512), default="")  # опц. референс стиля
     headlines: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # опц. текст по слайдам
     gen_status: Mapped[str] = mapped_column(String(64), default="")

@@ -1026,21 +1026,25 @@ def compare_delete(request: Request, cid: int, _: bool = Depends(require_user)):
 def seamless_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
     return templates.TemplateResponse(
         request, "seamless.html",
-        _ctx(request, items=seamless_svc.list_all(), products=catalog_svc.all_with_links(), msg=msg),
+        _ctx(request, items=seamless_svc.list_all(), products=catalog_svc.all_with_links(),
+             models=brand_svc.list_models(), msg=msg),
     )
 
 
 @router.post("/seamless/new")
 async def seamless_new(request: Request, product_id: str = Form(...), slides_n: int = Form(5),
                        theme: str = Form(""), headlines: str = Form(""),
+                       model_key: str = Form(""), slide_scenes: str = Form(""),
                        file: Optional[UploadFile] = File(None), _: bool = Depends(require_user)):
     try:
         lines = [ln.strip() for ln in headlines.splitlines() if ln.strip()]
+        scenes = [ln.strip() for ln in slide_scenes.splitlines() if ln.strip()]
         ref_bytes, ref_name = None, ""
         if file is not None and file.filename:
             ref_bytes = await file.read()
             ref_name = file.filename
-        cid = seamless_svc.create(product_id, slides_n, theme, ref_bytes, ref_name, lines)
+        cid = seamless_svc.create(product_id, slides_n, theme, ref_bytes, ref_name, lines,
+                                  model_key=model_key, slide_scenes=scenes)
         seamless_svc.enqueue(cid)
         msg = "Собираю карусель — обнови страницу через пару минут"
     except Exception as e:

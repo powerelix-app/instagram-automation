@@ -16,8 +16,14 @@
     <select name="slides_n" class="text-sm border rounded px-3 py-2">
       {% for n in range(3, 8) %}<option value="{{ n }}" {% if n == 5 %}selected{% endif %}>{{ n }} слайдов</option>{% endfor %}
     </select>
+    <select name="model_key" class="text-sm border rounded px-3 py-2">
+      <option value="">— без человека (только банка) —</option>
+      {% for m in models %}<option value="{{ m.key }}">👤 {{ m.name }}</option>{% endfor %}
+    </select>
   </div>
   <textarea name="theme" rows="2" placeholder="Описание сцены/настроения фона (напр. «мягкий градиент лайм→мята, плавные волны света»). Можно оставить пустым, если приложен референс."
+           class="w-full text-sm border rounded px-3 py-2"></textarea>
+  <textarea name="slide_scenes" rows="3" placeholder="Действия модели по слайдам, одно на строку (только если выбран человек; пусто — разные позы сами: держит банку, указывает, улыбается…)"
            class="w-full text-sm border rounded px-3 py-2"></textarea>
   <textarea name="headlines" rows="3" placeholder="Заголовки по слайдам, один на строку (необязательно, по порядку)"
            class="w-full text-sm border rounded px-3 py-2"></textarea>

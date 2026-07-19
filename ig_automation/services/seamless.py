@@ -27,7 +27,8 @@ log = logging.getLogger(__name__)
 
 def create(product_id: str, slides_n: int, theme: str,
           ref_bytes: Optional[bytes] = None, ref_filename: str = "",
-          headlines: Optional[List[str]] = None) -> int:
+          headlines: Optional[List[str]] = None, model_key: str = "",
+          slide_scenes: Optional[List[str]] = None) -> int:
     if not (3 <= slides_n <= 7):
         raise ValueError("слайдов должно быть от 3 до 7")
     if not theme.strip() and not ref_bytes:
@@ -36,7 +37,8 @@ def create(product_id: str, slides_n: int, theme: str,
     dest_dir.mkdir(parents=True, exist_ok=True)
     with session_scope() as s:
         c = SeamlessCarousel(product_id=product_id, slides_n=slides_n, theme=theme.strip(),
-                             headlines=headlines or None)
+                             headlines=headlines or None, model_key=model_key or "",
+                             slide_scenes=slide_scenes or None)
         s.add(c)
         s.flush()
         cid = c.id
@@ -66,6 +68,8 @@ def get(cid: int) -> Optional[dict]:
         return {
             "id": r.id, "product_id": r.product_id, "slides_n": r.slides_n,
             "theme": r.theme, "ref_path": r.ref_path, "headlines": r.headlines or [],
+            "model_key": getattr(r, "model_key", "") or "",
+            "slide_scenes": getattr(r, "slide_scenes", None) or [],
             "gen_status": r.gen_status, "gen_error": r.gen_error,
             "output_paths": r.output_paths or [],
         }
@@ -126,12 +130,31 @@ def execute(cid: int) -> None:
         product_id, n, theme = c.product_id, c.slides_n, c.theme
         ref_path = (config.DATA_DIR / c.ref_path.lstrip("/")) if c.ref_path else None
         headlines = list(c.headlines or [])
+        model_key = getattr(c, "model_key", "") or ""
+        slide_scenes = list(getattr(c, "slide_scenes", None) or [])
         c.gen_status = "генерация фона…"
 
     bottle = producer._product_ref(product_id)
     if not bottle:
         _fail(cid, f"нет фото товара {product_id} в каталоге")
         return
+
+    face = None
+    if model_key:
+        from . import brand
+        face = brand.model_by_key(model_key)
+
+    # дефолтные действия по слайдам, если человек в кадре, а сцены не заданы —
+    # разные позы/эмоции одной модели (как в референс-каруселях: живая история)
+    _DEFAULT_SCENES = [
+        "радостно держит банку двумя руками перед собой, широкая улыбка в камеру",
+        "указывает пальцем на банку, приподняв брови — жест «вот оно!»",
+        "держит банку у щеки, довольно улыбается с закрытыми глазами",
+        "показывает большой палец вверх одной рукой, банка в другой руке",
+        "подносит банку ближе к камере на вытянутой руке, этикеткой вперёд",
+        "смеётся, слегка запрокинув голову, банка прижата к груди",
+        "разводит руки в приглашающем жесте, банка стоит рядом",
+    ]
 
     # ── 1) один широкий фон, без продукта и без текста ──
     bg_prompt = (
@@ -185,34 +208,59 @@ def execute(cid: int) -> None:
         strip_path = tmp_dir / f"bg_{i}.png"
         strip.save(strip_path)
 
-        add_prompt = (
-            "ПЕРВОЕ изображение — базовый фон, менять его ЗАПРЕЩЕНО (тот же свет, цвет, "
-            "композиция, пиксели фона не трогать). Добавь ТОЛЬКО наш продукт из ВТОРОГО "
-            "изображения — форма банки, крышка, цвет и этикетка СТРОГО как на референсе, "
-            "этикетка чёткая и читаемая, банка целиком в кадре. "
-            # жёсткая геометрия: одинаковый размер/позиция на ВСЕХ слайдах серии — иначе
-            # при свайпе банка «прыгает» (модель сама выбирает масштаб на каждом вызове)
-            "РАЗМЕР И ПОЗИЦИЯ СТРОГО: банка занимает РОВНО 45% высоты кадра, "
-            "стоит точно по горизонтальному центру, нижний край банки — на 12% выше "
-            "нижнего края кадра. Мягкая тень под банкой, свет банки совпадает со светом фона. "
-            "Без текста, букв и надписей на изображении, кроме этикетки банки."
-        )
+        if face:
+            scene = (slide_scenes[i] if i < len(slide_scenes) and slide_scenes[i].strip()
+                     else _DEFAULT_SCENES[i % len(_DEFAULT_SCENES)])
+            prev = tmp_dir / f"slide_{i - 1}_clean.png" if i > 0 else None
+            chain = prev is not None and prev.exists()
+            add_prompt = (
+                "ПЕРВОЕ изображение — базовый фон, менять его ЗАПРЕЩЕНО (тот же свет, цвет, "
+                "композиция, пиксели фона не трогать). Добавь в кадр НАШУ модель со ВТОРОГО "
+                "изображения (то же лицо, та же внешность — не меняй человека) и НАШ продукт "
+                "с ТРЕТЬЕГО изображения (форма банки, крышка, цвет и этикетка СТРОГО как на "
+                f"референсе, этикетка чёткая и читаемая). ДЕЙСТВИЕ В КАДРЕ: модель {scene}. "
+                "ГЕОМЕТРИЯ СТРОГО: человек в кадре по пояс, занимает РОВНО 60% высоты кадра, "
+                "стоит по горизонтальному центру, голова не обрезана. "
+                + ("ЧЕТВЁРТОЕ изображение — предыдущий слайд этой же серии: одежда, причёска "
+                   "и макияж модели ДОЛЖНЫ совпадать с ним точь-в-точь. "
+                   if chain else
+                   "Одежда модели: однотонный спортивный топ глубокого тёмно-зелёного цвета, "
+                   "минимализм, без принтов и логотипов. ")
+                + "Свет человека и банки совпадает со светом фона. "
+                "Без текста, букв и надписей на изображении, кроме этикетки банки."
+            )
+            refs_i = [strip_path, face, bottle] + ([prev] if chain else [])
+        else:
+            add_prompt = (
+                "ПЕРВОЕ изображение — базовый фон, менять его ЗАПРЕЩЕНО (тот же свет, цвет, "
+                "композиция, пиксели фона не трогать). Добавь ТОЛЬКО наш продукт из ВТОРОГО "
+                "изображения — форма банки, крышка, цвет и этикетка СТРОГО как на референсе, "
+                "этикетка чёткая и читаемая, банка целиком в кадре. "
+                # жёсткая геометрия: одинаковый размер/позиция на ВСЕХ слайдах серии — иначе
+                # при свайпе банка «прыгает» (модель сама выбирает масштаб на каждом вызове)
+                "РАЗМЕР И ПОЗИЦИЯ СТРОГО: банка занимает РОВНО 45% высоты кадра, "
+                "стоит точно по горизонтальному центру, нижний край банки — на 12% выше "
+                "нижнего края кадра. Мягкая тень под банкой, свет банки совпадает со светом фона. "
+                "Без текста, букв и надписей на изображении, кроме этикетки банки."
+            )
+            refs_i = [strip_path, bottle]
         try:
-            slide_bytes = producer.gen_image_gpt(add_prompt, [strip_path, bottle], aspect="4:5")
+            slide_bytes = producer.gen_image_gpt(add_prompt, refs_i, aspect="4:5")
         except Exception as e:
             _fail(cid, f"слайд {i + 1}: продукт не добавился: {e}")
             return
 
         slide = Image.open(io.BytesIO(slide_bytes)).convert("RGB")
+        # чистый слайд (без текста) сохраняем всегда — следующий слайд ссылается
+        # на него для консистентности одежды/причёски модели
+        clean_path = tmp_dir / f"slide_{i}_clean.png"
+        slide.save(clean_path)
+        out_path = config.MEDIA_DIR / "seamless" / f"{cid}_{i}.png"
         if i < len(headlines) and headlines[i].strip():
-            tmp_headline_src = tmp_dir / f"slide_{i}_clean.png"
-            slide.save(tmp_headline_src)
-            out_path = config.MEDIA_DIR / "seamless" / f"{cid}_{i}.png"
-            overlay.render_cover(tmp_headline_src, headline=headlines[i].strip(),
+            overlay.render_cover(clean_path, headline=headlines[i].strip(),
                                  subtitle="", tag="", disclaimer="",
                                  out_path=str(out_path), ratio="4:5")
         else:
-            out_path = config.MEDIA_DIR / "seamless" / f"{cid}_{i}.png"
             slide.save(out_path)
         out_paths.append(f"/media/seamless/{out_path.name}")
 
