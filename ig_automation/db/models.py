@@ -182,6 +182,23 @@ class Comparison(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
+class SeamlessCarousel(Base):
+    """Бесшовная карусель (техника SYNTX.AI): один широкий фон-панорама режется
+    на N слайдов — фон визуально перетекает при свайпе. Продукт добавляется
+    отдельным edit-вызовом поверх каждого среза (фон не трогаем)."""
+    __tablename__ = "seamless_carousels"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    product_id: Mapped[str] = mapped_column(String(32), default="")
+    slides_n: Mapped[int] = mapped_column(Integer, default=5)
+    theme: Mapped[str] = mapped_column(Text, default="")  # описание сцены/настроения фона
+    ref_path: Mapped[str] = mapped_column(String(512), default="")  # опц. референс стиля
+    headlines: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # опц. текст по слайдам
+    gen_status: Mapped[str] = mapped_column(String(64), default="")
+    gen_error: Mapped[str] = mapped_column(Text, default="")
+    output_paths: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
 class Blogger(Base):
     """UGC-блогер для охвата (движок Б). Источник нишевого контента/рекламы."""
     __tablename__ = "bloggers"
@@ -287,7 +304,8 @@ class GenJob(Base):
     sb_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для раскадровок
     post_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для постов
     comparison_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для сравнений
-    kind: Mapped[str] = mapped_column(String(20))  # produce|stills|clips|assemble|post_*|comparison
+    seamless_id: Mapped[Optional[int]] = mapped_column(Integer, index=True, nullable=True)  # для бесшовных каруселей
+    kind: Mapped[str] = mapped_column(String(20))  # produce|stills|clips|assemble|post_*|comparison|seamless
     only: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)  # индекс кадра / кол-во слайдов
     status: Mapped[str] = mapped_column(String(12), default="queued", index=True)  # queued|running|done|failed
     error: Mapped[str] = mapped_column(Text, default="")

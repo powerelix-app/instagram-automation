@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Бесшовная карусель{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-semibold mb-1">🌊 Бесшовная карусель</h1>
+<p class="text-slate-500 mb-5 text-sm">Техника SYNTX.AI: один широкий фон режется на N слайдов — при свайпе фон перетекает без разрыва.
+  Продукт добавляется поверх каждого среза отдельно (фон не трогаем). Апскейл фона при большом числе слайдов — годится под мягкие градиентные/лайфстайл-сцены, не под резкую предметку.</p>
+
+{% if msg %}<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-2 mb-4 text-sm">{{ msg }}</div>{% endif %}
+
+<form action="/seamless/new" method="post" enctype="multipart/form-data" class="bg-white border rounded-xl p-4 mb-6 space-y-3">
+  <div class="flex items-center gap-3 flex-wrap">
+    <select name="product_id" required class="text-sm border rounded px-3 py-2">
+      <option value="">— товар —</option>
+      {% for p in products %}<option value="{{ p.id }}">{{ p.name }}</option>{% endfor %}
+    </select>
+    <select name="slides_n" class="text-sm border rounded px-3 py-2">
+      {% for n in range(3, 8) %}<option value="{{ n }}" {% if n == 5 %}selected{% endif %}>{{ n }} слайдов</option>{% endfor %}
+    </select>
+  </div>
+  <textarea name="theme" rows="2" placeholder="Описание сцены/настроения фона (напр. «мягкий градиент лайм→мята, плавные волны света»). Можно оставить пустым, если приложен референс."
+           class="w-full text-sm border rounded px-3 py-2"></textarea>
+  <textarea name="headlines" rows="3" placeholder="Заголовки по слайдам, один на строку (необязательно, по порядку)"
+           class="w-full text-sm border rounded px-3 py-2"></textarea>
+  <div>
+    <input type="file" name="file" accept="image/*" class="text-sm border rounded px-3 py-2">
+    <span class="text-xs text-slate-400">референс стиля фона (необязательно)</span>
+  </div>
+  <button class="bg-slate-900 hover:bg-slate-700 text-white rounded-lg px-4 py-2 text-sm">🌊 Собрать карусель</button>
+</form>
+
+{% if not items %}<div class="text-slate-400 text-sm">Пока пусто.</div>{% endif %}
+
+<div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+  {% for it in items %}
+  <a href="/seamless/{{ it.id }}" class="block bg-white border rounded-xl overflow-hidden hover:border-blue-300">
+    <div class="aspect-[4/5] bg-slate-100 flex items-center justify-center">
+      {% if it.output_paths %}<img src="{{ it.output_paths[0] }}" class="w-full h-full object-cover">
+      {% else %}<span class="text-3xl text-slate-300">🌊</span>{% endif %}
+    </div>
+    <div class="p-2">
+      <div class="text-[10px] mb-1">
+        <span class="rounded px-1.5 py-0.5 {% if it.gen_status == 'done' %}bg-emerald-100 text-emerald-700{% elif it.gen_status == 'error' %}bg-red-100 text-red-700{% elif it.gen_status %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-600{% endif %}">{{ it.gen_status or "новое" }}</span>
+      </div>
+      <div class="text-xs font-medium line-clamp-2">{{ it.slides_n }} слайдов · {{ it.theme[:40] or "—" }}</div>
+    </div>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

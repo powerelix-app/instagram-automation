@@ -22,6 +22,7 @@ from ..services import ideas as ideas_svc
 from ..services import bloggers as bloggers_svc
 from ..services import compliance, generator, insights, planner, publisher, recon, reels, tokens
 from ..services import comparison as comparison_svc
+from ..services import seamless as seamless_svc
 from .auth import auth_disabled, require_user
 
 log = logging.getLogger(__name__)
@@ -1017,3 +1018,54 @@ def compare_regenerate(request: Request, cid: int, _: bool = Depends(require_use
 def compare_delete(request: Request, cid: int, _: bool = Depends(require_user)):
     comparison_svc.delete(cid)
     return RedirectResponse("/compare?msg=" + quote("Удалено"), status_code=303)
+
+
+# ── Бесшовная карусель (один фон -> N слайдов) ──
+
+@router.get("/seamless", response_class=HTMLResponse)
+def seamless_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(
+        request, "seamless.html",
+        _ctx(request, items=seamless_svc.list_all(), products=catalog_svc.all_with_links(), msg=msg),
+    )
+
+
+@router.post("/seamless/new")
+async def seamless_new(request: Request, product_id: str = Form(...), slides_n: int = Form(5),
+                       theme: str = Form(""), headlines: str = Form(""),
+                       file: Optional[UploadFile] = File(None), _: bool = Depends(require_user)):
+    try:
+        lines = [ln.strip() for ln in headlines.splitlines() if ln.strip()]
+        ref_bytes, ref_name = None, ""
+        if file is not None and file.filename:
+            ref_bytes = await file.read()
+            ref_name = file.filename
+        cid = seamless_svc.create(product_id, slides_n, theme, ref_bytes, ref_name, lines)
+        seamless_svc.enqueue(cid)
+        msg = "Собираю карусель — обнови страницу через пару минут"
+    except Exception as e:
+        log.warning("seamless create failed: %s", e)
+        msg = f"Ошибка: {e}"
+        return RedirectResponse(f"/seamless?msg={quote(msg)}", status_code=303)
+    return RedirectResponse(f"/seamless/{cid}?msg={quote(msg)}", status_code=303)
+
+
+@router.get("/seamless/{cid}", response_class=HTMLResponse)
+def seamless_detail(request: Request, cid: int, msg: str = "", _: bool = Depends(require_user)):
+    item = seamless_svc.get(cid)
+    if not item:
+        return RedirectResponse("/seamless?msg=" + quote("не найдено"), status_code=303)
+    return templates.TemplateResponse(request, "seamless_detail.html", _ctx(request, item=item, msg=msg))
+
+
+@router.post("/seamless/{cid}/regenerate")
+def seamless_regenerate(request: Request, cid: int, _: bool = Depends(require_user)):
+    ok = seamless_svc.enqueue(cid)
+    msg = "Перегенерирую — обнови через пару минут" if ok else "Уже идёт генерация — подожди"
+    return RedirectResponse(f"/seamless/{cid}?msg=" + quote(msg), status_code=303)
+
+
+@router.post("/seamless/{cid}/delete")
+def seamless_delete(request: Request, cid: int, _: bool = Depends(require_user)):
+    seamless_svc.delete(cid)
+    return RedirectResponse("/seamless?msg=" + quote("Удалено"), status_code=303)
