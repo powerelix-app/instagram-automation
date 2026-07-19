@@ -1034,7 +1034,7 @@ def seamless_page(request: Request, msg: str = "", _: bool = Depends(require_use
 @router.post("/seamless/new")
 async def seamless_new(request: Request, product_id: str = Form(...), slides_n: int = Form(5),
                        theme: str = Form(""), headlines: str = Form(""),
-                       model_key: str = Form(""), slide_scenes: str = Form(""),
+                       model_keys: List[str] = Form(default=[]), slide_scenes: str = Form(""),
                        file: Optional[UploadFile] = File(None), _: bool = Depends(require_user)):
     try:
         lines = [ln.strip() for ln in headlines.splitlines() if ln.strip()]
@@ -1043,8 +1043,11 @@ async def seamless_new(request: Request, product_id: str = Form(...), slides_n: 
         if file is not None and file.filename:
             ref_bytes = await file.read()
             ref_name = file.filename
+        keys = [k for k in model_keys if k]
         cid = seamless_svc.create(product_id, slides_n, theme, ref_bytes, ref_name, lines,
-                                  model_key=model_key, slide_scenes=scenes)
+                                  model_key=(keys[0] if len(keys) == 1 else ""),
+                                  model_keys=(keys if len(keys) >= 2 else None),
+                                  slide_scenes=scenes)
         seamless_svc.enqueue(cid)
         msg = "Собираю карусель — обнови страницу через пару минут"
     except Exception as e:

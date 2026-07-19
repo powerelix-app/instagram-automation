@@ -16,12 +16,18 @@
     <select name="slides_n" class="text-sm border rounded px-3 py-2">
       {% for n in range(3, 8) %}<option value="{{ n }}" {% if n == 5 %}selected{% endif %}>{{ n }} слайдов</option>{% endfor %}
     </select>
-    <select name="model_key" class="text-sm border rounded px-3 py-2">
-      <option value="">— без человека (только банка) —</option>
-      {# у основной модели ключ пустой — коллизия с «без человека»; шлём sentinel
-         "default", model_by_key() на неизвестный ключ падает на основную #}
-      {% for m in models %}<option value="{{ m.key or 'default' }}">👤 {{ m.name }}</option>{% endfor %}
-    </select>
+  </div>
+  <div>
+    <div class="text-xs text-slate-500 mb-1">Модели в кадре (никого = только банка; одна = разные позы; 2+ = эстафета — передают банку друг другу через слайды):</div>
+    <div class="flex flex-wrap gap-2">
+      {# у основной модели ключ пустой — шлём sentinel "default",
+         model_by_key() на неизвестный ключ падает на основную #}
+      {% for m in models %}
+      <label class="flex items-center gap-1.5 text-sm border rounded-full px-3 py-1.5 hover:bg-slate-50 cursor-pointer">
+        <input type="checkbox" name="model_keys" value="{{ m.key or 'default' }}"> 👤 {{ m.name }}
+      </label>
+      {% endfor %}
+    </div>
   </div>
   <textarea name="theme" rows="2" placeholder="Описание сцены/настроения фона (напр. «мягкий градиент лайм→мята, плавные волны света»). Можно оставить пустым, если приложен референс."
            class="w-full text-sm border rounded px-3 py-2"></textarea>

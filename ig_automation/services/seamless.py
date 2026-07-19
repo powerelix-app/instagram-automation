@@ -28,7 +28,8 @@ log = logging.getLogger(__name__)
 def create(product_id: str, slides_n: int, theme: str,
           ref_bytes: Optional[bytes] = None, ref_filename: str = "",
           headlines: Optional[List[str]] = None, model_key: str = "",
-          slide_scenes: Optional[List[str]] = None) -> int:
+          slide_scenes: Optional[List[str]] = None,
+          model_keys: Optional[List[str]] = None) -> int:
     if not (3 <= slides_n <= 7):
         raise ValueError("слайдов должно быть от 3 до 7")
     if not theme.strip() and not ref_bytes:
@@ -38,6 +39,7 @@ def create(product_id: str, slides_n: int, theme: str,
     with session_scope() as s:
         c = SeamlessCarousel(product_id=product_id, slides_n=slides_n, theme=theme.strip(),
                              headlines=headlines or None, model_key=model_key or "",
+                             model_keys=model_keys or None,
                              slide_scenes=slide_scenes or None)
         s.add(c)
         s.flush()
@@ -131,6 +133,7 @@ def execute(cid: int) -> None:
         ref_path = (config.DATA_DIR / c.ref_path.lstrip("/")) if c.ref_path else None
         headlines = list(c.headlines or [])
         model_key = getattr(c, "model_key", "") or ""
+        model_keys = list(getattr(c, "model_keys", None) or [])
         slide_scenes = list(getattr(c, "slide_scenes", None) or [])
         c.gen_status = "генерация фона…"
 
@@ -139,10 +142,12 @@ def execute(cid: int) -> None:
         _fail(cid, f"нет фото товара {product_id} в каталоге")
         return
 
-    face = None
-    if model_key:
+    # список лиц: model_keys (2+ = эстафета) либо одиночный model_key
+    keys = model_keys or ([model_key] if model_key else [])
+    faces = []
+    if keys:
         from . import brand
-        face = brand.model_by_key(model_key)
+        faces = [brand.model_by_key("" if k == "default" else k) for k in keys]
 
     # дефолтные действия по слайдам, если человек в кадре, а сцены не заданы —
     # разные позы/эмоции одной модели (как в референс-каруселях: живая история)
@@ -154,6 +159,23 @@ def execute(cid: int) -> None:
         "подносит банку ближе к камере на вытянутой руке, этикеткой вперёд",
         "смеётся, слегка запрокинув голову, банка прижата к груди",
         "разводит руки в приглашающем жесте, банка стоит рядом",
+    ]
+    # эстафета (2+ моделей): банка «передаётся через шов» — в конце слайда уходит
+    # к правому краю, на следующем приходит с левого. Позы по позиции слайда.
+    _RELAY_FIRST = ("держит банку на уровне груди и протягивает её ВПРАВО, к правому краю "
+                    "кадра, обе руки тянутся вправо, взгляд в камеру, улыбка — начинает передачу")
+    _RELAY_RECV = ("принимает банку, протянутую СЛЕВА: обе руки тянутся к левому краю кадра, "
+                   "банка в левой части кадра, радостная улыбка")
+    _RELAY_PASS = ("держит банку и протягивает её дальше ВПРАВО, к правому краю кадра, "
+                   "банка в правой части кадра, смеётся")
+    _RELAY_LAST = ("приняла банку и держит её этикеткой в камеру по центру груди, "
+                   "широкая довольная улыбка — финал эстафеты")
+    # одежда по индексу модели — свой цвет на каждую, чтобы различались
+    _OUTFITS = [
+        "однотонный спортивный топ глубокого тёмно-зелёного цвета",
+        "однотонный кремово-белый спортивный топ",
+        "однотонный графитово-серый спортивный топ",
+        "однотонный тёмно-оливковый спортивный топ",
     ]
 
     # ── 1) один широкий фон, без продукта и без текста ──
@@ -208,11 +230,27 @@ def execute(cid: int) -> None:
         strip_path = tmp_dir / f"bg_{i}.png"
         strip.save(strip_path)
 
-        if face:
-            scene = (slide_scenes[i] if i < len(slide_scenes) and slide_scenes[i].strip()
-                     else _DEFAULT_SCENES[i % len(_DEFAULT_SCENES)])
-            prev = tmp_dir / f"slide_{i - 1}_clean.png" if i > 0 else None
+        if faces:
+            relay = len(faces) >= 2
+            face_idx = i % len(faces)
+            face = faces[face_idx]
+            if i < len(slide_scenes) and slide_scenes[i].strip():
+                scene = slide_scenes[i]
+            elif relay:
+                if i == 0:
+                    scene = _RELAY_FIRST
+                elif i == n - 1:
+                    scene = _RELAY_LAST
+                else:
+                    scene = _RELAY_RECV if i % 2 == 1 else _RELAY_PASS
+            else:
+                scene = _DEFAULT_SCENES[i % len(_DEFAULT_SCENES)]
+            # цепочка одежды: предыдущий слайд ЭТОЙ ЖЕ модели (для эстафеты — через
+            # len(faces) слайдов назад), не просто предыдущий кадр серии
+            prev_i = i - (len(faces) if relay else 1)
+            prev = tmp_dir / f"slide_{prev_i}_clean.png" if prev_i >= 0 else None
             chain = prev is not None and prev.exists()
+            outfit = _OUTFITS[face_idx % len(_OUTFITS)]
             add_prompt = (
                 "ПЕРВОЕ изображение — базовый фон, менять его ЗАПРЕЩЕНО (тот же свет, цвет, "
                 "композиция, пиксели фона не трогать). Добавь в кадр НАШУ модель со ВТОРОГО "
@@ -221,11 +259,10 @@ def execute(cid: int) -> None:
                 f"референсе, этикетка чёткая и читаемая). ДЕЙСТВИЕ В КАДРЕ: модель {scene}. "
                 "ГЕОМЕТРИЯ СТРОГО: человек в кадре по пояс, занимает РОВНО 60% высоты кадра, "
                 "стоит по горизонтальному центру, голова не обрезана. "
-                + ("ЧЕТВЁРТОЕ изображение — предыдущий слайд этой же серии: одежда, причёска "
-                   "и макияж модели ДОЛЖНЫ совпадать с ним точь-в-точь. "
+                + ("ЧЕТВЁРТОЕ изображение — предыдущий кадр С ЭТОЙ ЖЕ моделью: одежда, "
+                   "причёска и макияж ДОЛЖНЫ совпадать с ним точь-в-точь. "
                    if chain else
-                   "Одежда модели: однотонный спортивный топ глубокого тёмно-зелёного цвета, "
-                   "минимализм, без принтов и логотипов. ")
+                   f"Одежда модели: {outfit}, минимализм, без принтов и логотипов. ")
                 + "Свет человека и банки совпадает со светом фона. "
                 "Без текста, букв и надписей на изображении, кроме этикетки банки."
             )

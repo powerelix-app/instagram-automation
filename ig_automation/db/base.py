@@ -82,6 +82,7 @@ def _migrate(engine) -> None:
         ],
         "seamless_carousels": [
             ("model_key", "VARCHAR DEFAULT ''"),
+            ("model_keys", "JSON"),
             ("slide_scenes", "JSON"),
         ],
         "deals": [
