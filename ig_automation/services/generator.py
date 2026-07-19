@@ -235,7 +235,14 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
         if p and p.status == "generating":
             p.status = "review"
         s.flush()
-        return asset.id
+        asset_id = asset.id
+
+    if not extra:  # не для слайдов карусели (extra) — там на разных слайдах нужен разный текст
+        try:
+            apply_text_overlay(post_id, source_asset_id=asset_id)
+        except Exception as e:
+            log.warning("auto-overlay после генерации visual не удался: %s", e)
+    return asset_id
 
 
 _SLIDE_HINTS = [
