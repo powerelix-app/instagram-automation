@@ -645,6 +645,17 @@ def get_post(post_id: int) -> Optional[dict]:
             s.query(PostAsset).filter(PostAsset.post_id == post_id)
             .order_by(PostAsset.ord).all()
         )
+        images = [a for a in assets if a.kind == "image"]
+        # какая картинка РЕАЛЬНО уйдёт в публикацию сейчас (та же логика, что
+        # get_publish_assets) — чтобы бейдж «выбрано» в UI не расходился с фактом
+        effective_selected_id = None
+        if p.format != "carousel" and images:
+            sel_id = getattr(p, "selected_asset_id", None)
+            if sel_id and any(a.id == sel_id for a in images):
+                effective_selected_id = sel_id
+            else:
+                overlays = [a for a in images if a.model == "overlay"]
+                effective_selected_id = (overlays[-1] if overlays else images[-1]).id
         return {
             "id": p.id, "rubric": p.rubric, "product": p.product, "product_id": p.product_id,
             "format": p.format,
@@ -653,10 +664,53 @@ def get_post(post_id: int) -> Optional[dict]:
             "scheduled_at": p.scheduled_at, "ig_media_id": p.ig_media_id,
             "permalink": p.permalink, "error": p.error, "reels_script": p.reels_script,
             "blogger_id": p.blogger_id, "model_key": getattr(p, "model_key", "") or "",
-            "assets": [{"id": a.id, "path": a.path, "model": a.model} for a in assets if a.kind == "image"],
+            "assets": [{"id": a.id, "path": a.path, "model": a.model} for a in images],
             "refs": [{"id": a.id, "path": a.path} for a in assets if a.kind == "ref"],
             "videos": [{"id": a.id, "path": a.path} for a in assets if a.kind == "video"],
+            "selected_asset_id": getattr(p, "selected_asset_id", None),
+            "effective_selected_id": effective_selected_id,
         }
+
+
+def select_post_image(post_id: int, asset_id: int) -> bool:
+    """Помечает конкретную картинку как «ту самую» для публикации (photo/reels —
+    когда сгенерировано несколько вариантов, иначе непонятно, какую выкладывать)."""
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        asset = s.get(PostAsset, asset_id)
+        if not post or not asset or asset.post_id != post_id or asset.kind != "image":
+            return False
+        post.selected_asset_id = asset_id
+        return True
+
+
+def get_publish_assets(post_id: int) -> List[PostAsset]:
+    """Единый источник правды для publisher/vk_crosspost/tg_crosspost/manual-pack:
+    какие именно картинки идут в публикацию.
+    - carousel: ВСЕ картинки по порядку (как и раньше).
+    - photo/reels: РОВНО ОДНА — selected_asset_id, если выбрана явно; иначе
+      последняя обложка-с-текстом (model='overlay'); иначе последняя чистая.
+      Раньше тут брались ВСЕ оставшиеся варианты (включая старые перегенерации),
+      и IG получал их как нежданную карусель из мусора — теперь только одна."""
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return []
+        assets = (
+            s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
+            .order_by(PostAsset.ord).all()
+        )
+        if not assets:
+            return []
+        if post.format == "carousel":
+            return assets
+        sel_id = getattr(post, "selected_asset_id", None)
+        if sel_id:
+            picked = next((a for a in assets if a.id == sel_id), None)
+            if picked:
+                return [picked]
+        overlays = [a for a in assets if a.model == "overlay"]
+        return [overlays[-1]] if overlays else [assets[-1]]
 
 
 def add_post_ref(post_id: int, file_bytes: bytes, filename: str) -> Optional[int]:

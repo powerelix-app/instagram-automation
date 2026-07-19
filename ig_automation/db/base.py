@@ -73,6 +73,7 @@ def _migrate(engine) -> None:
             ("model_key", "VARCHAR DEFAULT ''"),
             ("gen_status", "VARCHAR DEFAULT ''"),
             ("gen_error", "TEXT DEFAULT ''"),
+            ("selected_asset_id", "INTEGER"),
         ],
         "gen_jobs": [
             ("post_id", "INTEGER"),

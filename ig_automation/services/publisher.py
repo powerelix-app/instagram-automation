@@ -97,15 +97,18 @@ def publish(post_id: int, platforms: Optional[list] = None) -> Dict:
             return {"ok": True, "already": True}
         if post.status not in ("approved", "scheduled"):
             return {"ok": False, "error": "пост не одобрен (нужен статус approved/scheduled)"}
-        assets = (
-            s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
-            .order_by(PostAsset.ord).all()
-        )
-        if not assets:
-            return {"ok": False, "error": "нет картинки для публикации (сгенерируй визуал)"}
-        caption = _full_caption(post.caption, post.hashtags)
-        image_urls = [_meta_reachable_url(a.path) for a in assets]
-        image_url = image_urls[0]
+        caption_src, hashtags_src = post.caption, post.hashtags
+
+    from . import generator
+    assets = generator.get_publish_assets(post_id)
+    if not assets:
+        return {"ok": False, "error": "нет картинки для публикации (сгенерируй визуал)"}
+    caption = _full_caption(caption_src, hashtags_src)
+    image_urls = [_meta_reachable_url(a.path) for a in assets]
+    image_url = image_urls[0]
+
+    with session_scope() as s:
+        post = s.get(Post, post_id)
         post.status = "publishing"
 
     # ── Симуляция: ничего в IG не уходит ──

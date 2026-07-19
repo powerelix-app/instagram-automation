@@ -148,6 +148,9 @@ class Post(Base):
     error: Mapped[str] = mapped_column(Text, default="")
     gen_status: Mapped[str] = mapped_column(String(64), default="")  # статус фоновой генерации (воркер)
     gen_error: Mapped[str] = mapped_column(Text, default="")
+    # для НЕ-carousel постов (photo/reels): какую именно из нескольких сгенерированных
+    # картинок публиковать. Пусто -> берём последнюю (см. generator.get_publish_assets).
+    selected_asset_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

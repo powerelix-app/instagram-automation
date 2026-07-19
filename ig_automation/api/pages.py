@@ -666,6 +666,14 @@ def post_asset_delete(request: Request, post_id: int, aid: int, _: bool = Depend
     return RedirectResponse(f"/post/{post_id}", status_code=303)
 
 
+@router.post("/post/{post_id}/asset/{aid}/select")
+def post_asset_select(request: Request, post_id: int, aid: int, _: bool = Depends(require_user)):
+    """Для photo/reels с несколькими вариантами картинки — какую именно публиковать."""
+    ok = generator.select_post_image(post_id, aid)
+    msg = "Выбрана для публикации" if ok else "Не удалось выбрать"
+    return RedirectResponse(f"/post/{post_id}?msg=" + quote(msg), status_code=303)
+
+
 @router.post("/post/{post_id}/gen-carousel")
 def post_gen_carousel(request: Request, post_id: int, slides: int = Form(4), _: bool = Depends(require_user)):
     from ..services import producer

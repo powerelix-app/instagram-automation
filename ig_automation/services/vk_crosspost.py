@@ -111,18 +111,16 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
             return {"ok": True, "already": True, "vk_post_id": post.vk_post_id}
         caption = _vk_caption(post.caption, post.product_id)
         hook = (post.hook or post.product or "POWERELIX")[:100]
-        # path хранится URL-путём вида /media/...  → локальный файл в DATA_DIR
-        images: List[Path] = [
-            config.DATA_DIR / a.path.lstrip("/")
-            for a in s.query(PostAsset)
-            .filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
-            .order_by(PostAsset.ord).all()
-        ]
         video_asset = (s.query(PostAsset)
                        .filter(PostAsset.post_id == post_id, PostAsset.kind == "video")
                        .order_by(PostAsset.ord.desc()).first())
         video = config.DATA_DIR / video_asset.path.lstrip("/") if video_asset else None
 
+    # path хранится URL-путём вида /media/...  → локальный файл в DATA_DIR
+    from . import generator
+    images: List[Path] = [
+        config.DATA_DIR / a.path.lstrip("/") for a in generator.get_publish_assets(post_id)
+    ]
     images = [p for p in images if p.exists()]
     gid = str(config.VK_GROUP_ID).lstrip("-")
 

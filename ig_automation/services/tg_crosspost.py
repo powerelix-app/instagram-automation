@@ -100,16 +100,14 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
             return {"ok": True, "already": True, "tg_message_id": post.tg_message_id}
         caption = _clean_caption(post.caption)
         product_id = post.product_id
-        images = (
-            s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
-            .order_by(PostAsset.ord).all()
-        )
         video = (
             s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "video")
             .order_by(PostAsset.ord.desc()).first()
         )
-        img_urls = [config.PUBLIC_BASE + a.path for a in images]
         vid_url = (config.PUBLIC_BASE + video.path) if video else None
+
+    from . import generator
+    img_urls = [config.PUBLIC_BASE + a.path for a in generator.get_publish_assets(post_id)]
 
     vid_dims = None
     if vid_url:
