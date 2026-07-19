@@ -75,6 +75,7 @@ class Storyboard(Base):
     product_name: Mapped[str] = mapped_column(String(128), default="")
     model_key: Mapped[str] = mapped_column(String(64), default="")  # лицо бренда из ростера
     video_engine: Mapped[str] = mapped_column(String(32), default="")  # seedance|kling|grok|omni
+    img_ratio: Mapped[str] = mapped_column(String(8), default="")  # 4:5 (лента) | 9:16 (Reels/сторис) | 1:1
     title: Mapped[str] = mapped_column(String(255), default="")
     concept: Mapped[str] = mapped_column(Text, default="")
     scenes: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # [{n,scene,camera,vo,duration_s}]

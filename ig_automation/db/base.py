@@ -57,6 +57,7 @@ def _migrate(engine) -> None:
         "storyboards": [
             ("model_key", "VARCHAR DEFAULT ''"),
             ("video_engine", "VARCHAR DEFAULT ''"),
+            ("img_ratio", "VARCHAR DEFAULT ''"),
             ("gen_status", "VARCHAR DEFAULT ''"),
             ("gen_error", "TEXT DEFAULT ''"),
             ("output_paths", "JSON"),

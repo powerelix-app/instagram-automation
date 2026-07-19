@@ -50,6 +50,16 @@
   <a href="/catalog" class="text-blue-600 hover:underline text-xs ml-auto">внести артикулы →</a>
 </form>
 
+<form action="/post/{{ post.id }}/set-format" method="post" class="mb-4 flex items-center gap-2 text-sm flex-wrap bg-white border rounded-xl p-3">
+  <span class="text-slate-500">🖼 Формат:</span>
+  <select name="fmt" onchange="this.form.submit()" class="px-3 py-2 border rounded">
+    <option value="photo"    {% if post.format == 'photo'    %}selected{% endif %}>Одиночный пост — лента (4:5)</option>
+    <option value="carousel" {% if post.format == 'carousel' %}selected{% endif %}>Карусель — лента (4:5)</option>
+    <option value="reels"    {% if post.format == 'reels'    %}selected{% endif %}>Reels / сторис — вертикаль (9:16)</option>
+  </select>
+  <span class="text-slate-400 text-xs">задаёт соотношение сторон генерации; после смены — перегенерируй визуал</span>
+</form>
+
 <form action="/post/{{ post.id }}/model" method="post" class="mb-4 flex items-center gap-2 text-sm flex-wrap bg-white border rounded-xl p-3">
   <span class="text-slate-500">👤 Модель в кадре:</span>
   <select name="model_key" onchange="this.form.submit()" class="px-3 py-2 border rounded">

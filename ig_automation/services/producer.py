@@ -646,6 +646,7 @@ def _produce_slides(sb_id: int):
         scenes = list(sb.scenes or [])
         product_id, reel_id = sb.product_id, sb.trend_reel_id
         model_key = getattr(sb, "model_key", "") or ""
+        ratio = getattr(sb, "img_ratio", "") or "4:5"   # 4:5 лента | 9:16 Reels | 1:1
     bottle = _product_ref(product_id)
     if not bottle:
         _set(sb_id, gen_status="error",
@@ -682,7 +683,7 @@ def _produce_slides(sb_id: int):
             if not face:  # без лица бренда нумерация референсов сдвигается
                 prompt = prompt.replace("со ВТОРОГО изображения", "— наша модель (медные волнистые волосы, веснушки)")
                 prompt = prompt.replace("с ТРЕТЬЕГО изображения", "со ВТОРОГО изображения")
-            img = gen_product_image(prompt, refs_i, aspect="4:5", sb_id=sb_id)
+            img = gen_product_image(prompt, refs_i, aspect=ratio, sb_id=sb_id)
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
             # фирменный оверлей: Claude-vision выбирает чистую зону; если текст
@@ -700,7 +701,7 @@ def _produce_slides(sb_id: int):
             prompt = (f"Слайд {i + 1} Instagram-карусели.\nВИЗУАЛ: {sc.get('scene', '')}\n"
                       f"Композиция: {sc.get('camera', '')}\n"
                       "СТРОГО: без текста и надписей (кроме этикетки продукта).")
-            img = gen_product_image(prompt, [bottle], aspect="4:5", sb_id=sb_id)
+            img = gen_product_image(prompt, [bottle], aspect=ratio, sb_id=sb_id)
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
             paths.append(f"/media/produced/{sb_id}/slide_{i}.png")

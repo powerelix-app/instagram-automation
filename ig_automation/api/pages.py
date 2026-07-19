@@ -325,6 +325,20 @@ def storyboard_set_engine(request: Request, sb_id: int, video_engine: str = Form
     return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote("Движок анимации выбран"), status_code=303)
 
 
+@router.post("/storyboard/{sb_id}/ratio")
+def storyboard_set_ratio(request: Request, sb_id: int, img_ratio: str = Form(""), _: bool = Depends(require_user)):
+    from ..db.models import Storyboard
+    if img_ratio not in ("4:5", "9:16", "1:1", ""):
+        raise HTTPException(400)
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if sb:
+            sb.img_ratio = img_ratio
+    names = {"4:5": "лента (4:5)", "9:16": "Reels/сторис (9:16)", "1:1": "квадрат (1:1)"}
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(f"Формат: {names.get(img_ratio, 'лента (4:5)')}"),
+                            status_code=303)
+
+
 @router.post("/storyboard/{sb_id}/stage/{stage}")
 def storyboard_stage(request: Request, sb_id: int, stage: str, _: bool = Depends(require_user)):
     from ..services import producer
@@ -582,6 +596,20 @@ def post_overlay(request: Request, post_id: int, source_asset_id: str = Form("")
 def post_set_product(request: Request, post_id: int, product_id: str = Form(""), _: bool = Depends(require_user)):
     generator.set_post_product(post_id, product_id)
     return RedirectResponse(f"/post/{post_id}?msg={quote('Товар привязан — перегенерируй текст')}", status_code=303)
+
+
+@router.post("/post/{post_id}/set-format")
+def post_set_format(request: Request, post_id: int, fmt: str = Form(""), _: bool = Depends(require_user)):
+    """Формат поста задаёт соотношение сторон генерации (см. generator._FORMAT_RATIO)."""
+    if fmt not in ("photo", "carousel", "reels"):
+        raise HTTPException(400)
+    with session_scope() as s:
+        p = s.get(Post, post_id)
+        if p:
+            p.format = fmt
+    names = {"photo": "одиночный пост (4:5)", "carousel": "карусель (4:5)", "reels": "Reels — вертикаль (9:16)"}
+    return RedirectResponse(f"/post/{post_id}?msg=" + quote(f"Формат: {names[fmt]} — перегенерируй визуал"),
+                            status_code=303)
 
 
 @router.post("/post/{post_id}/set-blogger")
