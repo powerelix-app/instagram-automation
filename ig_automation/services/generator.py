@@ -575,11 +575,34 @@ def list_posts() -> List[dict]:
                 s.query(PostAsset).filter(PostAsset.post_id == p.id, PostAsset.kind == "image")
                 .order_by(PostAsset.ord).first()
             )
+            thumb, is_video = (first.path, False) if first else ("", False)
+            if not thumb:  # Reels без картинки-превью — берём кадр видео (у видео своя обложка в браузере)
+                vid = (
+                    s.query(PostAsset).filter(PostAsset.post_id == p.id, PostAsset.kind == "video")
+                    .order_by(PostAsset.ord.desc()).first()
+                )
+                if vid:
+                    thumb, is_video = vid.path, True
             out.append({
                 "id": p.id, "rubric": p.rubric, "product": p.product, "format": p.format,
-                "hook": p.hook, "status": p.status, "thumb": first.path if first else "",
+                "hook": p.hook, "status": p.status, "thumb": thumb, "thumb_video": is_video,
             })
         return out
+
+
+def delete_post(post_id: int) -> bool:
+    """Удаляет пост со всеми ассетами (файлы на диске + записи в БД)."""
+    with session_scope() as s:
+        p = s.get(Post, post_id)
+        if not p:
+            return False
+        assets = s.query(PostAsset).filter(PostAsset.post_id == post_id).all()
+        for a in assets:
+            fp = config.MEDIA_DIR / a.path.replace("/media/", "", 1)
+            fp.unlink(missing_ok=True)
+            s.delete(a)
+        s.delete(p)
+        return True
 
 
 def get_post(post_id: int) -> Optional[dict]:

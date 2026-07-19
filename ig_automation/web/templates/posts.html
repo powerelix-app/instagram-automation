@@ -8,18 +8,30 @@
 
 <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
   {% for p in posts %}
-  <a href="/post/{{ p.id }}" class="block bg-white border rounded-xl overflow-hidden hover:border-blue-300">
-    <div class="aspect-[4/5] bg-slate-100 flex items-center justify-center">
-      {% if p.thumb %}<img src="{{ p.thumb }}" class="w-full h-full object-cover">{% else %}<span class="text-3xl text-slate-300">🖼️</span>{% endif %}
-    </div>
-    <div class="p-2">
-      <div class="flex items-center gap-1 flex-wrap text-[10px] mb-1">
-        <span class="rounded px-1.5 py-0.5 {% if p.status == 'published' %}bg-green-100 text-green-700{% elif p.status == 'approved' %}bg-emerald-100 text-emerald-700{% elif p.status == 'review' %}bg-blue-100 text-blue-700{% elif p.status == 'failed' %}bg-red-100 text-red-700{% elif p.status == 'generating' %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-600{% endif %}">{{ p.status }}</span>
-        <span class="text-slate-400">{{ p.format }}</span>
+  <div class="relative bg-white border rounded-xl overflow-hidden hover:border-blue-300">
+    <form action="/post/{{ p.id }}/delete" method="post" class="absolute top-1 right-1 z-10"
+          onsubmit="return confirm('Удалить пост #{{ p.id }} безвозвратно?')">
+      <button class="bg-black/50 hover:bg-red-600 text-white rounded px-2 py-0.5 text-xs" title="удалить пост">×</button>
+    </form>
+    <a href="/post/{{ p.id }}" class="block">
+      <div class="aspect-[4/5] bg-slate-100 flex items-center justify-center">
+        {% if p.thumb and p.thumb_video %}
+          <video src="{{ p.thumb }}" class="w-full h-full object-cover" muted preload="metadata"></video>
+        {% elif p.thumb %}
+          <img src="{{ p.thumb }}" class="w-full h-full object-cover">
+        {% else %}
+          <span class="text-3xl text-slate-300">🖼️</span>
+        {% endif %}
       </div>
-      <div class="text-xs font-medium line-clamp-2">{{ p.hook or "(без хука)" }}</div>
-    </div>
-  </a>
+      <div class="p-2">
+        <div class="flex items-center gap-1 flex-wrap text-[10px] mb-1">
+          <span class="rounded px-1.5 py-0.5 {% if p.status == 'published' %}bg-green-100 text-green-700{% elif p.status == 'approved' %}bg-emerald-100 text-emerald-700{% elif p.status == 'review' %}bg-blue-100 text-blue-700{% elif p.status == 'failed' %}bg-red-100 text-red-700{% elif p.status == 'generating' %}bg-amber-100 text-amber-700{% else %}bg-slate-100 text-slate-600{% endif %}">{{ p.status }}</span>
+          <span class="text-slate-400">{{ p.format }}</span>
+        </div>
+        <div class="text-xs font-medium line-clamp-2">{{ p.hook or "(без хука)" }}</div>
+      </div>
+    </a>
+  </div>
   {% endfor %}
 </div>
 {% endblock %}

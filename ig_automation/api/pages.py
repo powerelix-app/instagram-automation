@@ -552,6 +552,12 @@ def posts_page(request: Request, msg: str = "", _: bool = Depends(require_user))
     )
 
 
+@router.post("/post/{post_id}/delete")
+def post_delete(request: Request, post_id: int, _: bool = Depends(require_user)):
+    generator.delete_post(post_id)
+    return RedirectResponse("/posts?msg=" + quote("Пост удалён"), status_code=303)
+
+
 @router.get("/post/{post_id}", response_class=HTMLResponse)
 def post_detail(request: Request, post_id: int, msg: str = "", _: bool = Depends(require_user)):
     post = generator.get_post(post_id)
