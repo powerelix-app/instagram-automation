@@ -33,6 +33,12 @@ def _wrap(d, text: str, font, maxw: float) -> List[str]:
 
 
 _CANVAS_BY_RATIO = {"4:5": (1080, 1350), "9:16": (1080, 1920), "1:1": (1080, 1080)}
+# Reels/сторис (9:16) поверх нашей картинки рисуется ЧУЖОЙ UI: сверху часы/иконки
+# камеры, снизу — имя аккаунта, подпись, значки лайка/шаринга. Наш текст должен
+# садиться НИЖЕ верхней плашки и ВЫШЕ нижней, иначе они наезжают друг на друга
+# (как на скрине пользователя). Для фида (4:5/1:1) такого чужого UI нет — старые отступы.
+_TOP_Y_BY_RATIO = {"9:16": 210}       # y вордмарка POWERELIX; дефолт 60
+_BOTTOM_GAP_BY_RATIO = {"9:16": 360}  # отступ снизу под блок текста; дефолт 70
 
 
 def render_cover(bg_path, headline: str, subtitle: str = "", tag: str = DEFAULT_TAG,
@@ -47,9 +53,13 @@ def render_cover(bg_path, headline: str, subtitle: str = "", tag: str = DEFAULT_
     bo.W, bo.H = target
     try:
         W, H, M = bo.W, bo.H, bo.M
-        img = bo._scrim(bo._cover(Image.open(bg_path)), top=140, bottom=660)
+        top_y = _TOP_Y_BY_RATIO.get(ratio, 60)
+        bottom_gap = _BOTTOM_GAP_BY_RATIO.get(ratio, 70)
+        scrim_top = 140 + (top_y - 60)      # затемнение растёт вместе с отступом
+        scrim_bottom = 660 + (bottom_gap - 70)
+        img = bo._scrim(bo._cover(Image.open(bg_path)), top=scrim_top, bottom=scrim_bottom)
         d = ImageDraw.Draw(img)
-        bo._spaced(d, (M, 60), "POWERELIX", bo._font(bo.MONT_BLACK, 52), bo.WHITE, 3)
+        bo._spaced(d, (M, top_y), "POWERELIX", bo._font(bo.MONT_BLACK, 52), bo.WHITE, 3)
 
         fh = bo._font(bo.MONT_BLACK, 104)
         fs = bo._font(bo.INTER_SB, 42)
@@ -61,7 +71,7 @@ def render_cover(bg_path, headline: str, subtitle: str = "", tag: str = DEFAULT_
         subl = _wrap(d, subtitle, fs, W - 2 * M) if subtitle else []
 
         # снизу вверх
-        y = H - 70
+        y = H - bottom_gap
         disc_y = tag_y = None
         if disclaimer:
             y -= fd.size
