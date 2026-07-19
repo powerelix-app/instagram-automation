@@ -143,18 +143,42 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
             config.MEDIA_DIR / a.path.replace("/media/", "", 1)
             for a in s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "ref").all()
         ]
+        # последний ЧИСТЫЙ визуал (без наложенного текста) — если он уже есть и это не слайд
+        # карусели (extra задан для слайдов не-героя), берём его за референс и просто пересобираем
+        # под новый формат/ракурс — как в разведке, вместо случайной генерации с нуля.
+        clean = (
+            s.query(PostAsset)
+            .filter(PostAsset.post_id == post_id, PostAsset.kind == "image", PostAsset.model != "overlay")
+            .order_by(PostAsset.ord.desc()).first()
+        ) if not extra else None
+        clean_ref = (config.MEDIA_DIR / clean.path.replace("/media/", "", 1)) if clean else None
         post.status = "generating"
 
-    # Референсы: лицо бренда + ручные референсы поста + реальная банка товара
-    # (банка последней — по ней цепочка сверяет этикетку).
     prod_ref = brand.product_ref(product)
+    face_ref = brand.model_by_key(model_key)
     existing_user_refs = [p for p in user_refs if p.exists()]
-    refs = [brand.model_by_key(model_key)] + existing_user_refs + ([prod_ref] if prod_ref else [])
-    scene = _scene_description(visual_idea, hook, product)
-    prompt = _visual_prompt(scene, product, with_product_ref=bool(prod_ref) or bool(existing_user_refs),
-                            model_key=model_key)
-    if extra:
-        prompt += ". " + extra
+
+    if clean_ref and clean_ref.exists():
+        refs = [clean_ref, face_ref] + ([prod_ref] if prod_ref else [])
+        prompt = (
+            "ПЕРВОЕ изображение — наш предыдущий удачный кадр (человек и продукт на нём уже "
+            "правильные — референс). Пересоздай его МАКСИМАЛЬНО похоже: та же композиция, поза, "
+            "ракурс, действие, свет, стиль. Человек — ТА ЖЕ модель со ВТОРОГО изображения (то же "
+            "лицо, не меняй внешность)."
+            + (" Продукт — ТОТ ЖЕ с ТРЕТЬЕГО изображения, форма и этикетка строго как на референсе."
+               if prod_ref else "")
+            + f" НОВОЕ соотношение сторон кадра: {ratio} — адаптируй композицию под этот формат "
+              "(для вертикали 9:16 удлини сцену вверх/вниз, а не просто обрежь по бокам). "
+              "СТРОГО: без текста, букв и надписей на изображении, кроме этикетки продукта."
+        )
+    else:
+        # первая генерация или слайд карусели — сцена из идеи/хука
+        refs = [face_ref] + existing_user_refs + ([prod_ref] if prod_ref else [])
+        scene = _scene_description(visual_idea, hook, product)
+        prompt = _visual_prompt(scene, product, with_product_ref=bool(prod_ref) or bool(existing_user_refs),
+                                model_key=model_key)
+        if extra:
+            prompt += ". " + extra
 
     try:
         from . import producer
