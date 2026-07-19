@@ -135,6 +135,7 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
         if not post:
             return None
         product, hook, visual_idea = post.product, post.hook, post.visual_idea
+        product_id = getattr(post, "product_id", "") or ""
         model_key = getattr(post, "model_key", "") or ""
         ratio = ratio or _FORMAT_RATIO.get(post.format, "4:5")
         ord_ = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image").count()
@@ -154,7 +155,12 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
         clean_ref = (config.MEDIA_DIR / clean.path.replace("/media/", "", 1)) if clean else None
         post.status = "generating"
 
-    prod_ref = brand.product_ref(product)
+    prod_ref = None
+    if product_id:
+        from . import producer as _producer  # та же полка, что у раскадровок (data/product_refs/<id>)
+        prod_ref = _producer._product_ref(product_id)
+    if not prod_ref:
+        prod_ref = brand.product_ref(product)  # фолбэк по имени, если product_id не привязан
     face_ref = brand.model_by_key(model_key)
     existing_user_refs = [p for p in user_refs if p.exists()]
 
@@ -407,11 +413,16 @@ def generate_reels_video(post_id: int) -> Optional[int]:
         if not post:
             return None
         product, hook, visual_idea = post.product, post.hook, post.visual_idea
+        product_id = getattr(post, "product_id", "") or ""
         model_key = getattr(post, "model_key", "") or ""
         n = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "video").count()
         post.status = "generating"
     refs = [brand.model_by_key(model_key)]
-    pr = brand.product_ref(product)
+    pr = None
+    if product_id:
+        from . import producer as _producer
+        pr = _producer._product_ref(product_id)
+    pr = pr or brand.product_ref(product)
     if pr:
         refs.append(pr)
     scene = _scene_description(visual_idea, hook, product)
