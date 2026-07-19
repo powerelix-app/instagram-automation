@@ -514,6 +514,7 @@ def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,
         post = s.get(Post, post_id)
         if not post:
             return None
+        img_ratio = _FORMAT_RATIO.get(post.format, "4:5")
         q = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
         if source_asset_id:
             src = s.get(PostAsset, int(source_asset_id))
@@ -528,7 +529,8 @@ def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,
         headline, subtitle, tag, disclaimer = txt["headline"], txt["subtitle"], txt["tag"], txt["disclaimer"]
     dest = config.MEDIA_DIR / f"post_{post_id}_txt{ord_}.png"
     overlay.render_cover(src_path, headline=headline or "", subtitle=subtitle or "",
-                         tag=tag or overlay.DEFAULT_TAG, disclaimer=disclaimer or "", out_path=str(dest))
+                         tag=tag or overlay.DEFAULT_TAG, disclaimer=disclaimer or "",
+                         out_path=str(dest), ratio=img_ratio)
     with session_scope() as s:
         a = PostAsset(post_id=post_id, kind="image", path=f"/media/{dest.name}", model="overlay",
                       prompt=((headline or "") + " — " + (subtitle or ""))[:300], ord=ord_)
