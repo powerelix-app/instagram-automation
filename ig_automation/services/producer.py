@@ -470,14 +470,19 @@ def _shrink(p: Path, max_w: int = 900) -> bytes:
 
 def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
                       chain=IMG_CHAIN, sb_id: Optional[int] = None,
-                      bottle: Optional[Path] = None) -> bytes:
+                      bottle: Optional[Path] = None, strict: bool = False) -> bytes:
     """Кадр с продуктом: идём по цепочке нейросетей, после каждой Claude-vision
-    проверяет этикетку; кривая этикетка -> следующая модель. Все кривые варианты
-    не выбрасываем: если ни одна не прошла, отдаём последний."""
+    проверяет этикетку; кривая этикетка -> следующая модель.
+    strict=False (дефолт): если ни одна не прошла, отдаём последний вариант —
+    не хотим срывать пакетную генерацию (раскадровки/карусели) из-за одного кадра.
+    strict=True: если ни одна не прошла — кидаем ошибку с причиной последнего
+    отказа, а не молча подсовываем брак (для точечной генерации с реальным
+    внешним референсом, где пользователь ждёт конкретный результат)."""
     # банка для vision-проверки: явно или последним референсом (конвенция);
     # bottle=None и нет refs -> проверку пропускаем
     bottle = Path(bottle) if bottle else (Path(refs[-1]) if refs else None)
     last = b""
+    last_reason = "модели не вернули результат"
     for name in chain:
         try:
             if sb_id:
@@ -507,8 +512,11 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
             log.info("этикетка ok (%s)", name)
             return img
         log.warning("этикетка кривая (%s): %s — пробую следующую модель", name, v["reason"])
+        last_reason = v["reason"]
     if not last:
         raise RuntimeError("ни одна модель цепочки не вернула картинку")
+    if strict:
+        raise RuntimeError(f"ни одна модель не смогла подменить продукт на наш: {last_reason}")
     return last
 
 

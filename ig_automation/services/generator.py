@@ -158,6 +158,7 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
     face_ref = brand.model_by_key(model_key)
     existing_user_refs = [p for p in user_refs if p.exists()]
 
+    strict_mode = bool(existing_user_refs and not extra and prod_ref)
     if existing_user_refs and not extra:
         # НАСТОЯЩИЙ внешний референс (скачан по ссылке или загружен вручную) — как в разведке:
         # это реальное фото с чужим человеком/продуктом, композицию/позу берём с него,
@@ -209,7 +210,7 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
 
     try:
         from . import producer
-        img = producer.gen_product_image(prompt, refs, aspect=ratio, bottle=prod_ref)
+        img = producer.gen_product_image(prompt, refs, aspect=ratio, bottle=prod_ref, strict=strict_mode)
         dest = config.MEDIA_DIR / f"post_{post_id}_{ord_}.png"
         dest.write_bytes(img)
         _apply_logo(dest)
