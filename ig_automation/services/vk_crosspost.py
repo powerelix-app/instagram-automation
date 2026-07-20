@@ -109,7 +109,10 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
             return {"ok": False, "error": "пост не найден"}
         if post.vk_post_id:
             return {"ok": True, "already": True, "vk_post_id": post.vk_post_id}
-        caption = _vk_caption(post.caption, post.product_id)
+        # хэштеги в VK работают — добавляем в подпись (первые 5, как и в IG)
+        tags = " ".join(f"#{h.lstrip('#')}" for h in (post.hashtags or [])[:5])
+        base_caption = post.caption + ("\n\n" + tags if tags else "")
+        caption = _vk_caption(base_caption, post.product_id)
         hook = (post.hook or post.product or "POWERELIX")[:100]
         video_asset = (s.query(PostAsset)
                        .filter(PostAsset.post_id == post_id, PostAsset.kind == "video")
