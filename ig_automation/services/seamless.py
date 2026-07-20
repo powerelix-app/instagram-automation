@@ -160,15 +160,9 @@ def execute(cid: int) -> None:
         "смеётся, слегка запрокинув голову, банка прижата к груди",
         "разводит руки в приглашающем жесте, банка стоит рядом",
     ]
-    # эстафета (2+ моделей): банка «передаётся через шов» — в конце слайда уходит
-    # к правому краю, на следующем приходит с левого. Позы по позиции слайда.
-    _RELAY_FIRST = ("держит банку на уровне груди и протягивает её ВПРАВО, к правому краю "
-                    "кадра, обе руки тянутся вправо, взгляд в камеру, улыбка — начинает передачу")
-    _RELAY_RECV = ("принимает банку, протянутую СЛЕВА: обе руки тянутся к левому краю кадра, "
-                   "банка в левой части кадра, радостная улыбка")
-    _RELAY_PASS = ("держит банку и протягивает её дальше ВПРАВО, к правому краю кадра, "
-                   "банка в правой части кадра, смеётся")
-    _RELAY_LAST = ("приняла банку и держит её этикеткой в камеру по центру груди, "
+    # эстафета (2+ моделей): передача рисуется ПАРОЙ слайдов (см. ниже),
+    # соло-слайды — обычные позы; финальный — банка этикеткой в камеру
+    _RELAY_LAST = ("держит банку этикеткой в камеру по центру груди, "
                    "широкая довольная улыбка — финал эстафеты")
     # одежда по индексу модели — свой цвет на каждую, чтобы различались
     _OUTFITS = [
@@ -218,17 +212,77 @@ def execute(cid: int) -> None:
     strip_w = bg.width // n
     out_paths = []
 
+    # срезы фона для всех слайдов (cover-fit под целевой холст)
     for i in range(n):
-        _set(cid, gen_status=f"слайд {i + 1}/{n}…")
-        # срез фона -> апскейл под целевой холст (cover-fit по высоте)
         strip = bg.crop((i * strip_w, 0, (i + 1) * strip_w, bg.height))
         scale = max(slide_w / strip.width, slide_h / strip.height)
         strip = strip.resize((int(strip.width * scale), int(strip.height * scale)), Image.LANCZOS)
         x0 = (strip.width - slide_w) // 2
         y0 = (strip.height - slide_h) // 2
-        strip = strip.crop((x0, y0, x0 + slide_w, y0 + slide_h))
+        strip.crop((x0, y0, x0 + slide_w, y0 + slide_h)).save(tmp_dir / f"bg_{i}.png")
+
+    def _save_slide(idx: int, img: Image.Image) -> None:
+        clean = tmp_dir / f"slide_{idx}_clean.png"
+        img.save(clean)
+        out_path = config.MEDIA_DIR / "seamless" / f"{cid}_{idx}.png"
+        if idx < len(headlines) and headlines[idx].strip():
+            overlay.render_cover(clean, headline=headlines[idx].strip(),
+                                 subtitle="", tag="", disclaimer="",
+                                 out_path=str(out_path), ratio="4:5")
+        else:
+            img.save(out_path)
+        out_paths.append(f"/media/seamless/{out_path.name}")
+
+    relay = len(faces) >= 2
+    if relay and n >= 2:
+        # ── ПЕРЕДАЧА ЧЕРЕЗ ШОВ: слайды 1-2 генерим ОДНИМ вызовом на двойном
+        # развороте, руки с банкой встречаются на вертикальной середине —
+        # разрез проходит по протянутой руке, и она продолжается через шов ──
+        _set(cid, gen_status=f"передача (слайды 1-2/{n})…")
+        region = bg.crop((0, 0, strip_w * 2, bg.height))
+        pair_base = region.resize((1536, 1024), Image.LANCZOS)
+        pair_path = tmp_dir / "pair_0.png"
+        pair_base.save(pair_path)
+        fL, fR = faces[0], faces[1 % len(faces)]
+        oL = _OUTFITS[0]
+        oR = _OUTFITS[1 % len(_OUTFITS)]
+        pair_prompt = (
+            "ПЕРВОЕ изображение — базовый фон двойного разворота (два слайда карусели "
+            "рядом), менять фон ЗАПРЕЩЕНО. Нарисуй МОМЕНТ ПЕРЕДАЧИ банки между двумя "
+            "людьми. ЛЕВАЯ модель — лицо со ВТОРОГО изображения (та же внешность), "
+            f"одежда: {oL}; стоит в центре ЛЕВОЙ половины кадра (около 25% ширины), "
+            "корпус развёрнут вправо, ПРАВОЙ вытянутой рукой протягивает банку к "
+            "ЦЕНТРУ кадра. ПРАВАЯ модель — лицо с ТРЕТЬЕГО изображения (та же "
+            f"внешность), одежда: {oR}; стоит в центре ПРАВОЙ половины (около 75% "
+            "ширины), корпус развёрнут влево, тянется рукой к банке, почти касаясь её. "
+            "БАНКА — с ЧЕТВЁРТОГО изображения (форма, крышка, цвет и этикетка СТРОГО "
+            "как на референсе, этикетка к камере) — находится ТОЧНО на вертикальной "
+            "СЕРЕДИНЕ кадра, на высоте груди. Обе модели по пояс, каждая занимает "
+            "около 60% высоты кадра, головы не обрезаны. Обе улыбаются друг другу. "
+            "Свет людей и банки совпадает со светом фона. "
+            "Без текста, букв и надписей на изображении, кроме этикетки банки."
+        )
+        try:
+            pair_bytes = producer.gen_image_gpt(pair_prompt, [pair_path, fL, fR, bottle], aspect="3:2")
+        except Exception as e:
+            _fail(cid, f"передача (слайды 1-2): {e}")
+            return
+        pimg = Image.open(io.BytesIO(pair_bytes)).convert("RGB")
+        half_w = pimg.width // 2
+        for j, half in enumerate((pimg.crop((0, 0, half_w, pimg.height)),
+                                  pimg.crop((half_w, 0, pimg.width, pimg.height)))):
+            target_h = int(half.width * slide_h / slide_w)
+            if half.height > target_h:
+                y0 = (half.height - target_h) // 2
+                half = half.crop((0, y0, half.width, y0 + target_h))
+            half = half.resize((slide_w, slide_h), Image.LANCZOS)
+            _save_slide(j, half)
+
+    for i in range(n):
+        if relay and n >= 2 and i < 2:
+            continue  # слайды 1-2 уже собраны парой выше
+        _set(cid, gen_status=f"слайд {i + 1}/{n}…")
         strip_path = tmp_dir / f"bg_{i}.png"
-        strip.save(strip_path)
 
         if faces:
             relay = len(faces) >= 2
@@ -236,13 +290,8 @@ def execute(cid: int) -> None:
             face = faces[face_idx]
             if i < len(slide_scenes) and slide_scenes[i].strip():
                 scene = slide_scenes[i]
-            elif relay:
-                if i == 0:
-                    scene = _RELAY_FIRST
-                elif i == n - 1:
-                    scene = _RELAY_LAST
-                else:
-                    scene = _RELAY_RECV if i % 2 == 1 else _RELAY_PASS
+            elif relay and i == n - 1:
+                scene = _RELAY_LAST
             else:
                 scene = _DEFAULT_SCENES[i % len(_DEFAULT_SCENES)]
             # цепочка одежды: предыдущий слайд ЭТОЙ ЖЕ модели (для эстафеты — через
@@ -290,18 +339,7 @@ def execute(cid: int) -> None:
             return
 
         slide = Image.open(io.BytesIO(slide_bytes)).convert("RGB")
-        # чистый слайд (без текста) сохраняем всегда — следующий слайд ссылается
-        # на него для консистентности одежды/причёски модели
-        clean_path = tmp_dir / f"slide_{i}_clean.png"
-        slide.save(clean_path)
-        out_path = config.MEDIA_DIR / "seamless" / f"{cid}_{i}.png"
-        if i < len(headlines) and headlines[i].strip():
-            overlay.render_cover(clean_path, headline=headlines[i].strip(),
-                                 subtitle="", tag="", disclaimer="",
-                                 out_path=str(out_path), ratio="4:5")
-        else:
-            slide.save(out_path)
-        out_paths.append(f"/media/seamless/{out_path.name}")
+        _save_slide(i, slide)
 
     import shutil
     shutil.rmtree(tmp_dir, ignore_errors=True)
