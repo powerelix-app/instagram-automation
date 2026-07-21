@@ -1037,6 +1037,15 @@ def compare_regenerate(request: Request, cid: int, _: bool = Depends(require_use
     return RedirectResponse(f"/compare/{cid}?msg=" + quote(msg), status_code=303)
 
 
+@router.post("/compare/{cid}/restyle")
+def compare_restyle(request: Request, cid: int, style: str = Form("auto"),
+                    _: bool = Depends(require_user)):
+    res = comparison_svc.restyle(cid, style)
+    msg = (f"Формат: {res['fmt_ru']} — пересобираю…" if res.get("ok")
+           else res.get("error", "ошибка"))
+    return RedirectResponse(f"/compare/{cid}?msg=" + quote(msg), status_code=303)
+
+
 @router.post("/compare/{cid}/delete")
 def compare_delete(request: Request, cid: int, _: bool = Depends(require_user)):
     comparison_svc.delete(cid)

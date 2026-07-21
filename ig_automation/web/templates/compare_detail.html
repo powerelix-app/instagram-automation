@@ -53,6 +53,16 @@
   </div>
 </div>
 
+<div class="bg-white border rounded-xl p-3 mt-4">
+  <div class="text-xs text-slate-500 mb-2">🔧 Формат макета — сейчас: <b>{{ {'symptom':'🩺 симптом → продукт','lineup':'🧴 банки в ряд'}.get(item.style, item.style) }}</b>. Не тот? Выбери правильный и пересобери:</div>
+  <form action="/compare/{{ item.id }}/restyle" method="post" class="flex flex-wrap items-center gap-2">
+    <label class="flex items-center gap-1 text-sm border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50"><input type="radio" name="style" value="auto"> 🤖 Авто</label>
+    <label class="flex items-center gap-1 text-sm border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50"><input type="radio" name="style" value="symptom" {% if item.style=='symptom' %}checked{% endif %}> 🩺 Симптом → продукт</label>
+    <label class="flex items-center gap-1 text-sm border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50"><input type="radio" name="style" value="lineup" {% if item.style=='lineup' %}checked{% endif %}> 🧴 Банки в ряд</label>
+    <button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2">↻ Пересобрать в этом формате</button>
+  </form>
+</div>
+
 <div class="mt-4 flex items-center gap-3">
   <form action="/compare/{{ item.id }}/regenerate" method="post">
     <button class="text-sm bg-violet-600 hover:bg-violet-500 text-white rounded px-4 py-2">🔄 Перегенерировать</button>

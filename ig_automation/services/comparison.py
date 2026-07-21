@@ -218,6 +218,7 @@ def get(comparison_id: int) -> Optional[dict]:
             "id": r.id, "title": r.title, "ref_path": r.ref_path,
             "product_ids": r.product_ids or [], "gen_status": r.gen_status,
             "gen_error": r.gen_error, "output_path": r.output_path,
+            "style": getattr(r, "style", "lineup") or "lineup",
         }
 
 
@@ -248,6 +249,28 @@ def enqueue(comparison_id: int) -> bool:
         c.gen_status = "в очереди…"
         c.gen_error = ""
     return True
+
+
+def restyle(comparison_id: int, style: str) -> dict:
+    """Меняет ФОРМАТ существующего сравнения и ставит пересборку в очередь.
+    style='auto' → переопределяет по сохранённому референсу (analyze_reference)."""
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        if not c:
+            return {"ok": False, "error": "сравнение не найдено"}
+        if c.gen_status and c.gen_status not in ("", "done", "error"):
+            return {"ok": False, "error": "сейчас идёт генерация — дождись"}
+        ref_abs = config.DATA_DIR / (c.ref_path or "").lstrip("/")
+    if style == "auto":
+        style = analyze_reference(ref_abs.read_bytes()) if ref_abs.exists() else "symptom"
+    style = style if style in ("lineup", "symptom") else "lineup"
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        c.style = style
+    fmt_ru = {"symptom": "симптом → продукт", "lineup": "банки в ряд + чек-листы"}[style]
+    _clog(comparison_id, f"формат изменён на: {fmt_ru}", reset=True)
+    enqueue(comparison_id)
+    return {"ok": True, "style": style, "fmt_ru": fmt_ru}
 
 
 def _column_data(pid: str) -> dict:
