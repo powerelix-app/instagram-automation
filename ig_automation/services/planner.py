@@ -85,6 +85,23 @@ def materialize_posts(plan_id: int, only_date: Optional[str] = None) -> int:
         return added
 
 
+def delete_plan(plan_id: int) -> dict:
+    """Удаляет план. Черновики этого плана удаляются, опубликованные/запланированные —
+    отвязываются (plan_id=None), чтобы не потерять историю публикаций."""
+    with session_scope() as s:
+        plan = s.get(ContentPlan, plan_id)
+        if not plan:
+            return {"ok": False, "error": "план не найден"}
+        removed = kept = 0
+        for p in s.query(Post).filter(Post.plan_id == plan_id).all():
+            if p.status == "draft":
+                s.delete(p); removed += 1
+            else:
+                p.plan_id = None; kept += 1
+        s.delete(plan)
+        return {"ok": True, "removed": removed, "kept": kept}
+
+
 def list_plans() -> List[dict]:
     with session_scope() as s:
         plans = s.query(ContentPlan).order_by(ContentPlan.id.desc()).all()

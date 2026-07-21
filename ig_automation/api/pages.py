@@ -493,6 +493,16 @@ def plan_materialize(request: Request, plan_id: int, date: str = Form(""),
     return RedirectResponse(f"/plan/{plan_id}?msg={msg}", status_code=303)
 
 
+@router.post("/plan/{plan_id}/delete")
+def plan_delete(request: Request, plan_id: int, _: bool = Depends(require_user)):
+    res = planner.delete_plan(plan_id)
+    if res.get("ok"):
+        msg = f"План #{plan_id} удалён (черновиков снято: {res['removed']}, сохранено опубликованных: {res['kept']})"
+    else:
+        msg = res.get("error", "ошибка")
+    return RedirectResponse(f"/plan?msg={quote(msg)}", status_code=303)
+
+
 # ── Фаза 3: Банк идей ──
 
 @router.get("/ideas", response_class=HTMLResponse)
