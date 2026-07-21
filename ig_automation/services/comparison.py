@@ -410,15 +410,20 @@ def _beige_base() -> Path:
     return Path(tf.name)
 
 
+# Единый рисованный стиль иллюстраций симптомов (как в фирменном референсе POWERELIX).
+_ILLO_STYLE = ("плоская минималистичная векторная иллюстрация flat illustration, тёплая "
+               "бежево-пастельная палитра, мягкие простые формы, единый нежный стиль, это РИСУНОК "
+               "(не фотография, без фотореализма, без 3d), без текста и букв")
+
+
 def _symptom_illo(prompt: str, cid: int, idx: int):
-    """AI-иллюстрация симптома (тёплое лайфстайл-фото, бежевые тона, без текста). Path или None.
+    """AI-иллюстрация симптома (рисованный flat-стиль, бежевые тона, без текста). Path или None.
     gemini (ProxyAPI, если есть баланс) → фолбэк fal-seedream по бежевой подложке."""
     from . import producer
-    full = ("тёплое мягкое лайфстайл-фото в бежевых тонах, крупный план, размытый фон, "
-            "без текста, букв и цифр: " + prompt)
+    full = _ILLO_STYLE + ": " + prompt
     out = config.MEDIA_DIR / "comparisons" / f"{cid}_sym{idx}.png"
     try:
-        img = producer.gen_image(full, ref=None, aspect="1:1")
+        img = producer.gen_image(full, ref=None, aspect="1:1", style_suffix=_ILLO_STYLE)
         out.write_bytes(img)
         return out
     except Exception as e1:
@@ -529,19 +534,30 @@ def _render_symptom(rows: List[dict], out_path=None) -> Image.Image:
 
 
 def _execute_symptom(comparison_id: int, product_ids: List[str]) -> None:
-    """Сборка инфографики «симптом → продукт»: AI-иллюстрации + Pillow-макет."""
+    """Сборка инфографики «симптом → продукт»: AI-иллюстрации (параллельно) + Pillow-макет."""
+    from concurrent.futures import ThreadPoolExecutor
+
     from . import producer
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        if c:
+            c.gen_status = f"генерирую {len(product_ids)} иллюстраций…"
+    # илло гоняем параллельно (fal медленный, 5 подряд ≈ 10 мин → разом ≈ 2-3 мин)
+    syms = [_symptom_for(pid) for pid in product_ids]
+
+    def _gen(i):
+        return i, _symptom_illo(syms[i]["illo"], comparison_id, i)
+
+    illos: dict = {}
+    with ThreadPoolExecutor(max_workers=min(6, len(product_ids))) as ex:
+        for i, path in ex.map(_gen, range(len(product_ids))):
+            illos[i] = path
+
     rows = []
     for idx, pid in enumerate(product_ids):
-        with session_scope() as s:
-            c = s.get(Comparison, comparison_id)
-            if c:
-                c.gen_status = f"иллюстрация {idx + 1}/{len(product_ids)}…"
-        sym = _symptom_for(pid)
         col = _column_data(pid)
         rows.append({
-            "symptom": sym["symptom"],
-            "illo": _symptom_illo(sym["illo"], comparison_id, idx),
+            "symptom": syms[idx]["symptom"], "illo": illos.get(idx),
             "bottle": producer._product_ref(pid),
             "accent": col["accent"], "title": _short_name(pid), "art": col["art"],
         })
