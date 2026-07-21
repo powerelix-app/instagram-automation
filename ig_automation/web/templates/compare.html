@@ -17,6 +17,17 @@
     <input type="text" name="title" placeholder="название (необязательно)" class="text-sm border rounded px-3 py-2 w-full max-w-xs">
   </div>
   <div>
+    <div class="text-xs text-slate-600 mb-1"><b>Формат макета:</b></div>
+    <div class="flex flex-wrap gap-2">
+      <label class="flex items-center gap-1.5 text-sm border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="style" value="symptom" checked> 🩺 Симптом → продукт <span class="text-slate-400">(как референс: «если у тебя… тогда пей», с иллюстрациями)</span>
+      </label>
+      <label class="flex items-center gap-1.5 text-sm border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="style" value="lineup"> 🧴 Банки в ряд + чек-листы
+      </label>
+    </div>
+  </div>
+  <div>
     <div class="text-xs text-slate-600 mb-1"><b>Товары в сравнение</b> (2–6, порядок = слева направо) — <span class="text-emerald-600">не отметишь → подберём похожие по картинке сами</span>:</div>
     <div class="flex flex-wrap gap-2">
       {% for p in products %}

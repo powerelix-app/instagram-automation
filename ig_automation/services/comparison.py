@@ -94,7 +94,8 @@ def auto_pick_products(ref_bytes: bytes) -> List[str]:
     return valid[:6]
 
 
-def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: str = "") -> int:
+def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: str = "",
+           style: str = "lineup") -> int:
     """Сохраняет референс и список товаров, статус пустой (не в очереди).
     product_ids пуст → авто-подбор по картинке (Claude-vision)."""
     ext = Path(ref_filename or "").suffix.lower() or ".jpg"
@@ -111,7 +112,8 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
     dest_dir = config.MEDIA_DIR / "comparisons"
     dest_dir.mkdir(parents=True, exist_ok=True)
     with session_scope() as s:
-        c = Comparison(title=title.strip(), product_ids=list(product_ids))
+        c = Comparison(title=title.strip(), product_ids=list(product_ids),
+                       style=style if style in ("lineup", "symptom") else "lineup")
         s.add(c)
         s.flush()
         cid = c.id
@@ -121,7 +123,7 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
         return cid
 
 
-def create_by_url(url: str, product_ids: List[str], title: str = "") -> int:
+def create_by_url(url: str, product_ids: List[str], title: str = "", style: str = "lineup") -> int:
     """Тот же механизм, что в разведке: скачивает референс по ссылке
     (Pinterest пин / IG-пост) вместо загрузки файла руками."""
     from . import recon
@@ -131,7 +133,7 @@ def create_by_url(url: str, product_ids: List[str], title: str = "") -> int:
     frames = sorted((config.MEDIA_DIR / "frames" / str(reel_id)).glob("f*.jpg"))
     if not frames:
         raise ValueError("не удалось скачать изображение по ссылке")
-    return create(frames[0].read_bytes(), frames[0].name, product_ids, title)
+    return create(frames[0].read_bytes(), frames[0].name, product_ids, title, style)
 
 
 def list_all() -> List[dict]:
@@ -268,6 +270,233 @@ def _render(photo: Image.Image, columns: List[dict]) -> Image.Image:
     return canvas
 
 
+# ─────────────────────────────────────────────────────────────────────────
+# Стиль «симптом → продукт» (ЕСЛИ У ТЕБЯ … ТОГДА ПЕЙ) — фирменный формат POWERELIX.
+# Раскладку и весь текст рисует Pillow (чётко), AI генерит только иллюстрации симптомов.
+# ─────────────────────────────────────────────────────────────────────────
+_BG = (241, 235, 223)     # бежевый фон
+_CARD = (252, 249, 243)   # карточка
+_PILL_L = (122, 160, 90)  # плашка «ЕСЛИ У ТЕБЯ»
+_PILL_R = (66, 108, 140)  # плашка «ТОГДА ПЕЙ»
+_LINE = (150, 150, 155)
+
+_SYMPTOM_MAP = None
+
+
+def _symptom_for(pid: str) -> dict:
+    """Симптом + промпт иллюстрации для продукта (из data/symptom_map.json)."""
+    global _SYMPTOM_MAP
+    if _SYMPTOM_MAP is None:
+        import json
+        try:
+            _SYMPTOM_MAP = json.loads((config.DATA_DIR / "symptom_map.json").read_text(encoding="utf-8"))
+        except Exception:
+            _SYMPTOM_MAP = {}
+    m = _SYMPTOM_MAP.get(str(pid))
+    if m:
+        return m
+    p = products.product_by_id(str(pid)) or {}
+    ben = (p.get("key_benefits_3") or ["поддержка организма"])[0]
+    return {"symptom": ben, "illo": f"человек, забота о здоровье, {ben.lower()}"}
+
+
+def _short_name(pid: str) -> str:
+    a = _load_assets().get(str(pid), {})
+    if a.get("short"):
+        return a["short"].upper()
+    p = products.product_by_id(str(pid)) or {}
+    return (p.get("name") or "").upper()
+
+
+def _rrect(d, box, radius, **kw):
+    """rounded_rectangle с фолбэком на обычный прямоугольник (старый Pillow)."""
+    try:
+        d.rounded_rectangle(box, radius=radius, **kw)
+    except Exception:
+        d.rectangle(box, **kw)
+
+
+def _pill(d, text, font, x0, x1, y, color):
+    tw = d.textlength(text, font=font)
+    cx = (x0 + x1) // 2
+    px, py = 28, 13
+    h = font.size + 2 * py
+    _rrect(d, [cx - tw // 2 - px, y, cx + tw // 2 + px, y + h], radius=h // 2, fill=color)
+    d.text((cx - tw // 2, y + py), text, font=font, fill=(255, 255, 255))
+
+
+def _bottle_cutout(path: Path, target_h: int) -> Image.Image:
+    """Реальная банка с белого фона → вырез (белое в прозрачность) нужной высоты."""
+    im = Image.open(path).convert("RGBA")
+    data = []
+    for r, g, b, a in im.getdata():
+        data.append((r, g, b, 0) if (r > 242 and g > 242 and b > 242) else (r, g, b, a))
+    im.putdata(data)
+    bbox = im.getbbox()
+    if bbox:
+        im = im.crop(bbox)
+    w = max(1, int(im.width * target_h / im.height))
+    return im.resize((w, target_h), Image.LANCZOS)
+
+
+def _draw_glass(canvas, x, y, w, h, accent):
+    """Простой стакан с жидкостью акцентного цвета (Pillow)."""
+    d = ImageDraw.Draw(canvas)
+    bl, br = x + int(w * 0.12), x + int(w * 0.88)
+    lh = int(h * 0.58)
+    ly = y + h - lh
+    frac = (ly - y) / h
+    fl = x + int((bl - x) * frac)
+    fr = (x + w) - int((x + w - br) * frac)
+    d.polygon([(fl, ly), (fr, ly), (br, y + h), (bl, y + h)], fill=tuple(accent))
+    d.line([(x, y), (bl, y + h)], fill=_LINE, width=4)
+    d.line([(x + w, y), (br, y + h)], fill=_LINE, width=4)
+    d.line([(bl, y + h), (br, y + h)], fill=_LINE, width=4)
+    d.ellipse([x, y - 7, x + w, y + 7], outline=_LINE, width=4)
+
+
+def _symptom_illo(prompt: str, cid: int, idx: int):
+    """AI-иллюстрация симптома (мягкая пастель, бежевый фон, без текста). Path или None."""
+    from . import producer
+    full = ("мягкая чистая пастельная иллюстрация в тёплых бежевых тонах, единый нежный стиль, "
+            "без текста букв и цифр, квадратная композиция по центру: " + prompt)
+    try:
+        img = producer.gen_image(full, ref=None, aspect="1:1")
+        p = config.MEDIA_DIR / "comparisons" / f"{cid}_sym{idx}.png"
+        p.write_bytes(img)
+        return p
+    except Exception as e:
+        log.warning("symptom illo %s fail: %s", idx, e)
+        return None
+
+
+def _render_symptom(rows: List[dict], out_path=None) -> Image.Image:
+    """Инфографика «ЕСЛИ У ТЕБЯ (симптом) → ТОГДА ПЕЙ (продукт + артикул WB)»."""
+    n = len(rows)
+    W, HEAD, ROW, FOOT = 1080, 250, 214, 100
+    H = HEAD + n * ROW + FOOT
+    canvas = Image.new("RGB", (W, H), _BG)
+    d = ImageDraw.Draw(canvas)
+
+    # header: вордмарк + две плашки
+    f_word = _font("montserrat-black.ttf", 60)
+    ww = d.textlength("POWERELIX", font=f_word)
+    d.text(((W - ww) // 2, 46), "POWERELIX", font=f_word, fill=DARK)
+    f_pill = _font("Inter-ExtraBold.otf", 30)
+    _pill(d, "ЕСЛИ У ТЕБЯ:", f_pill, 40, 486, 150, _PILL_L)
+    _pill(d, "ТОГДА ПЕЙ:", f_pill, 590, 1040, 150, _PILL_R)
+
+    LX0, LX1, RX0, RX1 = 40, 486, 590, 1040
+    f_sym = _font("Inter-ExtraBold.otf", 31)
+    f_name = _font("montserrat-black.ttf", 33)
+    f_art = _font("Inter-ExtraBold.otf", 25)
+
+    for i, row in enumerate(rows):
+        band = HEAD + i * ROW
+        y0, y1 = band + 12, band + ROW - 12
+        accent = row["accent"]
+        cy = (y0 + y1) // 2
+
+        # левая карточка: иллюстрация симптома + подпись
+        _rrect(d, [LX0, y0, LX1, y1], 26, fill=_CARD)
+        sz = (y1 - y0) - 28
+        ix, iy = LX0 + 16, y0 + 14
+        placed = False
+        if row.get("illo"):
+            try:
+                il = Image.open(row["illo"]).convert("RGB").resize((sz, sz), Image.LANCZOS)
+                mask = Image.new("L", (sz, sz), 0)
+                _rrect(ImageDraw.Draw(mask), [0, 0, sz, sz], 20, fill=255)
+                canvas.paste(il, (ix, iy), mask)
+                placed = True
+            except Exception as e:
+                log.warning("illo paste fail: %s", e)
+        if not placed:
+            _rrect(d, [ix, iy, ix + sz, iy + sz], 20, fill=tuple(accent))
+        tx = ix + sz + 20
+        slines = str(row["symptom"]).split("\n")
+        ty = cy - len(slines) * (f_sym.size + 6) // 2
+        for ln in slines:
+            d.text((tx, ty), ln, font=f_sym, fill=DARK)
+            ty += f_sym.size + 6
+
+        # стрелка
+        d.line([LX1 + 14, cy, RX0 - 26, cy], fill=tuple(accent), width=9)
+        d.polygon([(RX0 - 26, cy - 15), (RX0 - 26, cy + 15), (RX0 - 4, cy)], fill=tuple(accent))
+
+        # правая карточка: стакан + банка + название + артикул
+        _rrect(d, [RX0, y0, RX1, y1], 26, fill=_CARD)
+        bh = (y1 - y0) - 26
+        bx = RX1 - 24
+        try:
+            bottle = _bottle_cutout(row["bottle"], bh)
+            bx = RX1 - bottle.width - 20
+            canvas.paste(bottle, (bx, y0 + 13), bottle)
+        except Exception as e:
+            log.warning("bottle cutout fail: %s", e)
+        _draw_glass(canvas, RX0 + 24, y0 + 30, 68, bh - 24, accent)
+        nx = RX0 + 108
+        nlines = _wrap(d, row["title"], f_name, max(140, bx - nx - 14))
+        nh = len(nlines) * (f_name.size + 4) + 46
+        ny = cy - nh // 2
+        for ln in nlines:
+            d.text((nx, ny), ln, font=f_name, fill=DARK)
+            ny += f_name.size + 4
+        if row.get("art"):
+            badge = f"#{row['art']}"
+            bw = d.textlength(badge, font=f_art)
+            _rrect(d, [nx, ny + 6, nx + bw + 26, ny + 6 + 40], 12, fill=DARK)
+            d.text((nx + 13, ny + 14), badge, font=f_art, fill=(255, 255, 255))
+
+    # футер
+    d.rectangle([0, H - FOOT + 18, W, H], fill=DARK)
+    f_foot = _font("montserrat-black.ttf", 33)
+    ft = "Ищи артикул на WILDBERRIES"
+    fw = d.textlength(ft, font=f_foot)
+    d.text(((W - fw) // 2, H - FOOT + 36), ft, font=f_foot, fill=(255, 255, 255))
+
+    if out_path:
+        canvas.save(out_path)
+    return canvas
+
+
+def _execute_symptom(comparison_id: int, product_ids: List[str]) -> None:
+    """Сборка инфографики «симптом → продукт»: AI-иллюстрации + Pillow-макет."""
+    from . import producer
+    rows = []
+    for idx, pid in enumerate(product_ids):
+        with session_scope() as s:
+            c = s.get(Comparison, comparison_id)
+            if c:
+                c.gen_status = f"иллюстрация {idx + 1}/{len(product_ids)}…"
+        sym = _symptom_for(pid)
+        col = _column_data(pid)
+        rows.append({
+            "symptom": sym["symptom"],
+            "illo": _symptom_illo(sym["illo"], comparison_id, idx),
+            "bottle": producer._product_ref(pid),
+            "accent": col["accent"], "title": _short_name(pid), "art": col["art"],
+        })
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        if c:
+            c.gen_status = "собираю макет…"
+    out_dir = config.MEDIA_DIR / "comparisons"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{comparison_id}_final.png"
+    try:
+        _render_symptom(rows, out_path)
+    except Exception as e:
+        _fail(comparison_id, f"сборка макета не удалась: {e}")
+        return
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        if c:
+            c.output_path = f"/media/comparisons/{out_path.name}"
+            c.gen_status = "done"
+            c.gen_error = ""
+
+
 def execute(comparison_id: int) -> None:
     from . import producer  # ленивый импорт — тот же паттерн, что в generator.py
     with session_scope() as s:
@@ -276,7 +505,12 @@ def execute(comparison_id: int) -> None:
             return
         ref_path = config.DATA_DIR / c.ref_path.lstrip("/")
         product_ids = list(c.product_ids or [])
+        style = getattr(c, "style", "lineup") or "lineup"
         c.gen_status = "генерация фото…"
+
+    if style == "symptom":
+        _execute_symptom(comparison_id, product_ids)
+        return
 
     cols = [_column_data(pid) for pid in product_ids]
     refs = [ref_path]

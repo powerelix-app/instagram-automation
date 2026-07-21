@@ -1002,14 +1002,14 @@ def compare_page(request: Request, msg: str = "", _: bool = Depends(require_user
 @router.post("/compare/new")
 async def compare_new(request: Request, file: Optional[UploadFile] = File(None),
                       url: str = Form(""), product_ids: Optional[List[str]] = Form(None), title: str = Form(""),
-                      _: bool = Depends(require_user)):
+                      style: str = Form("lineup"), _: bool = Depends(require_user)):
     try:
         pids = [p for p in (product_ids or []) if p and p.strip()]  # пусто → авто-подбор в create()
         if file is not None and file.filename:
             data = await file.read()
-            cid = comparison_svc.create(data, file.filename or "ref.jpg", pids, title)
+            cid = comparison_svc.create(data, file.filename or "ref.jpg", pids, title, style)
         elif url.strip():
-            cid = comparison_svc.create_by_url(url, pids, title)
+            cid = comparison_svc.create_by_url(url, pids, title, style)
         else:
             raise ValueError("дай файл или ссылку на референс")
         comparison_svc.enqueue(cid)

@@ -176,6 +176,7 @@ class Comparison(Base):
     title: Mapped[str] = mapped_column(String(128), default="")
     ref_path: Mapped[str] = mapped_column(String(512), default="")
     product_ids: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)  # ["5","2","11"]
+    style: Mapped[str] = mapped_column(String(16), default="lineup")  # lineup | symptom
     gen_status: Mapped[str] = mapped_column(String(64), default="")
     gen_error: Mapped[str] = mapped_column(Text, default="")
     output_path: Mapped[str] = mapped_column(String(512), default="")
