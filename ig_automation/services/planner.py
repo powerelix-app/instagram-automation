@@ -14,18 +14,21 @@ log = logging.getLogger(__name__)
 _FMT = {"Reels": "reels", "Карусель": "carousel", "Stories": "stories", "Пост (фото)": "photo"}
 
 
-def generate_and_store(n_posts: int, start_date: str, cadence: str, focus: Optional[str]) -> int:
+def generate_and_store(n_posts: int, start_date: str, cadence: str, focus: Optional[str],
+                       rhythm: str = "2:1", slots: str = "") -> int:
     """Генерит план через Claude и сохраняет в БД. Возвращает id плана."""
     if not config.ANTHROPIC_API_KEY:
         raise RuntimeError("Не задан ANTHROPIC_API_KEY в .env")
-    plan = content_plan.generate(n_posts=n_posts, start_date=start_date, cadence=cadence, focus=focus)
+    plan = content_plan.generate(n_posts=n_posts, start_date=start_date, cadence=cadence,
+                                 focus=focus, rhythm=rhythm, slots=slots)
     raw = plan.model_dump(mode="json")
     with session_scope() as s:
         row = ContentPlan(
             period=plan.period,
             strategy_summary=plan.strategy_summary,
             rubrics_legend=plan.rubrics_legend,
-            params={"n_posts": n_posts, "start_date": start_date, "cadence": cadence, "focus": focus},
+            params={"n_posts": n_posts, "start_date": start_date, "cadence": cadence,
+                    "focus": focus, "rhythm": rhythm, "slots": slots},
             raw=raw,
         )
         s.add(row)
@@ -34,8 +37,23 @@ def generate_and_store(n_posts: int, start_date: str, cadence: str, focus: Optio
         return row.id
 
 
+def _planned_utc(date_s: str, time_s: str):
+    """Дата+время плана (МСК) → scheduled_at в UTC-naive (как в publisher.schedule).
+    Ставим на черновик как ПЛАНОВУЮ дату — планировщик публикации фильтрует по
+    status='scheduled', поэтому черновик сам не улетит; дата лишь предзаполняет слот."""
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    try:
+        hh, mm = (time_s or "10:00").split(":")[:2]
+        naive = datetime.fromisoformat(f"{date_s}T{int(hh):02d}:{int(mm):02d}")
+        return naive.replace(tzinfo=ZoneInfo("Europe/Moscow")).astimezone(
+            ZoneInfo("UTC")).replace(tzinfo=None)
+    except Exception:
+        return None
+
+
 def materialize_posts(plan_id: int) -> int:
-    """Создаёт черновики постов из плана. Идемпотентно (если уже созданы — 0)."""
+    """Создаёт черновики постов из плана + проставляет плановую дату/слот. Идемпотентно."""
     with session_scope() as s:
         plan = s.get(ContentPlan, plan_id)
         if not plan or not plan.raw:
@@ -51,9 +69,10 @@ def materialize_posts(plan_id: int) -> int:
                 product=p.get("product", ""),
                 hook=p.get("hook", ""),
                 caption=p.get("caption", ""),
-                hashtags=p.get("hashtags", []),
+                hashtags=(p.get("hashtags", []) or [])[:5],
                 visual_idea=p.get("visual_idea", ""),
                 cta=p.get("cta", ""),
+                scheduled_at=_planned_utc(p.get("date", ""), p.get("time", "")),
                 status="draft",
             ))
             added += 1

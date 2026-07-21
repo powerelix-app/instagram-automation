@@ -2,28 +2,41 @@
 {% block title %}Контент-план{% endblock %}
 {% block content %}
 <h1 class="text-2xl font-semibold mb-1">🗓️ Контент-план</h1>
-<p class="text-slate-500 mb-5 text-sm">Claude генерит план с балансом рубрик и юр-правилами БАД (переиспользуем рабочий генератор).</p>
+<p class="text-slate-500 mb-5 text-sm">Полезные посты (мифы/признаки/лайфхаки из банка тем) + продуктовые вкраплениями по заданному ритму. Даты и слоты проставляются автоматически. Юр-правила БАД учтены.</p>
 
-<form action="/plan/generate" method="post" class="bg-white border rounded-xl p-4 mb-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
-  <div>
-    <label class="block text-xs text-slate-500 mb-1">Постов</label>
-    <input name="n_posts" type="number" value="10" min="3" max="40" class="px-3 py-2 border rounded w-full">
-  </div>
+<form action="/plan/generate" method="post" class="bg-white border rounded-xl p-4 mb-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
   <div>
     <label class="block text-xs text-slate-500 mb-1">Дата старта</label>
     <input name="start_date" type="date" required class="px-3 py-2 border rounded w-full">
   </div>
   <div>
-    <label class="block text-xs text-slate-500 mb-1">Частота</label>
-    <input name="cadence" value="5 публикаций в неделю (пн-пт)" class="px-3 py-2 border rounded w-full">
+    <label class="block text-xs text-slate-500 mb-1">Постов в день</label>
+    <input name="posts_per_day" type="number" value="3" min="1" max="6" class="px-3 py-2 border rounded w-full">
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Дней</label>
+    <input name="days" type="number" value="7" min="1" max="14" class="px-3 py-2 border rounded w-full">
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Ритм полезное:продукт</label>
+    <select name="rhythm" class="px-3 py-2 border rounded w-full">
+      <option value="2:1" selected>2 : 1 (2 полезных, 1 рекламный)</option>
+      <option value="3:1">3 : 1</option>
+      <option value="1:1">1 : 1</option>
+      <option value="4:1">4 : 1</option>
+    </select>
+  </div>
+  <div>
+    <label class="block text-xs text-slate-500 mb-1">Слоты (время МСК)</label>
+    <input name="slots" value="10:00, 14:00, 19:00" class="px-3 py-2 border rounded w-full">
   </div>
   <div>
     <label class="block text-xs text-slate-500 mb-1">Фокус (опц.)</label>
-    <input name="focus" placeholder="напр. линейка похудения" class="px-3 py-2 border rounded w-full">
+    <input name="focus" placeholder="напр. упор на женскую линейку" class="px-3 py-2 border rounded w-full">
   </div>
-  <div class="sm:col-span-2">
-    <button class="bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2">Сгенерировать план</button>
-    <span class="text-xs text-slate-400 ml-2">генерация через Claude, ~20–40 сек</span>
+  <div class="sm:col-span-3">
+    <button class="bg-blue-600 hover:bg-blue-500 text-white rounded px-4 py-2">Сгенерировать план на неделю</button>
+    <span class="text-xs text-slate-400 ml-2">генерация через Claude, ~30–60 сек</span>
   </div>
 </form>
 

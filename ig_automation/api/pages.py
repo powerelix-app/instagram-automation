@@ -453,14 +453,21 @@ def plan_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
 @router.post("/plan/generate")
 def plan_generate(
     request: Request,
-    n_posts: int = Form(10),
     start_date: str = Form(...),
-    cadence: str = Form("5 публикаций в неделю (пн-пт)"),
+    posts_per_day: int = Form(3),
+    days: int = Form(7),
+    rhythm: str = Form("2:1"),
+    slots: str = Form("10:00, 14:00, 19:00"),
     focus: str = Form(""),
     _: bool = Depends(require_user),
 ):
     try:
-        plan_id = planner.generate_and_store(n_posts, start_date, cadence, focus or None)
+        posts_per_day = max(1, min(posts_per_day, 6))
+        days = max(1, min(days, 14))
+        n_posts = posts_per_day * days
+        cadence = f"{posts_per_day} публикации в день, {days} дней подряд"
+        plan_id = planner.generate_and_store(n_posts, start_date, cadence, focus or None,
+                                             rhythm=rhythm, slots=slots)
         return RedirectResponse(f"/plan/{plan_id}", status_code=303)
     except Exception as e:
         log.warning("plan generate failed: %s", e)

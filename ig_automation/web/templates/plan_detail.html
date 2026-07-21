@@ -16,12 +16,13 @@
 
 <div class="space-y-2">
   {% for p in plan.posts %}
-  <div class="bg-white border rounded-xl p-3">
+  <div class="bg-white border rounded-xl p-3 {% if p.post_type == 'product' %}border-l-4 border-l-pink-400{% else %}border-l-4 border-l-emerald-400{% endif %}">
     <div class="flex items-center gap-2 text-xs text-slate-500 flex-wrap">
-      <span class="bg-slate-100 rounded px-2 py-0.5">{{ p.date }} · {{ p.weekday }}</span>
+      <span class="bg-slate-100 rounded px-2 py-0.5">{{ p.date }}{% if p.time %} {{ p.time }}{% endif %} · {{ p.weekday }}</span>
+      {% if p.post_type == 'product' %}<span class="bg-pink-100 text-pink-700 rounded px-2 py-0.5">💰 продукт</span>{% else %}<span class="bg-emerald-100 text-emerald-700 rounded px-2 py-0.5">📚 польза</span>{% endif %}
       <span class="bg-blue-50 text-blue-700 rounded px-2 py-0.5">{{ p.format }}</span>
       <span class="bg-amber-50 text-amber-700 rounded px-2 py-0.5">{{ p.rubric }}</span>
-      {% if p.product and p.product != "—" %}<span class="bg-emerald-50 text-emerald-700 rounded px-2 py-0.5">{{ p.product }}</span>{% endif %}
+      {% if p.product and p.product != "—" %}<span class="bg-slate-100 text-slate-600 rounded px-2 py-0.5">{{ p.product }}</span>{% endif %}
     </div>
     <div class="font-semibold text-sm mt-1">{{ p.hook }}</div>
     <div class="text-sm text-slate-600 mt-1 line-clamp-3">{{ p.caption }}</div>
