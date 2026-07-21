@@ -358,18 +358,40 @@ def _draw_glass(canvas, x, y, w, h, accent):
     d.ellipse([x, y - 7, x + w, y + 7], outline=_LINE, width=4)
 
 
+def _beige_base() -> Path:
+    """Бежевая подложка 1024² — вход для fal edit-эндпоинта (он перерисует по промпту)."""
+    import tempfile
+    base = Image.new("RGB", (1024, 1024), _BG)
+    tf = tempfile.NamedTemporaryFile(suffix=".png", delete=False)
+    base.save(tf.name)
+    return Path(tf.name)
+
+
 def _symptom_illo(prompt: str, cid: int, idx: int):
-    """AI-иллюстрация симптома (мягкая пастель, бежевый фон, без текста). Path или None."""
+    """AI-иллюстрация симптома (тёплое лайфстайл-фото, бежевые тона, без текста). Path или None.
+    gemini (ProxyAPI, если есть баланс) → фолбэк fal-seedream по бежевой подложке."""
     from . import producer
-    full = ("мягкая чистая пастельная иллюстрация в тёплых бежевых тонах, единый нежный стиль, "
-            "без текста букв и цифр, квадратная композиция по центру: " + prompt)
+    full = ("тёплое мягкое лайфстайл-фото в бежевых тонах, крупный план, размытый фон, "
+            "без текста, букв и цифр: " + prompt)
+    out = config.MEDIA_DIR / "comparisons" / f"{cid}_sym{idx}.png"
     try:
         img = producer.gen_image(full, ref=None, aspect="1:1")
-        p = config.MEDIA_DIR / "comparisons" / f"{cid}_sym{idx}.png"
-        p.write_bytes(img)
-        return p
-    except Exception as e:
-        log.warning("symptom illo %s fail: %s", idx, e)
+        out.write_bytes(img)
+        return out
+    except Exception as e1:
+        log.warning("symptom illo %s gemini fail (%s) — fal seedream", idx, e1)
+    try:
+        base = _beige_base()
+        img = producer.gen_image_seedream("полностью перерисуй это изображение как " + full,
+                                          [base], aspect="1:1")
+        try:
+            base.unlink()
+        except Exception:
+            pass
+        out.write_bytes(img)
+        return out
+    except Exception as e2:
+        log.warning("symptom illo %s seedream fail: %s", idx, e2)
         return None
 
 
