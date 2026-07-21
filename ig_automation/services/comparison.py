@@ -40,6 +40,19 @@ def _load_assets() -> dict:
     return bo._load_assets()
 
 
+def _clog(cid: int, msg: str, reset: bool = False) -> None:
+    """Строка в лог генерации сравнения → раздаётся как /media/comparisons/<cid>_gen.log
+    (страница опрашивает его каждые 3с, как у раскадровок)."""
+    from datetime import datetime
+    try:
+        p = config.MEDIA_DIR / "comparisons" / f"{cid}_gen.log"
+        p.parent.mkdir(parents=True, exist_ok=True)
+        with p.open("w" if reset else "a", encoding="utf-8") as f:
+            f.write(f"{datetime.now().strftime('%H:%M:%S')}  {msg}\n")
+    except Exception:
+        pass
+
+
 def auto_pick_products(ref_bytes: bytes) -> List[str]:
     """Claude-vision смотрит на референс-сравнение и подбирает НАШИ товары под то,
     что на картинке (по категории/цели), в порядке слева направо. [] если не смог.
@@ -163,7 +176,14 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
         ref_name = f"ref_{cid}{ext}"
         (dest_dir / ref_name).write_bytes(ref_bytes)
         c.ref_path = f"/media/comparisons/{ref_name}"
-        return cid
+    stored_style = style if style in ("lineup", "symptom") else "lineup"
+    fmt_ru = {"symptom": "симптом → продукт", "lineup": "банки в ряд + чек-листы"}[stored_style]
+    _clog(cid, "референс принят", reset=True)
+    _clog(cid, f"формат макета: {fmt_ru}")
+    names = ", ".join((products.product_by_id(p) or {}).get("name", p) for p in product_ids)
+    _clog(cid, f"товары в колонки: {names}")
+    _clog(cid, "поставлено в очередь генерации…")
+    return cid
 
 
 def create_by_url(url: str, product_ids: List[str], title: str = "", style: str = "lineup") -> int:
@@ -542,17 +562,22 @@ def _execute_symptom(comparison_id: int, product_ids: List[str]) -> None:
         c = s.get(Comparison, comparison_id)
         if c:
             c.gen_status = f"генерирую {len(product_ids)} иллюстраций…"
+    _clog(comparison_id, f"🎨 формат «симптом → продукт», генерирую {len(product_ids)} иллюстраций параллельно…")
     # илло гоняем параллельно (fal медленный, 5 подряд ≈ 10 мин → разом ≈ 2-3 мин)
     syms = [_symptom_for(pid) for pid in product_ids]
 
     def _gen(i):
-        return i, _symptom_illo(syms[i]["illo"], comparison_id, i)
+        sym_txt = str(syms[i]["symptom"]).replace("\n", " ")
+        r = _symptom_illo(syms[i]["illo"], comparison_id, i)
+        _clog(comparison_id, (f"  ✓ иллюстрация: {sym_txt}" if r else f"  ⚠ не вышла: {sym_txt}"))
+        return i, r
 
     illos: dict = {}
     with ThreadPoolExecutor(max_workers=min(6, len(product_ids))) as ex:
         for i, path in ex.map(_gen, range(len(product_ids))):
             illos[i] = path
 
+    _clog(comparison_id, "🖼 собираю макет (банки, стаканы, текст, артикулы)…")
     rows = []
     for idx, pid in enumerate(product_ids):
         col = _column_data(pid)
@@ -579,6 +604,7 @@ def _execute_symptom(comparison_id: int, product_ids: List[str]) -> None:
             c.output_path = f"/media/comparisons/{out_path.name}"
             c.gen_status = "done"
             c.gen_error = ""
+    _clog(comparison_id, "✅ готово — инфографика собрана")
 
 
 def execute(comparison_id: int) -> None:
@@ -592,9 +618,11 @@ def execute(comparison_id: int) -> None:
         style = getattr(c, "style", "lineup") or "lineup"
         c.gen_status = "генерация фото…"
 
+    _clog(comparison_id, "▶️ старт генерации")
     if style == "symptom":
         _execute_symptom(comparison_id, product_ids)
         return
+    _clog(comparison_id, "🧴 формат «банки в ряд», генерирую фото-сцену (gpt-image-2)…")
 
     cols = [_column_data(pid) for pid in product_ids]
     refs = [ref_path]
@@ -637,6 +665,7 @@ def execute(comparison_id: int) -> None:
         c = s.get(Comparison, comparison_id)
         if c:
             c.gen_status = "накладываю текст…"
+    _clog(comparison_id, "🖼 накладываю чек-листы и артикулы (текст — Pillow)…")
 
     try:
         import io
@@ -656,10 +685,12 @@ def execute(comparison_id: int) -> None:
             c.output_path = f"/media/comparisons/{out_path.name}"
             c.gen_status = "done"
             c.gen_error = ""
+    _clog(comparison_id, "✅ готово — инфографика собрана")
 
 
 def _fail(comparison_id: int, reason: str) -> None:
     log.warning("comparison %s failed: %s", comparison_id, reason)
+    _clog(comparison_id, f"❌ ошибка: {reason}")
     with session_scope() as s:
         c = s.get(Comparison, comparison_id)
         if c:

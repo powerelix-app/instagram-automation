@@ -15,6 +15,28 @@
 <div class="bg-red-50 border border-red-200 rounded-xl p-4 mb-4 text-sm">❌ <b>Ошибка:</b> {{ item.gen_error }}</div>
 {% endif %}
 
+<details class="mb-4" {% if item.gen_status and item.gen_status not in ('done','error') %}open{% endif %}>
+  <summary class="cursor-pointer text-sm text-slate-500 select-none">🖥 Логи генерации</summary>
+  <pre id="genlog" class="mt-2 bg-slate-900 text-emerald-300 text-xs rounded-lg p-3 overflow-auto"
+       style="max-height:220px; white-space:pre-wrap; word-break:break-word">загрузка…</pre>
+</details>
+<script>
+(function(){
+  var el = document.getElementById('genlog');
+  if(!el) return;
+  function tick(){
+    fetch('/media/comparisons/{{ item.id }}_gen.log?t=' + Date.now(), {cache:'no-store'})
+      .then(function(r){ return r.ok ? r.text() : ''; })
+      .then(function(t){
+        var atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
+        el.textContent = t ? t.trim().split('\n').slice(-60).join('\n') : 'пока пусто';
+        if(atBottom) el.scrollTop = el.scrollHeight;
+      }).catch(function(){});
+  }
+  tick(); setInterval(tick, 3000);
+})();
+</script>
+
 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
   <div class="bg-white border rounded-xl p-3">
     <div class="text-xs text-slate-500 mb-2">📎 Референс</div>
