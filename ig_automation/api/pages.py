@@ -1002,7 +1002,7 @@ def compare_page(request: Request, msg: str = "", _: bool = Depends(require_user
 @router.post("/compare/new")
 async def compare_new(request: Request, file: Optional[UploadFile] = File(None),
                       url: str = Form(""), product_ids: Optional[List[str]] = Form(None), title: str = Form(""),
-                      style: str = Form("lineup"), _: bool = Depends(require_user)):
+                      style: str = Form("auto"), _: bool = Depends(require_user)):
     try:
         pids = [p for p in (product_ids or []) if p and p.strip()]  # пусто → авто-подбор в create()
         if file is not None and file.filename:

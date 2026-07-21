@@ -94,13 +94,56 @@ def auto_pick_products(ref_bytes: bytes) -> List[str]:
     return valid[:6]
 
 
+def analyze_reference(ref_bytes: bytes) -> str:
+    """Vision определяет ФОРМАТ инфографики → какой шаблон собирать.
+    'symptom' (симптом→продукт) | 'lineup' (товары в ряд + чек-листы). Дефолт 'symptom'."""
+    import base64
+    import io
+    from typing import Literal
+
+    import anthropic
+    from pydantic import BaseModel
+
+    class _Fmt(BaseModel):
+        format: Literal["symptom", "lineup"]
+        reason: str = ""
+
+    im = Image.open(io.BytesIO(ref_bytes)).convert("RGB")
+    if im.width > 1024:
+        im = im.resize((1024, int(im.height * 1024 / im.width)), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=88)
+    content = [
+        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                     "data": base64.b64encode(buf.getvalue()).decode()}},
+        {"type": "text", "text":
+            "Определи тип инфографики БАДов:\n"
+            "- 'symptom' — формат «симптом → продукт»: слева боль/состояние (живот, отёки, лицо, "
+            "усталость, туман), стрелка, справа товар. Часто подписи «ЕСЛИ У ТЕБЯ… ТОГДА ПЕЙ».\n"
+            "- 'lineup' — товары стоят в один ряд рядом, сверху/сбоку колонки пользы (чек-листы), "
+            "сравнение нескольких продуктов в одном кадре.\n"
+            "Верни format."},
+    ]
+    try:
+        client = anthropic.Anthropic()
+        resp = client.messages.parse(model=config.CLAUDE_MODEL, max_tokens=150,
+                                     messages=[{"role": "user", "content": content}], output_format=_Fmt)
+        log.info("analyze reference: %s (%s)", resp.parsed_output.format, resp.parsed_output.reason[:80])
+        return resp.parsed_output.format
+    except Exception as e:
+        log.warning("analyze reference fail: %s — дефолт symptom", e)
+        return "symptom"
+
+
 def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: str = "",
            style: str = "lineup") -> int:
     """Сохраняет референс и список товаров, статус пустой (не в очереди).
-    product_ids пуст → авто-подбор по картинке (Claude-vision)."""
+    style='auto' → формат определяется по картинке; product_ids пуст → авто-подбор товаров."""
     ext = Path(ref_filename or "").suffix.lower() or ".jpg"
     if ext not in (".png", ".jpg", ".jpeg", ".webp"):
         raise ValueError("формат не поддерживается (PNG/JPG/WEBP)")
+    if style == "auto":
+        style = analyze_reference(ref_bytes)
     product_ids = [str(p).strip() for p in (product_ids or []) if str(p).strip()]
     if not product_ids:  # галочки не стоят — берём те, что на картинке
         product_ids = auto_pick_products(ref_bytes)
