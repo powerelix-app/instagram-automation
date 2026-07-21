@@ -1001,16 +1001,19 @@ def compare_page(request: Request, msg: str = "", _: bool = Depends(require_user
 
 @router.post("/compare/new")
 async def compare_new(request: Request, file: Optional[UploadFile] = File(None),
-                      url: str = Form(""), product_ids: List[str] = Form(...), title: str = Form(""),
+                      url: str = Form(""), product_ids: Optional[List[str]] = Form(None), title: str = Form(""),
                       _: bool = Depends(require_user)):
     try:
+        pids = [p for p in (product_ids or []) if p and p.strip()]
+        if not pids:
+            raise ValueError("отметь галочками наши товары для сравнения (обычно 2–6, порядок = слева направо)")
         if file is not None and file.filename:
             data = await file.read()
-            cid = comparison_svc.create(data, file.filename or "ref.jpg", product_ids, title)
+            cid = comparison_svc.create(data, file.filename or "ref.jpg", pids, title)
         elif url.strip():
-            cid = comparison_svc.create_by_url(url, product_ids, title)
+            cid = comparison_svc.create_by_url(url, pids, title)
         else:
-            raise ValueError("дай файл или ссылку на референс")
+            raise ValueError("дай файл или ссылку на референс (или отметь товары — сейчас не выбрано ни то, ни другое)")
         comparison_svc.enqueue(cid)
         msg = "Собираю сравнение — обнови страницу через минуту-две"
     except Exception as e:
