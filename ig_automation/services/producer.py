@@ -341,8 +341,8 @@ def _overlay_boxes(img_path: Path) -> dict:
     from typing import Literal, Optional
 
     class _Boxes(BaseModel):
-        face: Optional[list] = Field(default=None, description="рамка ЛИЦА человека [x0,y0,x1,y1] в долях 0..1, или null если лица нет")
-        product: Optional[list] = Field(default=None, description="рамка БАНКИ продукта [x0,y0,x1,y1] в долях 0..1, или null")
+        face: Optional[list[float]] = Field(default=None, description="рамка ЛИЦА человека [x0,y0,x1,y1] в долях 0..1, или null если лица нет")
+        product: Optional[list[float]] = Field(default=None, description="рамка БАНКИ продукта [x0,y0,x1,y1] в долях 0..1, или null")
         suggest: Literal["top-left", "top-right", "bottom-left", "bottom-right", "none"] = "bottom-left"
 
     import io
@@ -728,6 +728,10 @@ def _produce_slides(sb_id: int):
                 "(то же лицо и та же внешность, что на референсе модели — НЕ выдумывай другую; "
                 "поза и действие как в референсе, "
                 "НЕ копируй внешность человека из референса). "
+                "В КАДРЕ РОВНО ОДИН ЧЕЛОВЕК — наша модель. КАТЕГОРИЧЕСКИ запрещено добавлять "
+                "второго человека: ни на фоне, ни размытым силуэтом, ни в отражении, ни на "
+                "переднем плане. Если в референсе несколько людей — оставь ТОЛЬКО одного (нашу модель), "
+                "фон — чистая студия/размытие без людей. "
                 "ЛЮБОЙ продукт/упаковку замени на НАШ продукт с ТРЕТЬЕГО изображения — форма банки, "
                 "крышка, цвет и этикетка СТРОГО как на референсе продукта, этикетка чёткая, читаемая, "
                 "повернута к камере, БАНКА ЦЕЛИКОМ В КАДРЕ (не обрезать краем). ЗАПРЕЩЕНО придумывать "
@@ -757,6 +761,8 @@ def _produce_slides(sb_id: int):
             _set(sb_id, gen_status=f"слайд {i + 1}/{len(scenes)}…")
             prompt = (f"Слайд {i + 1} Instagram-карусели.\nВИЗУАЛ: {sc.get('scene', '')}\n"
                       f"Композиция: {sc.get('camera', '')}\n"
+                      "Если в кадре есть человек — РОВНО ОДИН (наша модель); никаких других "
+                      "людей на фоне/в отражении/размытым силуэтом.\n"
                       "СТРОГО: без текста и надписей (кроме этикетки продукта).")
             img = gen_product_image(prompt, [bottle], aspect=ratio, sb_id=sb_id)
             p = out / f"slide_{i}.png"
