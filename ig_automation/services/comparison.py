@@ -484,11 +484,11 @@ def _symptom_illo(prompt: str, cid: int, idx: int):
             return out
         except Exception as e:
             log.warning("symptom illo %s gemini fail #%s (%s)", idx, attempt, e)
-    for attempt in range(2):  # fal seedream — фолбэк по бежевой подложке
-        try:
+    for attempt in range(2):  # fal nano-banana-2 (та же модель, что gemini, но через fal-кошелёк
+        try:                  # — без 402 ProxyAPI; ~77с vs ~144с у seedream, слушает русский)
             base = _beige_base()
-            img = producer.gen_image_seedream("полностью перерисуй это изображение как " + full,
-                                              [base], aspect="1:1")
+            img = producer.gen_image_nano("полностью перерисуй это изображение как " + full,
+                                          [base], aspect="1:1")
             try:
                 base.unlink()
             except Exception:
@@ -496,7 +496,7 @@ def _symptom_illo(prompt: str, cid: int, idx: int):
             out.write_bytes(img)
             return out
         except Exception as e:
-            log.warning("symptom illo %s seedream fail #%s: %s", idx, attempt, e)
+            log.warning("symptom illo %s nano fail #%s: %s", idx, attempt, e)
     return None
 
 
