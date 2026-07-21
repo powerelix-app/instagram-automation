@@ -332,16 +332,18 @@ _MONT = Path(__file__).resolve().parents[2] / "assets" / "fonts" / "montserrat-b
 _INTER_SB = Path(__file__).resolve().parents[2] / "assets" / "fonts" / "Inter-SemiBold.otf"
 
 
-def _overlay_spot(img_path: Path) -> str:
-    """Claude-vision: куда можно положить крупный заголовок, не перекрыв
-    продукт/этикетку/лицо. -> 'top-left'|'top-right'|'bottom-left'|'bottom-right'|'none'."""
+def _overlay_boxes(img_path: Path) -> dict:
+    """Claude-vision возвращает НОРМИРОВАННЫЕ (0..1) рамки лица и продукта в кадре,
+    чтобы угол под заголовок выбрать геометрией, а не «на глаз» (vision путается).
+    -> {face: [x0,y0,x1,y1]|None, product: [...]|None, suggest: 'bottom-left'|...}."""
     import anthropic
-    from pydantic import BaseModel
-    from typing import Literal
+    from pydantic import BaseModel, Field
+    from typing import Literal, Optional
 
-    class _Spot(BaseModel):
-        position: Literal["top-left", "top-right", "bottom-left", "bottom-right", "none"]
-        reason: str = ""
+    class _Boxes(BaseModel):
+        face: Optional[list] = Field(default=None, description="рамка ЛИЦА человека [x0,y0,x1,y1] в долях 0..1, или null если лица нет")
+        product: Optional[list] = Field(default=None, description="рамка БАНКИ продукта [x0,y0,x1,y1] в долях 0..1, или null")
+        suggest: Literal["top-left", "top-right", "bottom-left", "bottom-right", "none"] = "bottom-left"
 
     import io
     from PIL import Image as _Im
@@ -353,19 +355,60 @@ def _overlay_spot(img_path: Path) -> str:
         {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
                                      "data": base64.b64encode(_buf.getvalue()).decode()}},
         {"type": "text", "text":
-            "Это слайд Instagram-карусели. Хотим наложить КРУПНЫЙ заголовок (2-3 строки, "
-            "занимает примерно четверть кадра). Выбери угол, где он НЕ перекроет банку "
-            "продукта, её этикетку, лицо и руки человека и важные предметы. Верхняя "
-            "полоса кадра занята маленьким логотипом — top-варианты чуть ниже него. "
-            "Если чистого угла нет — position='none' (лучше без текста, чем поверх продукта)."},
+            "Слайд Instagram. Верни НОРМИРОВАННЫЕ рамки (доли 0..1, x0y0 — левый верх, "
+            "x1y1 — правый низ): face — вокруг ЛИЦА/головы человека (если есть), product — "
+            "вокруг банки продукта. Рамку лица бери С ЗАПАСОМ (волосы, шея). Плюс suggest — "
+            "твой совет, в каком углу заголовок наименее мешает."},
     ]
     client = anthropic.Anthropic()
     resp = client.messages.parse(
-        model=config.CLAUDE_MODEL, max_tokens=200,
-        messages=[{"role": "user", "content": content}], output_format=_Spot)
+        model=config.CLAUDE_MODEL, max_tokens=300,
+        messages=[{"role": "user", "content": content}], output_format=_Boxes)
     v = resp.parsed_output
-    log.info("overlay spot: %s (%s)", v.position, v.reason)
-    return v.position
+    log.info("overlay boxes: face=%s product=%s suggest=%s", v.face, v.product, v.suggest)
+    return {"face": v.face, "product": v.product, "suggest": v.suggest}
+
+
+def _pick_spot(boxes: dict, W: int, H: int, bh: int, tw: int) -> str:
+    """Геометрически выбирает угол под заголовок (bh×tw — реальный размер блока).
+    ЛИЦО пересекать нельзя НИКОГДА (жёсткое правило). Банку — избегаем, но если
+    свободного угла нет, текст может лечь на корпус банки (это меньшее зло, чем лицо).
+    Порядок: совет vision → низ → верх. Совсем нет места мимо лица — 'none'."""
+    M = int(W * 0.055)
+    pad_x = int(W * 0.02)
+    def rect(pos):
+        top = "top" in pos
+        left = "left" in pos
+        y0 = int(H * 0.10) if top else int(H - H * 0.06 - bh)
+        x0 = (M - pad_x) if left else (W - M - tw - pad_x)
+        return (x0, y0, x0 + tw + 2 * pad_x, y0 + bh)
+    def to_px(b):
+        return (b[0] * W, b[1] * H, b[2] * W, b[3] * H) if (b and len(b) == 4) else None
+    face = to_px(boxes.get("face"))
+    product = to_px(boxes.get("product"))
+    def overlap(r, o, pad=0.0):
+        if not o:
+            return False
+        ox0, oy0, ox1, oy1 = o[0] - pad, o[1] - pad, o[2] + pad, o[3] + pad
+        return not (r[2] <= ox0 or r[0] >= ox1 or r[3] <= oy0 or r[1] >= oy1)
+    order = []
+    sug = boxes.get("suggest") or "bottom-left"
+    if sug != "none":
+        order.append(sug)
+    for c in ("bottom-left", "bottom-right", "top-right", "top-left"):
+        if c not in order:
+            order.append(c)
+    face_pad, prod_pad = H * 0.05, H * 0.02  # вокруг лица запас больше
+    # проход 1: идеальный угол — мимо лица И мимо банки
+    for pos in order:
+        r = rect(pos)
+        if not overlap(r, face, face_pad) and not overlap(r, product, prod_pad):
+            return pos
+    # проход 2: обязательное правило — только мимо ЛИЦА (банку допускаем)
+    for pos in order:
+        if not overlap(rect(pos), face, face_pad):
+            return pos
+    return "none"
 
 
 def smart_overlay(img_path: Path, title: str) -> None:
@@ -375,11 +418,6 @@ def smart_overlay(img_path: Path, title: str) -> None:
 
     im = _Im.open(img_path).convert("RGBA")
     W, H = im.size
-    try:
-        pos = _overlay_spot(img_path)
-    except Exception as e:
-        log.warning("overlay spot недоступен (%s) — кладу bottom-left", e)
-        pos = "bottom-left"
 
     f_logo = ImageFont.truetype(str(_MONT), int(H * 0.030))
     f_big = ImageFont.truetype(str(_MONT), int(H * 0.060))
@@ -390,19 +428,29 @@ def smart_overlay(img_path: Path, title: str) -> None:
     d = ImageDraw.Draw(tx)
     d.text((M, int(H * 0.04)), "POWERELIX", font=f_logo, fill=(255, 255, 255, 255))
 
+    # перенос заголовка по словам (макс. 3 строки) — считаем ДО выбора угла, т.к.
+    # высота блока нужна геометрии, чтобы текст не наехал на лицо/продукт.
+    words = title.upper().split()
+    lines, cur = [], ""
+    for w_ in words:
+        t = (cur + " " + w_).strip()
+        if d.textlength(t, font=f_big) > W * 0.48 and cur:
+            lines.append(cur); cur = w_
+        else:
+            cur = t
+    lines.append(cur)
+    lines = lines[:3]
+    bh = len(lines) * lh
+    tw = int(max((d.textlength(ln, font=f_big) for ln in lines), default=0))
+
+    # угол выбираем ГЕОМЕТРИЕЙ: vision даёт рамки лица/банки, блок не должен их пересечь.
+    try:
+        pos = _pick_spot(_overlay_boxes(img_path), W, H, bh, tw)
+    except Exception as e:
+        log.warning("overlay boxes недоступны (%s) — кладу bottom-left", e)
+        pos = "bottom-left"
+
     if pos != "none":
-        # перенос заголовка по словам, максимум 3 строки
-        words = title.upper().split()
-        lines, cur = [], ""
-        for w_ in words:
-            t = (cur + " " + w_).strip()
-            if d.textlength(t, font=f_big) > W * 0.48 and cur:
-                lines.append(cur); cur = w_
-            else:
-                cur = t
-        lines.append(cur)
-        lines = lines[:3]
-        bh = len(lines) * lh
         y = int(H * 0.115) if "top" in pos else int(H - H * 0.06 - bh)
         yy = y
         right = "right" in pos
