@@ -483,9 +483,13 @@ def plan_detail(request: Request, plan_id: int, msg: str = "", _: bool = Depends
 
 
 @router.post("/plan/{plan_id}/materialize")
-def plan_materialize(request: Request, plan_id: int, _: bool = Depends(require_user)):
-    added = planner.materialize_posts(plan_id)
-    msg = f"Создано черновиков: {added}" if added else "Черновики уже созданы (или план пуст)"
+def plan_materialize(request: Request, plan_id: int, date: str = Form(""),
+                     _: bool = Depends(require_user)):
+    added = planner.materialize_posts(plan_id, only_date=date or None)
+    if added:
+        msg = f"Создано черновиков: {added}" + (f" (день {date})" if date else "")
+    else:
+        msg = "Черновики уже созданы (или день/план пуст)"
     return RedirectResponse(f"/plan/{plan_id}?msg={msg}", status_code=303)
 
 

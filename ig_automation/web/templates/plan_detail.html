@@ -9,10 +9,27 @@
 <div class="text-xs text-slate-500 mb-4">{% for r in plan.rubrics_legend %}<span class="inline-block bg-slate-100 rounded px-2 py-0.5 mr-1 mb-1">{{ r }}</span>{% endfor %}</div>
 {% endif %}
 
-<form action="/plan/{{ plan.id }}/materialize" method="post" class="mb-5">
-  <button class="bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2 text-sm">📝 Посты → черновики</button>
-  <span class="text-xs text-slate-400 ml-2">создано: {{ plan.materialized }}</span>
-</form>
+<div class="mb-5 space-y-3">
+  <form action="/plan/{{ plan.id }}/materialize" method="post">
+    <button class="bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2 text-sm">📝 Весь план → черновики</button>
+    <span class="text-xs text-slate-400 ml-2">создано всего: {{ plan.materialized }}</span>
+  </form>
+  <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+    <div class="text-xs text-amber-800 mb-2">🧪 <b>Обкатать по одному дню</b> — жми день, в черновики уйдут только его посты (неделя останется целой):</div>
+    <div class="flex flex-wrap gap-1.5">
+      {% for d in plan.days %}
+      <form action="/plan/{{ plan.id }}/materialize" method="post" class="inline">
+        <input type="hidden" name="date" value="{{ d.date }}">
+        <button class="border rounded-lg px-2.5 py-1 text-xs transition
+          {% if d.done >= d.total %}bg-emerald-100 border-emerald-300 text-emerald-700{% else %}bg-white border-slate-300 text-slate-700 hover:bg-emerald-50 hover:border-emerald-300{% endif %}">
+          {% if d.done >= d.total %}✓ {% endif %}{{ d.date[8:10] }}.{{ d.date[5:7] }} · {{ d.weekday[:2] }}
+          <span class="opacity-60">({{ d.done }}/{{ d.total }})</span>
+        </button>
+      </form>
+      {% endfor %}
+    </div>
+  </div>
+</div>
 
 <div class="space-y-2">
   {% for p in plan.posts %}
@@ -23,6 +40,7 @@
       <span class="bg-blue-50 text-blue-700 rounded px-2 py-0.5">{{ p.format }}</span>
       <span class="bg-amber-50 text-amber-700 rounded px-2 py-0.5">{{ p.rubric }}</span>
       {% if p.product and p.product != "—" %}<span class="bg-slate-100 text-slate-600 rounded px-2 py-0.5">{{ p.product }}</span>{% endif %}
+      {% if p._done %}<span class="bg-emerald-600 text-white rounded px-2 py-0.5">✓ черновик</span>{% endif %}
     </div>
     <div class="font-semibold text-sm mt-1">{{ p.hook }}</div>
     <div class="text-sm text-slate-600 mt-1 line-clamp-3">{{ p.idea or p.visual_idea }}</div>

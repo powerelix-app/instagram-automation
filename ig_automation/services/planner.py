@@ -52,27 +52,35 @@ def _planned_utc(date_s: str, time_s: str):
         return None
 
 
-def materialize_posts(plan_id: int) -> int:
-    """Создаёт черновики постов из плана + проставляет плановую дату/слот. Идемпотентно."""
+def materialize_posts(plan_id: int, only_date: Optional[str] = None) -> int:
+    """Создаёт черновики постов из плана + проставляет плановую дату/слот.
+    only_date='YYYY-MM-DD' → только посты этого дня (обкатка по дню).
+    Идемпотентно по hook: повторный клик не плодит дубли, дни можно докидывать по одному."""
     with session_scope() as s:
         plan = s.get(ContentPlan, plan_id)
         if not plan or not plan.raw:
             return 0
-        if s.query(Post).filter(Post.plan_id == plan_id).count() > 0:
-            return 0
+        existing = {h for (h,) in s.query(Post.hook)
+                    .filter(Post.plan_id == plan_id).all() if h}
         added = 0
         for p in plan.raw.get("posts", []):
+            if only_date and p.get("date", "") != only_date:
+                continue
+            hook = p.get("hook", "")
+            if hook and hook in existing:
+                continue  # этот пост уже материализован
             s.add(Post(
                 plan_id=plan_id,
                 format=_FMT.get(p.get("format", ""), "photo"),
                 rubric=p.get("rubric", ""),
                 product=p.get("product", ""),
-                hook=p.get("hook", ""),
+                hook=hook,
                 caption="",  # полный текст пишется по кнопке «текст» на странице поста
                 visual_idea=p.get("idea", "") or p.get("visual_idea", ""),
                 scheduled_at=_planned_utc(p.get("date", ""), p.get("time", "")),
                 status="draft",
             ))
+            existing.add(hook)
             added += 1
         return added
 
@@ -93,8 +101,21 @@ def get_plan(plan_id: int) -> Optional[dict]:
         p = s.get(ContentPlan, plan_id)
         if not p:
             return None
+        posts = (p.raw or {}).get("posts", [])
+        done_hooks = {h for (h,) in s.query(Post.hook)
+                      .filter(Post.plan_id == plan_id).all() if h}
+        days: dict = {}  # date -> сводка для кнопок «материализовать день»
+        for post in posts:
+            post["_done"] = bool(post.get("hook") and post["hook"] in done_hooks)
+            d = post.get("date", "")
+            day = days.setdefault(d, {"date": d, "weekday": post.get("weekday", ""),
+                                      "total": 0, "done": 0})
+            day["total"] += 1
+            if post["_done"]:
+                day["done"] += 1
         return {
             "id": p.id, "period": p.period, "strategy_summary": p.strategy_summary,
-            "rubrics_legend": p.rubrics_legend or [], "posts": (p.raw or {}).get("posts", []),
+            "rubrics_legend": p.rubrics_legend or [], "posts": posts,
+            "days": list(days.values()),
             "materialized": s.query(Post).filter(Post.plan_id == p.id).count(),
         }
