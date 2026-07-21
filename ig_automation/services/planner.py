@@ -68,10 +68,8 @@ def materialize_posts(plan_id: int) -> int:
                 rubric=p.get("rubric", ""),
                 product=p.get("product", ""),
                 hook=p.get("hook", ""),
-                caption=p.get("caption", ""),
-                hashtags=(p.get("hashtags", []) or [])[:5],
-                visual_idea=p.get("visual_idea", ""),
-                cta=p.get("cta", ""),
+                caption="",  # полный текст пишется по кнопке «текст» на странице поста
+                visual_idea=p.get("idea", "") or p.get("visual_idea", ""),
                 scheduled_at=_planned_utc(p.get("date", ""), p.get("time", "")),
                 status="draft",
             ))
