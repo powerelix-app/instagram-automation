@@ -40,13 +40,74 @@ def _load_assets() -> dict:
     return bo._load_assets()
 
 
+def auto_pick_products(ref_bytes: bytes) -> List[str]:
+    """Claude-vision смотрит на референс-сравнение и подбирает НАШИ товары под то,
+    что на картинке (по категории/цели), в порядке слева направо. [] если не смог.
+    Нужно, когда пользователь не отметил галочки — 'возьми те, что на картинке'."""
+    import base64
+    import io
+
+    import anthropic
+    from pydantic import BaseModel, Field
+
+    brand = products.load_brand()
+    cat_lines = []
+    for p in brand["products"]:
+        ben = ", ".join(p.get("key_benefits_3", []))
+        cat_lines.append(f'#{p["id"]} {p.get("full_name", p["name"])} — {ben}')
+    catalog_txt = "\n".join(cat_lines)
+
+    class _Pick(BaseModel):
+        product_ids: list[str] = Field(description="id НАШИХ товаров под то, что на картинке, слева направо, 2-6 штук")
+        reason: str = ""
+
+    im = Image.open(io.BytesIO(ref_bytes)).convert("RGB")
+    if im.width > 1024:
+        im = im.resize((1024, int(im.height * 1024 / im.width)), Image.LANCZOS)
+    buf = io.BytesIO()
+    im.save(buf, "JPEG", quality=88)
+    content = [
+        {"type": "image", "source": {"type": "base64", "media_type": "image/jpeg",
+                                     "data": base64.b64encode(buf.getvalue()).decode()}},
+        {"type": "text", "text":
+            "Это сравнительная инфографика БАДов/добавок (несколько товаров или целей в одном кадре). "
+            "Определи, про какие категории/цели здоровья она (напр. похудение, сон, иммунитет, кожа, "
+            "гормоны, энергия). Из НАШЕЙ линейки ниже подбери товары, максимально близкие по ЦЕЛИ к тому, "
+            "что на картинке, в том же порядке слева направо. Столько же товаров, сколько на референсе "
+            "(но 2-6). Верни только id.\n\nНАША ЛИНЕЙКА:\n" + catalog_txt},
+    ]
+    try:
+        client = anthropic.Anthropic()
+        resp = client.messages.parse(model=config.CLAUDE_MODEL, max_tokens=400,
+                                     messages=[{"role": "user", "content": content}], output_format=_Pick)
+        picked = resp.parsed_output.product_ids
+        reason = resp.parsed_output.reason
+    except Exception as e:
+        log.warning("auto-pick сравнение упал: %s", e)
+        return []
+    valid: List[str] = []
+    for pid in picked:
+        pid = str(pid).strip().lstrip("#")
+        if products.product_by_id(pid) and pid not in valid:
+            valid.append(pid)
+    log.info("auto-pick сравнение: %s (%s)", valid, (reason or "")[:100])
+    return valid[:6]
+
+
 def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: str = "") -> int:
-    """Сохраняет референс и список товаров, статус пустой (не в очереди)."""
+    """Сохраняет референс и список товаров, статус пустой (не в очереди).
+    product_ids пуст → авто-подбор по картинке (Claude-vision)."""
     ext = Path(ref_filename or "").suffix.lower() or ".jpg"
     if ext not in (".png", ".jpg", ".jpeg", ".webp"):
         raise ValueError("формат не поддерживается (PNG/JPG/WEBP)")
+    product_ids = [str(p).strip() for p in (product_ids or []) if str(p).strip()]
+    if not product_ids:  # галочки не стоят — берём те, что на картинке
+        product_ids = auto_pick_products(ref_bytes)
+        if not product_ids:
+            raise ValueError("не смог распознать товары на картинке — отметь их галочками вручную")
     if not (2 <= len(product_ids) <= 6):
-        raise ValueError("выбери от 2 до 6 товаров")
+        raise ValueError("нужно 2–6 товаров (авто-подбор нашёл меньше — выбери вручную)"
+                         if len(product_ids) < 2 else "не больше 6 товаров")
     dest_dir = config.MEDIA_DIR / "comparisons"
     dest_dir.mkdir(parents=True, exist_ok=True)
     with session_scope() as s:

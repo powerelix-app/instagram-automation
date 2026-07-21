@@ -1004,18 +1004,17 @@ async def compare_new(request: Request, file: Optional[UploadFile] = File(None),
                       url: str = Form(""), product_ids: Optional[List[str]] = Form(None), title: str = Form(""),
                       _: bool = Depends(require_user)):
     try:
-        pids = [p for p in (product_ids or []) if p and p.strip()]
-        if not pids:
-            raise ValueError("отметь галочками наши товары для сравнения (обычно 2–6, порядок = слева направо)")
+        pids = [p for p in (product_ids or []) if p and p.strip()]  # пусто → авто-подбор в create()
         if file is not None and file.filename:
             data = await file.read()
             cid = comparison_svc.create(data, file.filename or "ref.jpg", pids, title)
         elif url.strip():
             cid = comparison_svc.create_by_url(url, pids, title)
         else:
-            raise ValueError("дай файл или ссылку на референс (или отметь товары — сейчас не выбрано ни то, ни другое)")
+            raise ValueError("дай файл или ссылку на референс")
         comparison_svc.enqueue(cid)
-        msg = "Собираю сравнение — обнови страницу через минуту-две"
+        msg = ("Собираю сравнение — обнови через минуту-две"
+               + ("" if pids else " (товары подобрал по картинке автоматически)"))
     except Exception as e:
         log.warning("compare create failed: %s", e)
         msg = f"Ошибка: {e}"
