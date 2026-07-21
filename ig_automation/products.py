@@ -68,6 +68,28 @@ def product_by_id(pid: str) -> dict | None:
     return None
 
 
+def resolve_product_id(name: str) -> str:
+    """Имя продукта из плана → id линейки. '' если не опознан.
+    План иногда пишет полное имя ('Магний + Витамин B6'), иногда короткое ('Инозитол')."""
+    if not name or name.strip() in ("", "—", "-"):
+        return ""
+    q = name.strip().lower()
+    prods = load_brand()["products"]
+    # 1) точное совпадение по full_name или name
+    for p in prods:
+        for cand in (p.get("full_name", ""), p.get("name", "")):
+            if cand and cand.strip().lower() == q:
+                return str(p["id"])
+    # 2) одно имя — подстрока другого (план мог укоротить/расширить); берём самое длинное совпадение
+    best_id, best_len = "", 0
+    for p in prods:
+        for cand in (p.get("full_name", ""), p.get("name", "")):
+            c = cand.strip().lower()
+            if len(c) >= 5 and (q in c or c in q) and len(c) > best_len:
+                best_id, best_len = str(p["id"]), len(c)
+    return best_id
+
+
 def one_context(pid: str) -> str:
     """Детальный контекст ОДНОГО товара для генерации текста под него."""
     p = product_by_id(pid)

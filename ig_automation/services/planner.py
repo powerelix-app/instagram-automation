@@ -4,7 +4,7 @@ from __future__ import annotations
 import logging
 from typing import List, Optional
 
-from .. import config, content_plan
+from .. import config, content_plan, products
 from ..db.base import session_scope
 from ..db.models import ContentPlan, Post
 
@@ -69,11 +69,13 @@ def materialize_posts(plan_id: int, only_date: Optional[str] = None) -> int:
             hook = p.get("hook", "")
             if hook and hook in existing:
                 continue  # этот пост уже материализован
+            prod_name = p.get("product", "")
             s.add(Post(
                 plan_id=plan_id,
                 format=_FMT.get(p.get("format", ""), "photo"),
                 rubric=p.get("rubric", ""),
-                product=p.get("product", ""),
+                product=prod_name,
+                product_id=products.resolve_product_id(prod_name),  # реальная банка + ссылка WB
                 hook=hook,
                 caption="",  # полный текст пишется по кнопке «текст» на странице поста
                 visual_idea=p.get("idea", "") or p.get("visual_idea", ""),
