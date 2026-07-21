@@ -326,11 +326,14 @@ def _pill(d, text, font, x0, x1, y, color):
 
 
 def _bottle_cutout(path: Path, target_h: int) -> Image.Image:
-    """Реальная банка с белого фона → вырез (белое в прозрачность) нужной высоты."""
+    """Реальная банка с белого фона → вырез (белое в прозрачность) нужной высоты.
+    Уменьшаем СРАЗУ (исходники ~12МП — попиксельный цикл на полном разрешении съест память)."""
     im = Image.open(path).convert("RGBA")
-    data = []
-    for r, g, b, a in im.getdata():
-        data.append((r, g, b, 0) if (r > 242 and g > 242 and b > 242) else (r, g, b, a))
+    work_h = target_h * 2  # рабочее разрешение для чистого выреза, но не 12МП
+    if im.height > work_h:
+        im = im.resize((max(1, int(im.width * work_h / im.height)), work_h), Image.LANCZOS)
+    data = [(r, g, b, 0) if (r > 242 and g > 242 and b > 242) else (r, g, b, a)
+            for r, g, b, a in im.getdata()]
     im.putdata(data)
     bbox = im.getbbox()
     if bbox:
