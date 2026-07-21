@@ -113,7 +113,6 @@ def generate(
     response = client.messages.parse(
         model=config.CLAUDE_MODEL,
         max_tokens=16000,
-        thinking={"type": "adaptive"},
         system=SYSTEM,
         messages=[
             {"role": "user", "content": build_user_prompt(n_posts, start_date, cadence, focus, rhythm, slots)}
