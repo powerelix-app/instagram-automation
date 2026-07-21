@@ -1002,14 +1002,15 @@ def compare_page(request: Request, msg: str = "", _: bool = Depends(require_user
 @router.post("/compare/new")
 async def compare_new(request: Request, file: Optional[UploadFile] = File(None),
                       url: str = Form(""), product_ids: Optional[List[str]] = Form(None), title: str = Form(""),
-                      style: str = Form("auto"), _: bool = Depends(require_user)):
+                      style: str = Form("auto"), ratio: str = Form("4:5"),
+                      _: bool = Depends(require_user)):
     try:
         pids = [p for p in (product_ids or []) if p and p.strip()]  # пусто → авто-подбор в create()
         if file is not None and file.filename:
             data = await file.read()
-            cid = comparison_svc.create(data, file.filename or "ref.jpg", pids, title, style)
+            cid = comparison_svc.create(data, file.filename or "ref.jpg", pids, title, style, ratio)
         elif url.strip():
-            cid = comparison_svc.create_by_url(url, pids, title, style)
+            cid = comparison_svc.create_by_url(url, pids, title, style, ratio)
         else:
             raise ValueError("дай файл или ссылку на референс")
         comparison_svc.enqueue(cid)
@@ -1039,9 +1040,9 @@ def compare_regenerate(request: Request, cid: int, _: bool = Depends(require_use
 
 @router.post("/compare/{cid}/restyle")
 def compare_restyle(request: Request, cid: int, style: str = Form("auto"),
-                    _: bool = Depends(require_user)):
-    res = comparison_svc.restyle(cid, style)
-    msg = (f"Формат: {res['fmt_ru']} — пересобираю…" if res.get("ok")
+                    ratio: str = Form(""), _: bool = Depends(require_user)):
+    res = comparison_svc.restyle(cid, style, ratio)
+    msg = (f"Формат: {res['fmt_ru']} ({res['ratio']}) — пересобираю…" if res.get("ok")
            else res.get("error", "ошибка"))
     return RedirectResponse(f"/compare/{cid}?msg=" + quote(msg), status_code=303)
 

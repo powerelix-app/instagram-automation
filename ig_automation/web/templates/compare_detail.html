@@ -54,12 +54,15 @@
 </div>
 
 <div class="bg-white border rounded-xl p-3 mt-4">
-  <div class="text-xs text-slate-500 mb-2">🔧 Формат макета — сейчас: <b>{{ {'symptom':'🩺 симптом → продукт','lineup':'🧴 банки в ряд'}.get(item.style, item.style) }}</b>. Не тот? Выбери правильный и пересобери:</div>
+  <div class="text-xs text-slate-500 mb-2">🔧 Формат — сейчас: <b>{{ {'symptom':'🩺 симптом → продукт','lineup':'🧴 банки в ряд'}.get(item.style, item.style) }}</b>, <b>{{ item.ratio }}</b>. Поменять и пересобрать:</div>
   <form action="/compare/{{ item.id }}/restyle" method="post" class="flex flex-wrap items-center gap-2">
     <label class="flex items-center gap-1 text-sm border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50"><input type="radio" name="style" value="auto"> 🤖 Авто</label>
     <label class="flex items-center gap-1 text-sm border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50"><input type="radio" name="style" value="symptom" {% if item.style=='symptom' %}checked{% endif %}> 🩺 Симптом → продукт</label>
     <label class="flex items-center gap-1 text-sm border rounded-lg px-3 py-1.5 cursor-pointer hover:bg-slate-50"><input type="radio" name="style" value="lineup" {% if item.style=='lineup' %}checked{% endif %}> 🧴 Банки в ряд</label>
-    <button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2">↻ Пересобрать в этом формате</button>
+    <select name="ratio" class="text-sm border rounded px-2 py-1.5">
+      {% for r in ['4:5','9:16','1:1','3:4'] %}<option value="{{ r }}" {% if item.ratio==r %}selected{% endif %}>{{ r }}</option>{% endfor %}
+    </select>
+    <button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded px-4 py-2">↻ Пересобрать</button>
   </form>
 </div>
 

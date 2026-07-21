@@ -148,10 +148,14 @@ def analyze_reference(ref_bytes: bytes) -> str:
         return "symptom"
 
 
+_RATIOS = ("4:5", "9:16", "1:1", "3:4", "16:9")
+
+
 def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: str = "",
-           style: str = "lineup") -> int:
+           style: str = "lineup", ratio: str = "4:5") -> int:
     """Сохраняет референс и список товаров, статус пустой (не в очереди).
-    style='auto' → формат определяется по картинке; product_ids пуст → авто-подбор товаров."""
+    style='auto' → формат определяется по картинке; product_ids пуст → авто-подбор товаров.
+    ratio — итоговое соотношение картинки."""
     ext = Path(ref_filename or "").suffix.lower() or ".jpg"
     if ext not in (".png", ".jpg", ".jpeg", ".webp"):
         raise ValueError("формат не поддерживается (PNG/JPG/WEBP)")
@@ -169,7 +173,8 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
     dest_dir.mkdir(parents=True, exist_ok=True)
     with session_scope() as s:
         c = Comparison(title=title.strip(), product_ids=list(product_ids),
-                       style=style if style in ("lineup", "symptom") else "lineup")
+                       style=style if style in ("lineup", "symptom") else "lineup",
+                       ratio=ratio if ratio in _RATIOS else "4:5")
         s.add(c)
         s.flush()
         cid = c.id
@@ -186,7 +191,8 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
     return cid
 
 
-def create_by_url(url: str, product_ids: List[str], title: str = "", style: str = "lineup") -> int:
+def create_by_url(url: str, product_ids: List[str], title: str = "", style: str = "lineup",
+                  ratio: str = "4:5") -> int:
     """Тот же механизм, что в разведке: скачивает референс по ссылке
     (Pinterest пин / IG-пост) вместо загрузки файла руками."""
     from . import recon
@@ -196,7 +202,7 @@ def create_by_url(url: str, product_ids: List[str], title: str = "", style: str 
     frames = sorted((config.MEDIA_DIR / "frames" / str(reel_id)).glob("f*.jpg"))
     if not frames:
         raise ValueError("не удалось скачать изображение по ссылке")
-    return create(frames[0].read_bytes(), frames[0].name, product_ids, title, style)
+    return create(frames[0].read_bytes(), frames[0].name, product_ids, title, style, ratio)
 
 
 def list_all() -> List[dict]:
@@ -219,6 +225,7 @@ def get(comparison_id: int) -> Optional[dict]:
             "product_ids": r.product_ids or [], "gen_status": r.gen_status,
             "gen_error": r.gen_error, "output_path": r.output_path,
             "style": getattr(r, "style", "lineup") or "lineup",
+            "ratio": getattr(r, "ratio", "4:5") or "4:5",
         }
 
 
@@ -251,8 +258,8 @@ def enqueue(comparison_id: int) -> bool:
     return True
 
 
-def restyle(comparison_id: int, style: str) -> dict:
-    """Меняет ФОРМАТ существующего сравнения и ставит пересборку в очередь.
+def restyle(comparison_id: int, style: str, ratio: str = "") -> dict:
+    """Меняет ФОРМАТ и/или соотношение существующего сравнения и ставит пересборку.
     style='auto' → переопределяет по сохранённому референсу (analyze_reference)."""
     with session_scope() as s:
         c = s.get(Comparison, comparison_id)
@@ -267,10 +274,13 @@ def restyle(comparison_id: int, style: str) -> dict:
     with session_scope() as s:
         c = s.get(Comparison, comparison_id)
         c.style = style
+        if ratio in _RATIOS:
+            c.ratio = ratio
+        cur_ratio = c.ratio
     fmt_ru = {"symptom": "симптом → продукт", "lineup": "банки в ряд + чек-листы"}[style]
-    _clog(comparison_id, f"формат изменён на: {fmt_ru}", reset=True)
+    _clog(comparison_id, f"формат изменён на: {fmt_ru} ({cur_ratio})", reset=True)
     enqueue(comparison_id)
-    return {"ok": True, "style": style, "fmt_ru": fmt_ru}
+    return {"ok": True, "style": style, "fmt_ru": fmt_ru, "ratio": cur_ratio}
 
 
 def _column_data(pid: str) -> dict:
@@ -453,10 +463,12 @@ def _beige_base() -> Path:
     return Path(tf.name)
 
 
-# Единый рисованный стиль иллюстраций симптомов (как в фирменном референсе POWERELIX).
-_ILLO_STYLE = ("плоская минималистичная векторная иллюстрация flat illustration, тёплая "
-               "бежево-пастельная палитра, мягкие простые формы, единый нежный стиль, это РИСУНОК "
-               "(не фотография, без фотореализма, без 3d), без текста и букв")
+# Единый рисованный стиль иллюстраций симптомов (как в фирменном референсе POWERELIX):
+# детальный, объёмный, полу-реалистичный рисунок — не плоский минимализм и не фото.
+_ILLO_STYLE = ("детальная мягкая рисованная иллюстрация с объёмом, лёгкими тенями и градиентами, "
+               "полу-реалистичный редакторский стиль как в качественных медицинских инфографиках, "
+               "тёплая бежево-пастельная палитра, аккуратная детальная прорисовка, крупный акцент на "
+               "объекте по центру, НЕ плоский минимализм, НЕ фотография, без текста и букв")
 
 
 def _symptom_illo(prompt: str, cid: int, idx: int):
@@ -486,10 +498,33 @@ def _symptom_illo(prompt: str, cid: int, idx: int):
         return None
 
 
-def _render_symptom(rows: List[dict], out_path=None) -> Image.Image:
-    """Инфографика «ЕСЛИ У ТЕБЯ (симптом) → ТОГДА ПЕЙ (продукт + артикул WB)»."""
+def _fit_canvas(canvas: Image.Image, ratio: str) -> Image.Image:
+    """Подгоняет готовый холст под соотношение (паддинг бежевым фоном), НЕ обрезая контент.
+    ratio '4:5' лента, '9:16' сторис/reels, '1:1' квадрат, '3:4' и т.д."""
+    try:
+        rw, rh = (int(x) for x in ratio.split(":"))
+        target = rw / rh
+    except Exception:
+        return canvas
+    W, H = canvas.size
+    if abs(W / H - target) < 0.01:
+        return canvas
+    if W / H > target:  # шире целевого → добавляем поля сверху/снизу
+        newH = int(round(W / target))
+        out = Image.new("RGB", (W, newH), _BG)
+        out.paste(canvas, (0, (newH - H) // 2))
+    else:               # уже/выше целевого → добавляем поля по бокам
+        newW = int(round(H * target))
+        out = Image.new("RGB", (newW, H), _BG)
+        out.paste(canvas, ((newW - W) // 2, 0))
+    return out
+
+
+def _render_symptom(rows: List[dict], out_path=None, ratio: str = "4:5") -> Image.Image:
+    """Инфографика «ЕСЛИ У ТЕБЯ (симптом) → ТОГДА ПЕЙ (продукт + артикул WB)».
+    ratio — итоговый формат (паддинг бежевым, контент не обрезается)."""
     n = len(rows)
-    W, HEAD, ROW, FOOT = 1080, 250, 214, 100
+    W, HEAD, ROW, FOOT = 1080, 250, 262, 100
     H = HEAD + n * ROW + FOOT
     canvas = Image.new("RGB", (W, H), _BG)
     d = ImageDraw.Draw(canvas)
@@ -499,11 +534,11 @@ def _render_symptom(rows: List[dict], out_path=None) -> Image.Image:
     ww = d.textlength("POWERELIX", font=f_word)
     d.text(((W - ww) // 2, 46), "POWERELIX", font=f_word, fill=DARK)
     f_pill = _font("Inter-ExtraBold.otf", 30)
-    _pill(d, "ЕСЛИ У ТЕБЯ:", f_pill, 40, 486, 150, _PILL_L)
-    _pill(d, "ТОГДА ПЕЙ:", f_pill, 590, 1040, 150, _PILL_R)
+    LX0, LX1, RX0, RX1 = 40, 548, 604, 1040
+    _pill(d, "ЕСЛИ У ТЕБЯ:", f_pill, LX0, LX1, 150, _PILL_L)
+    _pill(d, "ТОГДА ПЕЙ:", f_pill, RX0, RX1, 150, _PILL_R)
 
-    LX0, LX1, RX0, RX1 = 40, 486, 590, 1040
-    f_sym = _font("Inter-ExtraBold.otf", 31)
+    f_sym = _font("Inter-ExtraBold.otf", 29)
     f_name = _font("montserrat-black.ttf", 33)
     f_art = _font("Inter-ExtraBold.otf", 25)
 
@@ -512,24 +547,28 @@ def _render_symptom(rows: List[dict], out_path=None) -> Image.Image:
         y0, y1 = band + 12, band + ROW - 12
         accent = row["accent"]
         cy = (y0 + y1) // 2
+        ch = y1 - y0
 
-        # левая карточка: иллюстрация симптома + подпись
-        _rrect(d, [LX0, y0, LX1, y1], 26, fill=_CARD)
-        sz = (y1 - y0) - 28
-        ix, iy = LX0 + 16, y0 + 14
+        # ЛЕВАЯ карточка: КРУПНАЯ иллюстрация во всю высоту + подпись справа
+        _rrect(d, [LX0, y0, LX1, y1], 28, fill=_CARD)
+        sz = ch - 16
+        ix, iy = LX0 + 14, y0 + 8
         placed = False
         if row.get("illo"):
             try:
-                il = Image.open(row["illo"]).convert("RGB").resize((sz, sz), Image.LANCZOS)
+                il = Image.open(row["illo"]).convert("RGB")
+                s = min(il.size)  # center-crop в квадрат — деталь заполняет окно
+                il = il.crop(((il.width - s) // 2, (il.height - s) // 2,
+                              (il.width + s) // 2, (il.height + s) // 2)).resize((sz, sz), Image.LANCZOS)
                 mask = Image.new("L", (sz, sz), 0)
-                _rrect(ImageDraw.Draw(mask), [0, 0, sz, sz], 20, fill=255)
+                _rrect(ImageDraw.Draw(mask), [0, 0, sz, sz], 22, fill=255)
                 canvas.paste(il, (ix, iy), mask)
                 placed = True
             except Exception as e:
                 log.warning("illo paste fail: %s", e)
         if not placed:
-            _rrect(d, [ix, iy, ix + sz, iy + sz], 20, fill=tuple(accent))
-        tx = ix + sz + 20
+            _rrect(d, [ix, iy, ix + sz, iy + sz], 22, fill=tuple(accent))
+        tx = ix + sz + 18
         slines = str(row["symptom"]).split("\n")
         ty = cy - len(slines) * (f_sym.size + 6) // 2
         for ln in slines:
@@ -537,12 +576,12 @@ def _render_symptom(rows: List[dict], out_path=None) -> Image.Image:
             ty += f_sym.size + 6
 
         # стрелка
-        d.line([LX1 + 14, cy, RX0 - 26, cy], fill=tuple(accent), width=9)
-        d.polygon([(RX0 - 26, cy - 15), (RX0 - 26, cy + 15), (RX0 - 4, cy)], fill=tuple(accent))
+        d.line([LX1 + 12, cy, RX0 - 24, cy], fill=tuple(accent), width=10)
+        d.polygon([(RX0 - 24, cy - 16), (RX0 - 24, cy + 16), (RX0 - 2, cy)], fill=tuple(accent))
 
-        # правая карточка: стакан + банка + название + артикул
-        _rrect(d, [RX0, y0, RX1, y1], 26, fill=_CARD)
-        bh = (y1 - y0) - 26
+        # ПРАВАЯ карточка: стакан + банка + название + артикул
+        _rrect(d, [RX0, y0, RX1, y1], 28, fill=_CARD)
+        bh = ch - 26
         bx = RX1 - 24
         try:
             bottle = _bottle_cutout(row["bottle"], bh)
@@ -550,9 +589,10 @@ def _render_symptom(rows: List[dict], out_path=None) -> Image.Image:
             canvas.paste(bottle, (bx, y0 + 13), bottle)
         except Exception as e:
             log.warning("bottle cutout fail: %s", e)
-        _draw_glass(canvas, RX0 + 24, y0 + 30, 68, bh - 24, accent)
-        nx = RX0 + 108
-        nlines = _wrap(d, row["title"], f_name, max(140, bx - nx - 14))
+        gh = min(bh, 156)
+        _draw_glass(canvas, RX0 + 24, cy - gh // 2, 70, gh, accent)
+        nx = RX0 + 110
+        nlines = _wrap(d, row["title"], f_name, max(140, bx - nx - 12))
         nh = len(nlines) * (f_name.size + 4) + 46
         ny = cy - nh // 2
         for ln in nlines:
@@ -571,12 +611,13 @@ def _render_symptom(rows: List[dict], out_path=None) -> Image.Image:
     fw = d.textlength(ft, font=f_foot)
     d.text(((W - fw) // 2, H - FOOT + 36), ft, font=f_foot, fill=(255, 255, 255))
 
+    canvas = _fit_canvas(canvas, ratio)
     if out_path:
         canvas.save(out_path)
     return canvas
 
 
-def _execute_symptom(comparison_id: int, product_ids: List[str]) -> None:
+def _execute_symptom(comparison_id: int, product_ids: List[str], ratio: str = "4:5") -> None:
     """Сборка инфографики «симптом → продукт»: AI-иллюстрации (параллельно) + Pillow-макет."""
     from concurrent.futures import ThreadPoolExecutor
 
@@ -617,7 +658,7 @@ def _execute_symptom(comparison_id: int, product_ids: List[str]) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{comparison_id}_final.png"
     try:
-        _render_symptom(rows, out_path)
+        _render_symptom(rows, out_path, ratio)
     except Exception as e:
         _fail(comparison_id, f"сборка макета не удалась: {e}")
         return
@@ -639,11 +680,12 @@ def execute(comparison_id: int) -> None:
         ref_path = config.DATA_DIR / c.ref_path.lstrip("/")
         product_ids = list(c.product_ids or [])
         style = getattr(c, "style", "lineup") or "lineup"
+        ratio = getattr(c, "ratio", "4:5") or "4:5"
         c.gen_status = "генерация фото…"
 
-    _clog(comparison_id, "▶️ старт генерации")
+    _clog(comparison_id, f"▶️ старт генерации (формат {ratio})")
     if style == "symptom":
-        _execute_symptom(comparison_id, product_ids)
+        _execute_symptom(comparison_id, product_ids, ratio)
         return
     _clog(comparison_id, "🧴 формат «банки в ряд», генерирую фото-сцену (gpt-image-2)…")
 
@@ -693,7 +735,7 @@ def execute(comparison_id: int) -> None:
     try:
         import io
         photo = Image.open(io.BytesIO(img_bytes))
-        final = _render(photo, cols)
+        final = _fit_canvas(_render(photo, cols), ratio)
     except Exception as e:
         _fail(comparison_id, f"наложение текста не удалось: {e}")
         return

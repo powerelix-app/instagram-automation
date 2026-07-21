@@ -31,6 +31,15 @@
     </div>
   </div>
   <div>
+    <div class="text-xs text-slate-600 mb-1"><b>Формат картинки:</b></div>
+    <select name="ratio" class="text-sm border rounded px-3 py-2">
+      <option value="4:5">4:5 — лента (пост)</option>
+      <option value="9:16">9:16 — сторис / reels</option>
+      <option value="1:1">1:1 — квадрат</option>
+      <option value="3:4">3:4 — вытянутый пост</option>
+    </select>
+  </div>
+  <div>
     <div class="text-xs text-slate-600 mb-1"><b>Товары в сравнение</b> (2–6, порядок = слева направо) — <span class="text-emerald-600">не отметишь → подберём похожие по картинке сами</span>:</div>
     <div class="flex flex-wrap gap-2">
       {% for p in products %}
