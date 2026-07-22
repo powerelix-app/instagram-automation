@@ -79,15 +79,28 @@ def _lipsync(video: Path, audio: Path, out_path: Path) -> Path:
 
 
 def _lipsync_sync2(video: Path, audio: Path, out_path: Path) -> Path:
-    """Sync Lipsync 2 (fal-ai/sync-lipsync/v2). video/audio отдаём публичными URL,
-    результат тянем с fal.media (режется РКН → фолбэк через apify-actor)."""
-    r = requests.post(
-        "https://fal.run/fal-ai/sync-lipsync/v2",
-        headers={"Authorization": f"Key {config.FAL_KEY}", "Content-Type": "application/json"},
-        json={"video_url": _public_url(video), "audio_url": _public_url(audio)},
-        timeout=600)
-    r.raise_for_status()
-    v = r.json().get("video")
+    """Sync Lipsync 2 через fal QUEUE API (синхронный fal.run на этой длинной модели
+    отдаёт 504/422). Сохраняет зубы/черты лица. Результат тянем с fal.media
+    (режется РКН → фолбэк через apify-actor)."""
+    hdr = {"Authorization": f"Key {config.FAL_KEY}", "Content-Type": "application/json"}
+    sub = requests.post("https://queue.fal.run/fal-ai/sync-lipsync/v2", headers=hdr,
+                        json={"video_url": _public_url(video), "audio_url": _public_url(audio)},
+                        timeout=60)
+    sub.raise_for_status()
+    j = sub.json()
+    status_url, response_url = j["status_url"], j["response_url"]
+    for _ in range(120):  # до ~10 мин
+        time.sleep(5)
+        st = requests.get(status_url, headers=hdr, timeout=30).json()
+        s = st.get("status")
+        if s == "COMPLETED":
+            break
+        if s in ("FAILED", "ERROR"):
+            raise RuntimeError(f"sync-lipsync: {s} {str(st)[:200]}")
+    else:
+        raise RuntimeError("sync-lipsync: таймаут ожидания queue")
+    res = requests.get(response_url, headers=hdr, timeout=60).json()
+    v = res.get("video")
     url = v.get("url") if isinstance(v, dict) else v
     if not url:
         raise RuntimeError("sync-lipsync: пустой output")
