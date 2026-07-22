@@ -130,7 +130,8 @@
   <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="include_model" value="1" {% if sb.include_model %}checked{% endif %}> 👤 человек</label>
   <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="include_product" value="1" {% if sb.include_product %}checked{% endif %}> 🫙 наша банка</label>
   <button type="submit" class="px-3 py-1.5 bg-slate-800 text-white rounded font-medium">Применить</button>
-  <span class="text-slate-500 text-xs">сейчас: {% if sb.include_model %}👤 человек{% else %}без человека{% endif %} + {% if sb.include_product %}🫙 банка{% else %}без банки{% endif %} · снять обе → чистый концепт</span>
+  <span class="px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap {% if sb.include_model or sb.include_product %}bg-emerald-100 text-emerald-800{% else %}bg-amber-100 text-amber-800{% endif %}">✅ Сейчас в кадре: {% if sb.include_model %}👤 человек{% endif %}{% if sb.include_model and sb.include_product %} + {% endif %}{% if sb.include_product %}🫙 банка{% endif %}{% if not sb.include_model and not sb.include_product %}🎨 чистый концепт (без человека и банки){% endif %}</span>
+  <span class="text-slate-400 text-xs">снять обе → чистый концепт</span>
 </form>
 
 <form action="/storyboard/{{ sb.id }}/engine" method="post" class="bg-white border rounded-xl p-3 mb-3 text-sm flex items-center gap-2 flex-wrap">

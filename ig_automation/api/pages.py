@@ -356,7 +356,8 @@ def storyboard_set_scene(request: Request, sb_id: int,
             sb.include_product = include_product
     what = (("👤 человек" if include_model else "без человека") + " + "
             + ("🫙 банка" if include_product else "без банки"))
-    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(f"В кадре: {what}"), status_code=303)
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(f"✅ Фильтр «что в кадре» применён — {what}"),
+                            status_code=303)
 
 
 @router.post("/storyboard/{sb_id}/stage/{stage}")
