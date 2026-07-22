@@ -243,7 +243,7 @@ def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
             }, max_charge_usd=0.05, timeout=700)
             for it in items:
                 if it.get("ok") and it.get("downloadUrl"):
-                    raw = requests.get(it["downloadUrl"], params={"token": config.APIFY_TOKEN},
+                    raw = requests.get(it["downloadUrl"], headers={"Authorization": f"Bearer {config.APIFY_TOKEN}"},
                                        timeout=180).content
                     return _parse(json.loads(raw))
             raise RuntimeError("media-fetcher не вернул ответ OpenAI")
@@ -677,7 +677,7 @@ def _eleven_post(path: str, payload: dict) -> bytes:
         }, max_charge_usd=0.05, timeout=240)
         for it in items:
             if it.get("ok") and it.get("downloadUrl"):
-                return requests.get(it["downloadUrl"], params={"token": config.APIFY_TOKEN}, timeout=120).content
+                return requests.get(it["downloadUrl"], headers={"Authorization": f"Bearer {config.APIFY_TOKEN}"}, timeout=120).content
         raise RuntimeError("elevenlabs недоступен и через прокси")
 
 

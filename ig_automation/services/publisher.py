@@ -68,7 +68,7 @@ def _meta_reachable_url(asset_path: str) -> str:
             for it in items:
                 if it.get("downloadUrl"):
                     resp = _rq.get(it["downloadUrl"],
-                                   params={"token": config.APIFY_TOKEN}, timeout=60).json()
+                                   headers={"Authorization": f"Bearer {config.APIFY_TOKEN}"}, timeout=60).json()
                     if resp.get("ok"):
                         file_id = resp["result"]["document"]["file_id"]
                     break

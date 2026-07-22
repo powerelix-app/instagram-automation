@@ -23,7 +23,7 @@ def _run(payload: dict[str, Any], timeout: int = 600) -> list[dict[str, Any]]:
         raise SystemExit("Не задан APIFY_TOKEN в .env")
     r = requests.post(
         f"{BASE}/acts/{ACTOR}/run-sync-get-dataset-items",
-        params={"token": config.APIFY_TOKEN},
+        headers={"Authorization": f"Bearer {config.APIFY_TOKEN}"},  # токен в заголовке, не в URL (не течёт в ошибки)
         json=payload,
         timeout=timeout,
     )
@@ -40,7 +40,8 @@ def _run_actor(
         raise RuntimeError("Не задан APIFY_TOKEN в .env")
     r = requests.post(
         f"{BASE}/acts/{actor}/run-sync-get-dataset-items",
-        params={"token": config.APIFY_TOKEN, "maxTotalChargeUsd": max_charge_usd},
+        params={"maxTotalChargeUsd": max_charge_usd},  # это не секрет — можно в URL
+        headers={"Authorization": f"Bearer {config.APIFY_TOKEN}"},  # токен в заголовке, не в URL
         json=payload,
         timeout=timeout,
     )
@@ -222,7 +223,7 @@ def fetch_via_actor(url: str, timeout: int = 240) -> Optional[bytes]:
         return None
     for it in items:
         if it.get("ok") and it.get("downloadUrl"):
-            r = requests.get(it["downloadUrl"], params={"token": config.APIFY_TOKEN}, timeout=120)
+            r = requests.get(it["downloadUrl"], headers={"Authorization": f"Bearer {config.APIFY_TOKEN}"}, timeout=120)
             if r.ok and r.content:
                 return r.content
     return None
