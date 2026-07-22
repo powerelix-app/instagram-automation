@@ -152,10 +152,11 @@ def seedance_spokesperson_prompt(script: str) -> str:
     return SEEDANCE_SPOKESPERSON.format(script=script)
 
 
-# Голос бренда: ElevenLabs «Nastya POWERELIX» (клон). Ползунки — под естественный звук
-# (similarity высокий = ближе к реальной Насте; stability средний = живая интонация; style = экспрессия).
-ELEVEN_MODEL = "eleven_multilingual_v2"
-NASTYA_SETTINGS = {"stability": 0.45, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": True}
+# Голос бренда: ElevenLabs «Nastya POWERELIX» (клон). Финальный рецепт (подтверждён юзером
+# 22.07.2026): модель eleven_v3 (v3 держит русский и УДАРЕНИЯ верно, в отличие от multilingual_v2),
+# stability 0.75 / similarity 0.25 — как в эталонном файле Nastya_pvc_sp100_s75_sb25_v3.
+ELEVEN_MODEL = "eleven_v3"
+NASTYA_SETTINGS = {"stability": 0.75, "similarity_boost": 0.25, "style": 0.0, "use_speaker_boost": True}
 
 
 def _eleven_tts(text: str, out_path: Path, settings: Optional[dict] = None) -> Optional[Path]:
