@@ -152,9 +152,29 @@ def seedance_spokesperson_prompt(script: str) -> str:
     return SEEDANCE_SPOKESPERSON.format(script=script)
 
 
+# Голос бренда: ElevenLabs «Nastya POWERELIX» (клон). Ползунки — под естественный звук
+# (similarity высокий = ближе к реальной Насте; stability средний = живая интонация; style = экспрессия).
+ELEVEN_MODEL = "eleven_multilingual_v2"
+NASTYA_SETTINGS = {"stability": 0.45, "similarity_boost": 0.8, "style": 0.3, "use_speaker_boost": True}
+
+
+def _eleven_tts(text: str, out_path: Path, settings: Optional[dict] = None) -> Optional[Path]:
+    """Озвучка голосом Насти (ElevenLabs) с настраиваемыми ползунками. Геопрокси внутри."""
+    from . import producer
+    try:
+        data = producer._eleven_post(
+            f"/v1/text-to-speech/{producer.NASTYA_VOICE}",
+            {"text": text, "model_id": ELEVEN_MODEL, "voice_settings": settings or NASTYA_SETTINGS})
+        out_path.write_bytes(data)
+        return out_path
+    except Exception as e:
+        log.warning("eleven tts fail: %s", e)
+        return None
+
+
 def _gen_voice_clip(product_id: str, persona_key: str, script: str, ts: int) -> dict:
-    """Движок 'voice': i2v говорящая мимика → озвучка клоном/MiniMax → липсинк.
-    Точная управляемая русская речь (в отличие от генерённого голоса Veo)."""
+    """Движок 'voice': i2v говорящая мимика → озвучка ГОЛОСОМ НАСТИ (ElevenLabs) → липсинк.
+    Точная, управляемая, живая русская речь (в отличие от генерённого голоса Veo)."""
     import shutil
 
     from . import reels
@@ -168,7 +188,7 @@ def _gen_voice_clip(product_id: str, persona_key: str, script: str, ts: int) -> 
                                 out_name=f"blogger_{product_id}_{ts}_raw.mp4")
     clip = config.MEDIA_DIR / f"blogger_{product_id}_{ts}_raw.mp4"
     shutil.copy(raw, clip)  # в MEDIA_DIR — нужен публичный URL для липсинка
-    audio = reels._tts(script, config.MEDIA_DIR / f"blogger_{product_id}_{ts}_vo.mp3")
+    audio = _eleven_tts(script, config.MEDIA_DIR / f"blogger_{product_id}_{ts}_vo.mp3")
     final = out_dir / f"clip_{product_id}_{ts}.mp4"
     if audio:
         dur = reels._ffprobe_dur(audio) or 8.0
