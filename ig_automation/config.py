@@ -98,3 +98,6 @@ TTS_MODEL = os.getenv("CF_TTS_MODEL", "minimax/speech-02-turbo")
 TTS_VOICE = os.getenv("CF_TTS_VOICE", "Wise_Woman")
 # Lip-sync для Reels (губы модели под озвучку). Пусто = выключить (озвучка просто закадром).
 LIPSYNC_MODEL = os.getenv("CF_LIPSYNC_MODEL", "bytedance/latentsync")
+# Премиум-липсинк Sync-2 (fal). Сейчас fal.media режется РКН с РФ-VPS (fal не может
+# скачать наше медиа) → выключен. Включить (=1) после CF-хостинга медиа, доступного fal.
+LIPSYNC_SYNC2 = os.getenv("CF_LIPSYNC_SYNC2", "") == "1"

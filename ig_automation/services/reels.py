@@ -70,7 +70,7 @@ def _lipsync(video: Path, audio: Path, out_path: Path) -> Path:
     """Синхронизирует губы в video под audio. Основной движок — Sync Lipsync 2
     (fal): сохраняет зубы/черты лица, не «мылит» низ лица как latentsync. Фолбэк —
     latentsync (Replicate), чтобы пайплайн не падал при недоступности fal."""
-    if config.FAL_KEY:
+    if config.FAL_KEY and config.LIPSYNC_SYNC2:
         try:
             return _lipsync_sync2(video, audio, out_path)
         except Exception as e:
