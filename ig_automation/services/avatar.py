@@ -111,6 +111,47 @@ def veo_prompt(product_name: str, script: str, persona_key: str = "nutri") -> st
     )
 
 
+# ── Движок «Seedance-спикер» (приём Егора Кузьмина XR, id 22.04.2026) ─────────
+# ВАЖНО: это НЕ text-to-speech. Нужен базовый видео-референс (@video_1), где кто-то
+# уже говорит нужный текст — Seedance берёт оттуда ГОЛОС и тайминг губ, а лицо — из
+# @image_1, и переносит в дорогую студийную сцену. Хак: язык в промпте «украинский»
+# (обход запрета русского), а lyrics — русский текст. Доступ: Seedance 2.0 через SYNTX
+# (мульти-референс image+video). Полуручной; держим шаблон для премиального спикера.
+SEEDANCE_SPOKESPERSON = """@video_1 — base video reference. Master source for lip movements, \
+facial articulation, head movements, speech timing, and audio.
+
+@image_1 — exact face and body. Preserve likeness 100% throughout.
+
+LANGUAGE AND VOICE:
+Spoken language: Ukrainian. The character speaks Ukrainian throughout with natural \
+conversational delivery, medium pace, relaxed tone. Use standard Ukrainian pronunciation.
+
+lyrics: "{script}"
+
+TASK: Relocate the speaker from @video_1 into a new environment, but preserve his speech \
+and performance exactly:
+— Lip movements and mouth shapes match @video_1 frame-for-frame
+— Head movements, facial expressions, eye movements from @video_1
+— Speech timing and rhythm from @video_1
+— Audio from @video_1 is the final audio — do not regenerate, replace, or modify the voice
+— The person in the new video must be @image_1
+
+FORMAT: 9:16 / duration matches @video_1 / cinematic studio portrait
+STYLE: High-end commercial studio cinematography. ARRI Alexa, 85mm lens. Ultra-sharp focus \
+on face, cinematic shallow depth of field. Subtle film grain. Photorealistic skin texture.
+COLOR: Dark moody studio. Deep black background. Single warm key light from above-right \
+creating dramatic shadows. Strong contrast, rim light on hair and shoulders.
+ENVIRONMENT: Professional photo studio, pure black seamless backdrop, @image_1 on a simple \
+stool, plain black fitted t-shirt. Clean, cinematic, editorial feel.
+FRAMING: Medium close-up, front-facing, eye level. Camera static, locked off, centered."""
+
+
+def seedance_spokesperson_prompt(script: str) -> str:
+    """Заполняет шаблон Seedance-спикера русским текстом (язык в промпте — «украинский»,
+    хак для русской речи). Нужен базовый @video_1 (речь) + @image_1 (лицо)."""
+    return SEEDANCE_SPOKESPERSON.format(script=script)
+
+
 def gen_blogger_clip(product_id: str, persona_key: str = "nutri", angle: str = "польза",
                      mode: str = "i2v") -> dict:
     """Полная цепочка UGC-блогера. mode='i2v' (реком.) — старт-кадр с РЕАЛЬНОЙ банкой →
