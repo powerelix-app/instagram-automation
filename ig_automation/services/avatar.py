@@ -19,10 +19,12 @@ log = logging.getLogger(__name__)
 
 # Персоны UGC-блогеров (лицо/типаж). Расширяется; пока текстовые типажи под Veo.
 PERSONAS = {
-    "nutri": "молодая девушка-нутрициолог 25-30 лет, естественная кожа без ретуши, дружелюбная, "
-             "спортивная, светлый верх, минимум макияжа",
-    "mom": "обычная мама 30-35 лет, тёплая и искренняя, домашняя обстановка, без гламура",
-    "fit": "фитнес-девушка 23-28 лет, спортивная форма, энергичная, утренний свет",
+    "nutri": "молодая девушка-нутрициолог 24-28 лет, привлекательная, здоровая сияющая кожа, "
+             "выспавшийся свежий вид, ясные глаза, лёгкий естественный макияж, дружелюбная улыбка, светлый верх",
+    "mom": "молодая мама 28-33 лет, привлекательная и ухоженная, здоровый свежий вид, "
+           "тёплая искренняя улыбка, лёгкий макияж, уютная домашняя обстановка",
+    "fit": "фитнес-девушка 23-27 лет, спортивная подтянутая, здоровый румянец, энергичная, "
+           "свежий выспавшийся вид, утренний свет",
 }
 
 
@@ -87,11 +89,12 @@ def _start_frame(product_id: str, persona_key: str = "nutri") -> Path:
         raise RuntimeError("нет референса банки в data/product_refs")
     persona = PERSONAS.get(persona_key, PERSONAS["nutri"])
     prompt = (
-        "UGC-style vertical selfie photo, handheld, natural warm light, authentic amateur look, real skin texture. "
+        "UGC-style vertical selfie photo, handheld, soft natural warm light, real but FLATTERING skin texture. "
         f"{persona} holds THIS exact supplement bottle from the reference image at chest height, close to camera "
-        "as if filming a selfie review in a cozy home kitchen. Keep the bottle shape, cap and LABEL EXACTLY as in "
-        "the reference — do not change or distort the label text. Waist-up, looking into camera. "
-        "Vertical 9:16 frame, no text overlays."
+        "as if filming a selfie review in a cozy home kitchen. She looks healthy, well-rested and attractive: "
+        "clear glowing skin, bright awake eyes, NO dark under-eye circles, no puffiness, no facial redness, "
+        "friendly natural smile. Keep the bottle shape, cap and LABEL EXACTLY as in the reference — do not change "
+        "or distort the label text. Waist-up, looking into camera. Vertical 9:16 frame, no text overlays."
     )
     img = producer.gen_image_nano(prompt, [bottle], aspect="9:16")
     out = config.MEDIA_DIR / "bloggers" / f"start_{product_id}_{int(time.time())}.png"

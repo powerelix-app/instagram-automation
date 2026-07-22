@@ -59,8 +59,43 @@ def _replicate_version_run(version: str, body: dict, poll_tries: int = 100, poll
 
 
 def _lipsync(video: Path, audio: Path, out_path: Path) -> Path:
-    """Подгоняет губы в video под audio (latentsync). video/audio должны лежать в MEDIA_DIR
-    (нужны публичные URL). Выход — видео со звуком и синхронными губами."""
+    """Синхронизирует губы в video под audio. Основной движок — Sync Lipsync 2
+    (fal): сохраняет зубы/черты лица, не «мылит» низ лица как latentsync. Фолбэк —
+    latentsync (Replicate), чтобы пайплайн не падал при недоступности fal."""
+    if config.FAL_KEY:
+        try:
+            return _lipsync_sync2(video, audio, out_path)
+        except Exception as e:
+            log.warning("sync-lipsync-2 упал (%s) — фолбэк на latentsync", e)
+    return _lipsync_latentsync(video, audio, out_path)
+
+
+def _lipsync_sync2(video: Path, audio: Path, out_path: Path) -> Path:
+    """Sync Lipsync 2 (fal-ai/sync-lipsync/v2). video/audio отдаём публичными URL,
+    результат тянем с fal.media (режется РКН → фолбэк через apify-actor)."""
+    r = requests.post(
+        "https://fal.run/fal-ai/sync-lipsync/v2",
+        headers={"Authorization": f"Key {config.FAL_KEY}", "Content-Type": "application/json"},
+        json={"video_url": _public_url(video), "audio_url": _public_url(audio)},
+        timeout=600)
+    r.raise_for_status()
+    v = r.json().get("video")
+    url = v.get("url") if isinstance(v, dict) else v
+    if not url:
+        raise RuntimeError("sync-lipsync: пустой output")
+    try:
+        out_path.write_bytes(requests.get(url, timeout=180).content)
+    except Exception:  # fal.media режется РКН с РФ-VPS
+        from .. import apify
+        data = apify.fetch_via_actor(url) or b""
+        if not data:
+            raise RuntimeError("sync-lipsync: не скачался результат")
+        out_path.write_bytes(data)
+    return out_path
+
+
+def _lipsync_latentsync(video: Path, audio: Path, out_path: Path) -> Path:
+    """Фолбэк-липсинк: bytedance/latentsync (Replicate). Слабее по лицу, но живой."""
     global _lipsync_version
     if _lipsync_version is None:
         h = {"Authorization": f"Bearer {config.REPLICATE_API_TOKEN}"}
