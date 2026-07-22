@@ -201,7 +201,21 @@ def create_by_url(url: str, product_ids: List[str], title: str = "", style: str 
         raise ValueError("не удалось разобрать ссылку — проверь URL Pinterest/IG")
     frames = sorted((config.MEDIA_DIR / "frames" / str(reel_id)).glob("f*.jpg"))
     if not frames:
-        raise ValueError("не удалось скачать изображение по ссылке")
+        # видео-Reel: кадры-стопы не извлекались — берём репрезентативный кадр из mp4
+        # (Reel по сути = одна анимированная картинка, для сравнения нужен статичный кадр)
+        import subprocess
+        mp4 = config.MEDIA_DIR / "reels" / f"{reel_id}.mp4"
+        if mp4.exists() and mp4.stat().st_size > 0:
+            fdir = config.MEDIA_DIR / "frames" / str(reel_id)
+            fdir.mkdir(parents=True, exist_ok=True)
+            out = fdir / "f0.jpg"
+            subprocess.run(["ffmpeg", "-y", "-ss", "1", "-i", str(mp4),
+                            "-frames:v", "1", "-q:v", "2", str(out)],
+                           capture_output=True, timeout=120)
+            if out.exists() and out.stat().st_size > 0:
+                frames = [out]
+    if not frames:
+        raise ValueError("не удалось скачать изображение по ссылке (видео без кадров)")
     return create(frames[0].read_bytes(), frames[0].name, product_ids, title, style, ratio)
 
 
