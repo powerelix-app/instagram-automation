@@ -299,6 +299,9 @@ def storyboard_page(request: Request, sb_id: int, _: bool = Depends(require_user
               "status": r.status, "reel_id": r.trend_reel_id,
               "model_key": getattr(r, "model_key", "") or "",
               "video_engine": getattr(r, "video_engine", "") or "",
+              "img_ratio": getattr(r, "img_ratio", "") or "",
+              "include_model": bool(getattr(r, "include_model", True)),
+              "include_product": bool(getattr(r, "include_product", True)),
               "gen_status": r.gen_status or "", "gen_error": r.gen_error or "",
               "outputs": r.output_paths or [], "video": r.output_video or "",
               "is_carousel": bool(r.scenes) and all(float(x.get("duration_s") or 0) == 0 for x in (r.scenes or []))}

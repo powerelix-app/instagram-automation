@@ -144,13 +144,14 @@
 
 <form action="/storyboard/{{ sb.id }}/ratio" method="post" class="bg-white border rounded-xl p-3 mb-3 text-sm flex items-center gap-2 flex-wrap">
   <span class="text-slate-500">🖼 Формат картинок:</span>
-  <select name="img_ratio" onchange="this.form.submit()" class="px-3 py-2 border rounded">
-    {% set r = sb.img_ratio or '4:5' %}
+  {% set r = sb.img_ratio or '4:5' %}
+  <select name="img_ratio" class="px-3 py-2 border rounded">
     <option value="4:5"  {% if r == '4:5'  %}selected{% endif %}>Лента — пост/карусель (4:5)</option>
     <option value="9:16" {% if r == '9:16' %}selected{% endif %}>Reels / сторис — вертикаль (9:16)</option>
     <option value="1:1"  {% if r == '1:1'  %}selected{% endif %}>Квадрат (1:1)</option>
   </select>
-  <span class="text-slate-400 text-xs">9:16 — если картинку выкладываем как Reels</span>
+  <button type="submit" class="px-3 py-1.5 bg-slate-800 text-white rounded font-medium">Применить</button>
+  <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 whitespace-nowrap">✅ Сейчас: {% if r == '9:16' %}Reels 9:16{% elif r == '1:1' %}Квадрат 1:1{% else %}Лента 4:5{% endif %}</span>
 </form>
 
 <form action="/storyboard/{{ sb.id }}/scenes" method="post">
