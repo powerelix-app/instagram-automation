@@ -32,7 +32,8 @@ def ugc_script(product_id: str, angle: str = "польза") -> str:
     ctx = products.one_context(str(product_id)) or ""
     prompt = (
         "Ты — UGC-блогер, девушка-нутрициолог, снимаешь селфи-Reels про добавку. "
-        "Напиши ЖИВОЙ разговорный монолог на 8-12 секунд (2-3 коротких предложения, ~25-40 слов). "
+        "Напиши ЖИВОЙ разговорный монолог на ~8 секунд (1-2 коротких предложения, СТРОГО 18-24 слова, "
+        "не больше — иначе не влезет в клип). "
         "Правила: цепляющий хук в первой фразе; по-человечески, без канцелярита и без впаривания; "
         "мягкая польза; лёгкий призыв в конце (посмотреть/попробовать). БАД — НЕ лекарство: без "
         "обещаний вылечить/гарантий. Верни ТОЛЬКО текст реплики (что говорит девушка), без кавычек и ремарок.\n\n"
@@ -176,24 +177,28 @@ def _eleven_tts(text: str, out_path: Path, settings: Optional[dict] = None) -> O
 def _gen_voice_clip(product_id: str, persona_key: str, script: str, ts: int) -> dict:
     """Движок 'voice': i2v говорящая мимика → озвучка ГОЛОСОМ НАСТИ (ElevenLabs) → липсинк.
     Точная, управляемая, живая русская речь (в отличие от генерённого голоса Veo)."""
+    import math
     import shutil
 
     from . import reels
     from .. import scenes
     out_dir = config.MEDIA_DIR / "bloggers"
     start = _start_frame(product_id, persona_key)  # блогер + реальная банка (в bloggers/)
+    # 1) озвучка Насти ПЕРВОЙ — под её длину подгоняем видео (иначе растяжка ломает липсинк)
+    audio = _eleven_tts(script, config.MEDIA_DIR / f"blogger_{product_id}_{ts}_vo.mp3")
+    adur = reels._ffprobe_dur(audio) if audio else 8.0
+    vdur = max(4, min(8, math.ceil(adur)))  # i2v-модель тянет до ~8с; длину берём под озвучку
+    # 2) i2v говорящая мимика ровно под длину озвучки
     vprompt = ("person looks into the camera and talks warmly to the viewer, natural mouth and "
                "head movement, handheld UGC selfie; keep the bottle and its label EXACTLY as in "
                "the image; no subtitles, no on-screen text")
-    raw = scenes.generate_video(start, prompt=vprompt, duration=8, aspect_ratio="9:16",
+    raw = scenes.generate_video(start, prompt=vprompt, duration=vdur, aspect_ratio="9:16",
                                 out_name=f"blogger_{product_id}_{ts}_raw.mp4")
     clip = config.MEDIA_DIR / f"blogger_{product_id}_{ts}_raw.mp4"
     shutil.copy(raw, clip)  # в MEDIA_DIR — нужен публичный URL для липсинка
-    audio = _eleven_tts(script, config.MEDIA_DIR / f"blogger_{product_id}_{ts}_vo.mp3")
     final = out_dir / f"clip_{product_id}_{ts}.mp4"
     if audio:
-        dur = reels._ffprobe_dur(audio) or 8.0
-        ext = reels._seg_video(clip, dur + 0.4, config.MEDIA_DIR / f"blogger_{product_id}_{ts}_ext.mp4")
+        ext = reels._seg_video(clip, adur + 0.3, config.MEDIA_DIR / f"blogger_{product_id}_{ts}_ext.mp4")
         try:
             reels._lipsync(ext, audio, final)
         except Exception as e:  # липсинк упал — хотя бы примонтируем голос
