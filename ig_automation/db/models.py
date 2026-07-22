@@ -74,6 +74,8 @@ class Storyboard(Base):
     product_id: Mapped[str] = mapped_column(String(32), default="")
     product_name: Mapped[str] = mapped_column(String(128), default="")
     model_key: Mapped[str] = mapped_column(String(64), default="")  # лицо бренда из ростера
+    include_model: Mapped[bool] = mapped_column(Boolean, default=True)   # 👤 человек в кадре
+    include_product: Mapped[bool] = mapped_column(Boolean, default=True)  # 🫙 банка в кадре
     video_engine: Mapped[str] = mapped_column(String(32), default="")  # seedance|kling|grok|omni
     img_ratio: Mapped[str] = mapped_column(String(8), default="")  # 4:5 (лента) | 9:16 (Reels/сторис) | 1:1
     title: Mapped[str] = mapped_column(String(255), default="")

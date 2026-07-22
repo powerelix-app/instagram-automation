@@ -518,7 +518,8 @@ def _shrink(p: Path, max_w: int = 900) -> bytes:
 
 def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
                       chain=IMG_CHAIN, sb_id: Optional[int] = None,
-                      bottle: Optional[Path] = None, strict: bool = False) -> bytes:
+                      bottle: Optional[Path] = None, strict: bool = False,
+                      check_label: bool = True) -> bytes:
     """Кадр с продуктом: идём по цепочке нейросетей, после каждой Claude-vision
     проверяет этикетку; кривая этикетка -> следующая модель.
     strict=False (дефолт): если ни одна не прошла, отдаём последний вариант —
@@ -527,8 +528,10 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
     отказа, а не молча подсовываем брак (для точечной генерации с реальным
     внешним референсом, где пользователь ждёт конкретный результат)."""
     # банка для vision-проверки: явно или последним референсом (конвенция);
-    # bottle=None и нет refs -> проверку пропускаем
-    bottle = Path(bottle) if bottle else (Path(refs[-1]) if refs else None)
+    # check_label=False (концепт «без банки») -> проверку не делаем и цепочку не гоняем зря
+    bottle = Path(bottle) if bottle else (Path(refs[-1]) if (refs and check_label) else None)
+    if not check_label:
+        bottle = None
     last = b""
     last_reason = "модели не вернули результат"
     for name in chain:
@@ -703,8 +706,10 @@ def _produce_slides(sb_id: int):
         product_id, reel_id = sb.product_id, sb.trend_reel_id
         model_key = getattr(sb, "model_key", "") or ""
         ratio = getattr(sb, "img_ratio", "") or "4:5"   # 4:5 лента | 9:16 Reels | 1:1
-    bottle = _product_ref(product_id)
-    if not bottle:
+        inc_model = bool(getattr(sb, "include_model", True))      # 👤 человек в кадре
+        inc_product = bool(getattr(sb, "include_product", True))  # 🫙 банка в кадре
+    bottle = _product_ref(product_id) if inc_product else None
+    if inc_product and not bottle:
         _set(sb_id, gen_status="error",
              gen_error="Нет фото продукта: проверь ссылку WB в /catalog "
                        "или положи фото в data/product_refs/<id>.jpg")
@@ -715,39 +720,48 @@ def _produce_slides(sb_id: int):
     ref_slides = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
     paths = []
     from .brand import model_by_key
-    face = model_by_key(model_key)
+    face = model_by_key(model_key) if inc_model else None
     if ref_slides:
         for i, rs in enumerate(ref_slides):
             _set(sb_id, gen_status=f"слайд {i + 1}/{len(ref_slides)} (по референсу)…")
             hint = scenes[i].get("scene", "") if i < len(scenes) else ""
-            prompt = (
+            # референсы и промпт собираем под тумблеры (человек / банка)
+            refs_i = [rs]
+            model_phrase = bottle_phrase = ""
+            if face:
+                refs_i.append(face)
+                model_phrase = "со ВТОРОГО изображения"
+            if bottle:
+                refs_i.append(bottle)
+                bottle_phrase = f"с {'ТРЕТЬЕГО' if face else 'ВТОРОГО'} изображения"
+            parts = [
                 "ПЕРВОЕ изображение — референсный слайд. Пересоздай его МАКСИМАЛЬНО похоже: "
-                "та же композиция, ракурс, свет, стиль, креативный приём, ДЕЙСТВИЕ и настроение "
-                "(если человек пьёт/наливает/держит — то же самое действие, без изменений). "
-                "НО: если в кадре есть человек — замени его на НАШУ модель со ВТОРОГО изображения "
-                "(то же лицо и та же внешность, что на референсе модели — НЕ выдумывай другую; "
-                "поза и действие как в референсе, "
-                "НЕ копируй внешность человека из референса). "
-                "В КАДРЕ РОВНО ОДИН ЧЕЛОВЕК — наша модель. КАТЕГОРИЧЕСКИ запрещено добавлять "
-                "второго человека: ни на фоне, ни размытым силуэтом, ни в отражении, ни на "
-                "переднем плане. Если в референсе несколько людей — оставь ТОЛЬКО одного (нашу модель), "
-                "фон — чистая студия/размытие без людей. "
-                "ЛЮБОЙ продукт/упаковку замени на НАШ продукт с ТРЕТЬЕГО изображения — форма банки, "
-                "крышка, цвет и этикетка СТРОГО как на референсе продукта, этикетка чёткая, читаемая, "
-                "повернута к камере, БАНКА ЦЕЛИКОМ В КАДРЕ (не обрезать краем). ЗАПРЕЩЕНО придумывать "
-                "другую упаковку или оставлять продукт из референса. "
-                "ЦВЕТ СТЕКЛА и крышки — РОВНО как на референсе; НЕ перекрашивай банку под цвет темы "
-                "или содержимого (зелёный продукт ≠ зелёная или прозрачная банка — стекло остаётся "
-                "того цвета и непрозрачности, что на референсе). Цветовую гамму СЦЕНЫ (фон/свет) "
-                "адаптируй под фирменный цвет, но саму банку НЕ перекрашивай.\n"
-                + (f"Контекст слайда: {hint}\n" if hint else "")
-                + "СТРОГО: никакого текста, букв или надписей на изображении, "
-                "кроме этикетки нашего продукта.")
-            refs_i = [rs] + ([face] if face else []) + [bottle]
-            if not face:  # без лица бренда нумерация референсов сдвигается
-                prompt = prompt.replace("со ВТОРОГО изображения", "— наша модель бренда")
-                prompt = prompt.replace("с ТРЕТЬЕГО изображения", "со ВТОРОГО изображения")
-            img = gen_product_image(prompt, refs_i, aspect=ratio, sb_id=sb_id)
+                "та же композиция, ракурс, свет, стиль, креативный приём, ДЕЙСТВИЕ и настроение. "]
+            if face:
+                parts.append(
+                    f"Если в кадре есть человек — замени его на НАШУ модель {model_phrase} "
+                    "(то же лицо и внешность, что на референсе модели; поза и действие как в референсе). "
+                    "В КАДРЕ РОВНО ОДИН ЧЕЛОВЕК — наша модель, никаких других людей (ни на фоне, ни в "
+                    "отражении, ни размытым силуэтом). ")
+            else:
+                parts.append(
+                    "В КАДРЕ НЕТ ЛЮДЕЙ ВООБЩЕ — убери всех людей из сцены. Только предметы, продукт и "
+                    "окружение (чистый предметный/концептуальный кадр). ")
+            if bottle:
+                parts.append(
+                    f"ЛЮБОЙ продукт/упаковку замени на НАШ продукт {bottle_phrase} — форма банки, крышка, "
+                    "цвет и этикетка СТРОГО как на референсе продукта, этикетка чёткая, банка целиком в "
+                    "кадре. ЦВЕТ СТЕКЛА и крышки — ровно как на референсе, НЕ перекрашивай под цвет темы. ")
+            else:
+                parts.append(
+                    "НЕ добавляй нашу банку/упаковку. Продукт покажи КАК НА РЕФЕРЕНСЕ (капсула, таблетка, "
+                    "капля, абстрактный концепт, натуральные элементы) — БЕЗ фирменной баночки. ")
+            parts.append((f"Контекст слайда: {hint}\n" if hint else "")
+                         + "СТРОГО: никакого текста, букв или надписей на изображении"
+                         + (", кроме этикетки нашего продукта." if bottle else "."))
+            prompt = "".join(parts)
+            img = gen_product_image(prompt, refs_i, aspect=ratio, sb_id=sb_id,
+                                    bottle=bottle, check_label=bool(bottle))
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
             # фирменный оверлей: Claude-vision выбирает чистую зону; если текст
@@ -762,12 +776,16 @@ def _produce_slides(sb_id: int):
     else:  # фолбэк: по описаниям сцен
         for i, sc in enumerate(scenes):
             _set(sb_id, gen_status=f"слайд {i + 1}/{len(scenes)}…")
+            people = ("В кадре РОВНО ОДИН человек — наша модель; никаких других людей." if face
+                      else "В КАДРЕ НЕТ ЛЮДЕЙ — только предметы/сцена/концепт.")
+            prod = ("Товар — наша банка (форма/этикетка как на референсе)." if bottle
+                    else "БЕЗ фирменной баночки — продукт как концепт (капсула/абстракция).")
             prompt = (f"Слайд {i + 1} Instagram-карусели.\nВИЗУАЛ: {sc.get('scene', '')}\n"
-                      f"Композиция: {sc.get('camera', '')}\n"
-                      "Если в кадре есть человек — РОВНО ОДИН (наша модель); никаких других "
-                      "людей на фоне/в отражении/размытым силуэтом.\n"
-                      "СТРОГО: без текста и надписей (кроме этикетки продукта).")
-            img = gen_product_image(prompt, [bottle], aspect=ratio, sb_id=sb_id)
+                      f"Композиция: {sc.get('camera', '')}\n{people}\n{prod}\n"
+                      "СТРОГО: без текста и надписей"
+                      + (" (кроме этикетки продукта)." if bottle else "."))
+            img = gen_product_image(prompt, ([bottle] if bottle else []), aspect=ratio,
+                                    sb_id=sb_id, bottle=bottle, check_label=bool(bottle))
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
             paths.append(f"/media/produced/{sb_id}/slide_{i}.png")

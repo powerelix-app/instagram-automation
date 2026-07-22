@@ -343,6 +343,22 @@ def storyboard_set_ratio(request: Request, sb_id: int, img_ratio: str = Form("")
                             status_code=303)
 
 
+@router.post("/storyboard/{sb_id}/scene")
+def storyboard_set_scene(request: Request, sb_id: int,
+                         include_model: bool = Form(False),
+                         include_product: bool = Form(False),
+                         _: bool = Depends(require_user)):
+    from ..db.models import Storyboard
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if sb:
+            sb.include_model = include_model
+            sb.include_product = include_product
+    what = (("👤 человек" if include_model else "без человека") + " + "
+            + ("🫙 банка" if include_product else "без банки"))
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(f"В кадре: {what}"), status_code=303)
+
+
 @router.post("/storyboard/{sb_id}/stage/{stage}")
 def storyboard_stage(request: Request, sb_id: int, stage: str, _: bool = Depends(require_user)):
     from ..services import producer
