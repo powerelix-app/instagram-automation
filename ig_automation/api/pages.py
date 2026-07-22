@@ -1077,7 +1077,8 @@ def promptlab_index(request: Request, _: bool = Depends(require_user)):
         for p in sorted(base.glob("*.md")):
             if p.name not in skip:
                 files.append({"path": p.name, "title": _md_title(p)})
-        _labels = {"syntx": "SYNTX — 385 техник AI-контента", "egor-xr": "Егор Кузьмин XR"}
+        _labels = {"syntx": "SYNTX — 385 техник AI-контента", "egor-xr": "Егор Кузьмин XR",
+                   "sasha-sadekov": "Саша Садеков"}
         for sub in sorted(base.iterdir()):
             if sub.is_dir():
                 sfiles = [{"path": f"{sub.name}/{p.name}", "title": _md_title(p)}
