@@ -23,7 +23,10 @@
   <a href="/prompt-lab" class="text-blue-600 text-sm hover:underline">← Все плейбуки</a>
   <article class="md max-w-none mt-3 bg-white border rounded-xl p-5">{{ pl_content | safe }}</article>
 {% else %}
-  <p class="text-sm text-slate-500 mb-3">Плейбуки промптов и каталог техник SYNTX (385 приёмов). Источник — репозиторий <code>prompt-lab</code>, синхронизируется на сервер.</p>
+  {% if pl_home %}
+  <article class="md max-w-none mb-6 bg-white border rounded-xl p-5">{{ pl_home | safe }}</article>
+  {% endif %}
+  <h2 class="text-lg font-semibold mt-2 mb-2">📄 Плейбуки промптов</h2>
   <div class="grid sm:grid-cols-2 gap-2">
     {% for f in pl_files %}
     <a href="/prompt-lab/{{ f.path }}" class="block bg-white border rounded-lg px-3 py-2 hover:border-blue-300 text-sm">📄 {{ f.title }}</a>

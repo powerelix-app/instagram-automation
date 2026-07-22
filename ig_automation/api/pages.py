@@ -1063,13 +1063,24 @@ def _md_title(p) -> str:
 def promptlab_index(request: Request, _: bool = Depends(require_user)):
     base = config.DATA_DIR / "promptlab"
     files, syntx = [], []
+    home_html = None
     if base.exists():
+        # витрина сверху: capabilities.md (что умею) — приоритет, иначе README
+        for hb in ("capabilities.md", "README.md"):
+            hp = base / hb
+            if hp.exists():
+                import markdown as _md
+                home_html = _md.markdown(hp.read_text(encoding="utf-8"),
+                                         extensions=["fenced_code", "tables", "sane_lists"])
+                break
+        skip = {"capabilities.md", "README.md"}
         for p in sorted(base.glob("*.md")):
-            files.append({"path": p.name, "title": _md_title(p)})
+            if p.name not in skip:
+                files.append({"path": p.name, "title": _md_title(p)})
         for p in sorted((base / "syntx").glob("*.md")):
             syntx.append({"path": f"syntx/{p.name}", "title": _md_title(p)})
     return templates.TemplateResponse(request, "promptlab.html",
-        _ctx(request, pl_files=files, pl_syntx=syntx, pl_content=None, pl_title="Prompt-lab"))
+        _ctx(request, pl_files=files, pl_syntx=syntx, pl_content=None, pl_home=home_html, pl_title="База знаний"))
 
 
 @router.get("/prompt-lab/{path:path}", response_class=HTMLResponse)
