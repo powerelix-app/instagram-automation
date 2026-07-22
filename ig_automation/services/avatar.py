@@ -152,17 +152,53 @@ def seedance_spokesperson_prompt(script: str) -> str:
     return SEEDANCE_SPOKESPERSON.format(script=script)
 
 
+def _gen_voice_clip(product_id: str, persona_key: str, script: str, ts: int) -> dict:
+    """Движок 'voice': i2v говорящая мимика → озвучка клоном/MiniMax → липсинк.
+    Точная управляемая русская речь (в отличие от генерённого голоса Veo)."""
+    import shutil
+
+    from . import reels
+    from .. import scenes
+    out_dir = config.MEDIA_DIR / "bloggers"
+    start = _start_frame(product_id, persona_key)  # блогер + реальная банка (в bloggers/)
+    vprompt = ("person looks into the camera and talks warmly to the viewer, natural mouth and "
+               "head movement, handheld UGC selfie; keep the bottle and its label EXACTLY as in "
+               "the image; no subtitles, no on-screen text")
+    raw = scenes.generate_video(start, prompt=vprompt, duration=8, aspect_ratio="9:16",
+                                out_name=f"blogger_{product_id}_{ts}_raw.mp4")
+    clip = config.MEDIA_DIR / f"blogger_{product_id}_{ts}_raw.mp4"
+    shutil.copy(raw, clip)  # в MEDIA_DIR — нужен публичный URL для липсинка
+    audio = reels._tts(script, config.MEDIA_DIR / f"blogger_{product_id}_{ts}_vo.mp3")
+    final = out_dir / f"clip_{product_id}_{ts}.mp4"
+    if audio:
+        dur = reels._ffprobe_dur(audio) or 8.0
+        ext = reels._seg_video(clip, dur + 0.4, config.MEDIA_DIR / f"blogger_{product_id}_{ts}_ext.mp4")
+        try:
+            reels._lipsync(ext, audio, final)
+        except Exception as e:  # липсинк упал — хотя бы примонтируем голос
+            log.warning("blogger lipsync fail (%s) — монтирую аудио без синка", e)
+            reels._run(["ffmpeg", "-y", "-i", str(ext), "-i", str(audio), "-map", "0:v",
+                        "-map", "1:a", "-c:v", "copy", "-shortest", str(final)])
+    else:
+        shutil.copy(clip, final)
+    return {"video": final, "script": script, "start_frame": str(start), "engine": "voice"}
+
+
 def gen_blogger_clip(product_id: str, persona_key: str = "nutri", angle: str = "польза",
                      mode: str = "i2v") -> dict:
-    """Полная цепочка UGC-блогера. mode='i2v' (реком.) — старт-кадр с РЕАЛЬНОЙ банкой →
-    Veo 3 оживляет и озвучивает (наша этикетка сохраняется). mode='t2v' — Veo рисует всё
-    сам (быстрее, но банка генерная/искажённая). -> {video, script, start_frame}."""
+    """Полная цепочка UGC-блогера. Движки речи:
+    'i2v' (реком.) — старт-кадр с РЕАЛЬНОЙ банкой → Veo 3 оживляет+озвучивает (голос Veo);
+    't2v' — Veo рисует всё сам (быстрее, банка генерная);
+    'voice' — i2v мимика + озвучка КЛОНОМ/MiniMax + липсинк (точная русская речь).
+    -> {video, script, start_frame, engine}."""
     p = products.product_by_id(str(product_id)) or {}
     name = p.get("full_name", p.get("name", "supplement"))
     script = ugc_script(product_id, angle)
     log.info("blogger script (%s): %s", product_id, script)
     out_dir = config.MEDIA_DIR / "bloggers"
     out_dir.mkdir(parents=True, exist_ok=True)
+    if mode == "voice":
+        return _gen_voice_clip(product_id, persona_key, script, int(time.time()))
     start = None
     if mode == "i2v":
         start = _start_frame(product_id, persona_key)
