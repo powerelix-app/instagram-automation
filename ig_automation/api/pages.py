@@ -1047,6 +1047,44 @@ def compare_restyle(request: Request, cid: int, style: str = Form("auto"),
     return RedirectResponse(f"/compare/{cid}?msg=" + quote(msg), status_code=303)
 
 
+# ── Prompt-lab: веб-вьюер плейбуков промптов + каталога техник SYNTX ──
+
+def _md_title(p) -> str:
+    try:
+        for line in p.read_text(encoding="utf-8").splitlines():
+            if line.startswith("# "):
+                return line[2:].strip()
+    except Exception:
+        pass
+    return p.stem
+
+
+@router.get("/prompt-lab", response_class=HTMLResponse)
+def promptlab_index(request: Request, _: bool = Depends(require_user)):
+    base = config.DATA_DIR / "promptlab"
+    files, syntx = [], []
+    if base.exists():
+        for p in sorted(base.glob("*.md")):
+            files.append({"path": p.name, "title": _md_title(p)})
+        for p in sorted((base / "syntx").glob("*.md")):
+            syntx.append({"path": f"syntx/{p.name}", "title": _md_title(p)})
+    return templates.TemplateResponse(request, "promptlab.html",
+        _ctx(request, pl_files=files, pl_syntx=syntx, pl_content=None, pl_title="Prompt-lab"))
+
+
+@router.get("/prompt-lab/{path:path}", response_class=HTMLResponse)
+def promptlab_view(request: Request, path: str, _: bool = Depends(require_user)):
+    base = (config.DATA_DIR / "promptlab").resolve()
+    target = (base / path).resolve()
+    if not str(target).startswith(str(base)) or not target.exists() or target.suffix != ".md":
+        return RedirectResponse("/prompt-lab", status_code=303)
+    import markdown as _md
+    html = _md.markdown(target.read_text(encoding="utf-8"),
+                        extensions=["fenced_code", "tables", "sane_lists"])
+    return templates.TemplateResponse(request, "promptlab.html",
+        _ctx(request, pl_content=html, pl_title=_md_title(target), pl_files=None, pl_syntx=None))
+
+
 @router.post("/compare/{cid}/delete")
 def compare_delete(request: Request, cid: int, _: bool = Depends(require_user)):
     comparison_svc.delete(cid)

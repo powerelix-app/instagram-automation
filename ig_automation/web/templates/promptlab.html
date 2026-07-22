@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Prompt-lab{% endblock %}
+{% block content %}
+<style>
+  .md h1{font-size:1.6rem;font-weight:800;margin:1rem 0 .6rem}
+  .md h2{font-size:1.25rem;font-weight:700;margin:1.4rem 0 .5rem;border-top:1px solid #e5e7eb;padding-top:.8rem}
+  .md h3{font-size:1.05rem;font-weight:700;margin:1rem 0 .4rem}
+  .md p{margin:.5rem 0;line-height:1.55}
+  .md ul,.md ol{margin:.5rem 0 .5rem 1.4rem;line-height:1.5}
+  .md li{margin:.2rem 0}
+  .md code{background:#f1f5f9;border-radius:4px;padding:.1rem .3rem;font-size:.85em}
+  .md pre{background:#0f172a;color:#e2e8f0;border-radius:10px;padding:.9rem;overflow:auto;font-size:.82rem;white-space:pre-wrap;word-break:break-word;margin:.6rem 0}
+  .md pre code{background:none;padding:0;color:inherit}
+  .md table{border-collapse:collapse;margin:.6rem 0;display:block;overflow-x:auto}
+  .md th,.md td{border:1px solid #e5e7eb;padding:.35rem .6rem;font-size:.85rem;text-align:left}
+  .md a{color:#2563eb;text-decoration:underline}
+  .md blockquote{border-left:3px solid #cbd5e1;padding-left:.8rem;color:#64748b;margin:.6rem 0}
+</style>
+<a href="/" class="text-blue-600 text-sm hover:underline">← Штаб</a>
+<h1 class="text-2xl font-semibold mt-2 mb-3">🧪 {{ pl_title }}</h1>
+
+{% if pl_content %}
+  <a href="/prompt-lab" class="text-blue-600 text-sm hover:underline">← Все плейбуки</a>
+  <article class="md max-w-none mt-3 bg-white border rounded-xl p-5">{{ pl_content | safe }}</article>
+{% else %}
+  <p class="text-sm text-slate-500 mb-3">Плейбуки промптов и каталог техник SYNTX (385 приёмов). Источник — репозиторий <code>prompt-lab</code>, синхронизируется на сервер.</p>
+  <div class="grid sm:grid-cols-2 gap-2">
+    {% for f in pl_files %}
+    <a href="/prompt-lab/{{ f.path }}" class="block bg-white border rounded-lg px-3 py-2 hover:border-blue-300 text-sm">📄 {{ f.title }}</a>
+    {% endfor %}
+  </div>
+  {% if pl_syntx %}
+  <h2 class="text-lg font-semibold mt-6 mb-2">🎯 SYNTX — каталог техник AI-контента</h2>
+  <div class="grid sm:grid-cols-2 gap-2">
+    {% for f in pl_syntx %}
+    <a href="/prompt-lab/{{ f.path }}" class="block bg-white border rounded-lg px-3 py-2 hover:border-blue-300 text-sm">📑 {{ f.title }}</a>
+    {% endfor %}
+  </div>
+  {% endif %}
+{% endif %}
+{% endblock %}
