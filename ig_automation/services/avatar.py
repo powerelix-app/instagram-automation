@@ -44,23 +44,59 @@ def ugc_script(product_id: str, angle: str = "польза") -> str:
     return r.content[0].text.strip().strip('"').strip()
 
 
-def _veo3(prompt: str, aspect: str = "9:16", duration: str = "8s") -> bytes:
-    """Veo 3 fast на fal (text-to-video с речью). Возвращает mp4-байты."""
-    r = requests.post("https://fal.run/fal-ai/veo3/fast",
+def _veo3(prompt: str, image: Optional[Path] = None, aspect: str = "9:16", duration: str = "8s") -> bytes:
+    """Veo 3 fast на fal. image=None → text-to-video; image=старт-кадр → image-to-video
+    (сохраняет реальную банку). Речь по-русски прямо в промпте. Возвращает mp4-байты."""
+    if image is not None:
+        from .. import scenes
+        ep = "fal-ai/veo3/fast/image-to-video"
+        payload = {"prompt": prompt, "image_url": scenes._data_url(image, 1080),
+                   "aspect_ratio": aspect, "duration": duration, "generate_audio": True}
+    else:
+        ep = "fal-ai/veo3/fast"
+        payload = {"prompt": prompt, "aspect_ratio": aspect, "duration": duration}
+    r = requests.post(f"https://fal.run/{ep}",
                       headers={"Authorization": f"Key {config.FAL_KEY}", "Content-Type": "application/json"},
-                      json={"prompt": prompt, "aspect_ratio": aspect, "duration": duration}, timeout=600)
+                      json=payload, timeout=600)
     r.raise_for_status()
     url = r.json()["video"]["url"]
-    try:
-        v = requests.get(url, timeout=180)
-        v.raise_for_status()
-        data = v.content
-    except Exception:  # fal.media иногда режется РКН — обход через apify
+    data = b""
+    for _ in range(2):  # fal.media иногда режется РКН — ретрай, затем обход через apify
+        try:
+            v = requests.get(url, timeout=180)
+            v.raise_for_status()
+            data = v.content
+            break
+        except Exception as e:
+            log.warning("veo3 download retry (%s)", e)
+    if not data:
         from .. import apify
         data = apify.fetch_via_actor(url) or b""
     if not data:
         raise RuntimeError("veo3: видео не скачалось")
     return data
+
+
+def _start_frame(product_id: str, persona_key: str = "nutri") -> Path:
+    """Старт-кадр для i2v: persona-блогер держит РЕАЛЬНУЮ банку (nano edit по референсу),
+    вертикальное селфи 9:16. Так Veo сохранит нашу этикетку (text-to-video её коверкает)."""
+    from . import producer
+    bottle = producer._product_ref(str(product_id))
+    if not bottle:
+        raise RuntimeError("нет референса банки в data/product_refs")
+    persona = PERSONAS.get(persona_key, PERSONAS["nutri"])
+    prompt = (
+        "UGC-style vertical selfie photo, handheld, natural warm light, authentic amateur look, real skin texture. "
+        f"{persona} holds THIS exact supplement bottle from the reference image at chest height, close to camera "
+        "as if filming a selfie review in a cozy home kitchen. Keep the bottle shape, cap and LABEL EXACTLY as in "
+        "the reference — do not change or distort the label text. Waist-up, looking into camera. "
+        "Vertical 9:16 frame, no text overlays."
+    )
+    img = producer.gen_image_nano(prompt, [bottle], aspect="9:16")
+    out = config.MEDIA_DIR / "bloggers" / f"start_{product_id}_{int(time.time())}.png"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_bytes(img)
+    return out
 
 
 def veo_prompt(product_name: str, script: str, persona_key: str = "nutri") -> str:
@@ -75,16 +111,30 @@ def veo_prompt(product_name: str, script: str, persona_key: str = "nutri") -> st
     )
 
 
-def gen_blogger_clip(product_id: str, persona_key: str = "nutri", angle: str = "польза") -> dict:
-    """Полная цепочка: сценарий → Veo 3 говорящая голова. -> {video: Path, script: str}."""
+def gen_blogger_clip(product_id: str, persona_key: str = "nutri", angle: str = "польза",
+                     mode: str = "i2v") -> dict:
+    """Полная цепочка UGC-блогера. mode='i2v' (реком.) — старт-кадр с РЕАЛЬНОЙ банкой →
+    Veo 3 оживляет и озвучивает (наша этикетка сохраняется). mode='t2v' — Veo рисует всё
+    сам (быстрее, но банка генерная/искажённая). -> {video, script, start_frame}."""
     p = products.product_by_id(str(product_id)) or {}
     name = p.get("full_name", p.get("name", "supplement"))
     script = ugc_script(product_id, angle)
     log.info("blogger script (%s): %s", product_id, script)
-    prompt = veo_prompt(name, script, persona_key)
-    data = _veo3(prompt)
     out_dir = config.MEDIA_DIR / "bloggers"
     out_dir.mkdir(parents=True, exist_ok=True)
+    start = None
+    if mode == "i2v":
+        start = _start_frame(product_id, persona_key)
+        prompt = (
+            "The person looks directly into the camera and speaks in RUSSIAN with clear natural lip-sync and "
+            f"warm friendly intonation: \"{script}\". Keep the bottle and its label EXACTLY as in the image. "
+            "Handheld UGC selfie, subtle natural movement, authentic amateur vibe. No subtitles, no on-screen text."
+        )
+        data = _veo3(prompt, image=start)
+    else:
+        prompt = veo_prompt(name, script, persona_key)
+        data = _veo3(prompt)
     out = out_dir / f"clip_{product_id}_{int(time.time())}.mp4"
     out.write_bytes(data)
-    return {"video": out, "script": script, "prompt": prompt}
+    return {"video": out, "script": script, "prompt": prompt,
+            "start_frame": str(start) if start else None}
