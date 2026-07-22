@@ -127,9 +127,10 @@
 
 <form action="/storyboard/{{ sb.id }}/scene" method="post" class="bg-white border rounded-xl p-3 mb-3 text-sm flex items-center gap-3 flex-wrap">
   <span class="text-slate-500">🎬 Что в кадре:</span>
-  <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="include_model" value="1" onchange="this.form.submit()" {% if sb.include_model %}checked{% endif %}> 👤 человек</label>
-  <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="include_product" value="1" onchange="this.form.submit()" {% if sb.include_product %}checked{% endif %}> 🫙 наша банка</label>
-  <span class="text-slate-400 text-xs">снять обе галочки → чистый концепт (капсула/абстракция, как на Pinterest-референсе)</span>
+  <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="include_model" value="1" {% if sb.include_model %}checked{% endif %}> 👤 человек</label>
+  <label class="flex items-center gap-1 cursor-pointer"><input type="checkbox" name="include_product" value="1" {% if sb.include_product %}checked{% endif %}> 🫙 наша банка</label>
+  <button type="submit" class="px-3 py-1.5 bg-slate-800 text-white rounded font-medium">Применить</button>
+  <span class="text-slate-500 text-xs">сейчас: {% if sb.include_model %}👤 человек{% else %}без человека{% endif %} + {% if sb.include_product %}🫙 банка{% else %}без банки{% endif %} · снять обе → чистый концепт</span>
 </form>
 
 <form action="/storyboard/{{ sb.id }}/engine" method="post" class="bg-white border rounded-xl p-3 mb-3 text-sm flex items-center gap-2 flex-wrap">
