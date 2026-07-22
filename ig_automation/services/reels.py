@@ -29,8 +29,16 @@ _lipsync_version: Optional[str] = None
 
 
 def _public_url(p: Path) -> str:
-    """Публичный URL файла из MEDIA_DIR (Replicate скачивает по нему с РФ-сервера)."""
-    return f"{config.PUBLIC_BASE}/media/{p.name}"
+    """Публичный URL файла из MEDIA_DIR (липсинк fal/Replicate скачивают по нему).
+    ВАЖНО: сохраняем путь относительно MEDIA_DIR — файлы из подпапок (bloggers/,
+    produced/…) при плоском `/media/{name}` отдавали 404, из-за чего липсинк молча
+    не срабатывал и звук просто накладывался поверх (губы не попадали)."""
+    p = Path(p)
+    try:
+        rel = p.resolve().relative_to(Path(config.MEDIA_DIR).resolve()).as_posix()
+    except (ValueError, OSError):
+        rel = p.name
+    return f"{config.PUBLIC_BASE}/media/{rel}"
 
 
 def _replicate_version_run(version: str, body: dict, poll_tries: int = 100, poll_every: int = 4) -> dict:
