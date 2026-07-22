@@ -1077,10 +1077,15 @@ def promptlab_index(request: Request, _: bool = Depends(require_user)):
         for p in sorted(base.glob("*.md")):
             if p.name not in skip:
                 files.append({"path": p.name, "title": _md_title(p)})
-        for p in sorted((base / "syntx").glob("*.md")):
-            syntx.append({"path": f"syntx/{p.name}", "title": _md_title(p)})
+        _labels = {"syntx": "SYNTX — 385 техник AI-контента", "egor-xr": "Егор Кузьмин XR"}
+        for sub in sorted(base.iterdir()):
+            if sub.is_dir():
+                sfiles = [{"path": f"{sub.name}/{p.name}", "title": _md_title(p)}
+                          for p in sorted(sub.glob("*.md"))]
+                if sfiles:
+                    syntx.append({"name": _labels.get(sub.name, sub.name), "files": sfiles})
     return templates.TemplateResponse(request, "promptlab.html",
-        _ctx(request, pl_files=files, pl_syntx=syntx, pl_content=None, pl_home=home_html, pl_title="База знаний"))
+        _ctx(request, pl_files=files, pl_sources=syntx, pl_content=None, pl_home=home_html, pl_title="База знаний"))
 
 
 @router.get("/prompt-lab/{path:path}", response_class=HTMLResponse)

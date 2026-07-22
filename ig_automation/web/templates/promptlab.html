@@ -32,13 +32,13 @@
     <a href="/prompt-lab/{{ f.path }}" class="block bg-white border rounded-lg px-3 py-2 hover:border-blue-300 text-sm">📄 {{ f.title }}</a>
     {% endfor %}
   </div>
-  {% if pl_syntx %}
-  <h2 class="text-lg font-semibold mt-6 mb-2">🎯 SYNTX — каталог техник AI-контента</h2>
+  {% for src in pl_sources %}
+  <h2 class="text-lg font-semibold mt-6 mb-2">🎯 {{ src.name }}</h2>
   <div class="grid sm:grid-cols-2 gap-2">
-    {% for f in pl_syntx %}
+    {% for f in src.files %}
     <a href="/prompt-lab/{{ f.path }}" class="block bg-white border rounded-lg px-3 py-2 hover:border-blue-300 text-sm">📑 {{ f.title }}</a>
     {% endfor %}
   </div>
-  {% endif %}
+  {% endfor %}
 {% endif %}
 {% endblock %}
