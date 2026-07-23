@@ -146,7 +146,7 @@ def recon_page(request: Request, topic: str = "", show: str = "", lang: str = ""
               msg: str = "", _: bool = Depends(require_user)):
     topics = recon.list_topics()
     include = show == "all"  # показать отсеянные AI-фильтром
-    sel_sort = sort if sort in ("views", "new", "old") else "views"
+    sel_sort = sort if sort in ("views", "new", "old") else "new"  # дефолт — новые сверху
     # "" → последняя тема; "__all__" → все темы вперемешку
     if topic == "__all__":
         sel, filt = "__all__", None
