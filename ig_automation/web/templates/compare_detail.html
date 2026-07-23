@@ -51,7 +51,10 @@
       <div class="mt-3">
         <div class="text-xs text-slate-500 mb-1">📝 Подпись (описание + артикулы WB):</div>
         <textarea id="cap" readonly rows="8" class="w-full text-xs border rounded p-2 bg-slate-50 leading-snug">{{ item.caption }}</textarea>
-        <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cap').value); this.textContent='✓ скопировано'" class="mt-1 text-xs bg-slate-800 hover:bg-slate-700 text-white rounded px-3 py-1.5">📋 Копировать подпись</button>
+        <div class="mt-1 flex items-center gap-2">
+          <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cap').value); this.textContent='✓ скопировано'" class="text-xs bg-slate-800 hover:bg-slate-700 text-white rounded px-3 py-1.5">📋 Копировать подпись</button>
+          <form action="/compare/{{ item.id }}/caption" method="post"><button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1.5">🔄 Переделать текст</button></form>
+        </div>
       </div>
       {% endif %}
     {% else %}

@@ -1121,6 +1121,17 @@ def compare_regenerate(request: Request, cid: int, _: bool = Depends(require_use
     return RedirectResponse(f"/compare/{cid}?msg=" + quote(msg), status_code=303)
 
 
+@router.post("/compare/{cid}/caption")
+def compare_caption(request: Request, cid: int, _: bool = Depends(require_user)):
+    try:
+        comparison_svc.regen_caption(cid)
+        msg = "Подпись переделана"
+    except Exception as e:
+        log.warning("compare caption failed: %s", e)
+        msg = f"Ошибка (нужен баланс ProxyAPI?): {e}"
+    return RedirectResponse(f"/compare/{cid}?msg={quote(msg)}", status_code=303)
+
+
 @router.post("/compare/{cid}/restyle")
 def compare_restyle(request: Request, cid: int, style: str = Form("auto"),
                     ratio: str = Form(""), _: bool = Depends(require_user)):

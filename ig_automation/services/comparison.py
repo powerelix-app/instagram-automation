@@ -250,6 +250,11 @@ def get(comparison_id: int) -> Optional[dict]:
         }
 
 
+def regen_caption(comparison_id: int) -> None:
+    """Перегенерировать только подпись (без пересборки картинки)."""
+    _gen_caption(comparison_id)
+
+
 def delete(comparison_id: int) -> None:
     with session_scope() as s:
         r = s.get(Comparison, comparison_id)
