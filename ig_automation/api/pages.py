@@ -1132,6 +1132,21 @@ def compare_caption(request: Request, cid: int, _: bool = Depends(require_user))
     return RedirectResponse(f"/compare/{cid}?msg={quote(msg)}", status_code=303)
 
 
+@router.post("/compare/{cid}/to-telegram")
+def compare_to_telegram(request: Request, cid: int, _: bool = Depends(require_user)):
+    from ..services import notify
+    d = comparison_svc.get(cid)
+    if not d or not d.get("output_path"):
+        return RedirectResponse(f"/compare/{cid}?msg={quote('Сначала собери инфографику')}", status_code=303)
+    photo_url = config.PUBLIC_BASE.rstrip("/") + d["output_path"]
+    if not notify.configured():
+        return RedirectResponse(f"/compare/{cid}?msg={quote('Telegram не настроен (CF_TG_TOKEN/CF_TG_CHAT)')}",
+                                status_code=303)
+    ok = notify.send_post(photo_url, d.get("caption") or d.get("title") or "")
+    msg = "📨 Отправлено в Telegram — забирай для выкладки" if ok else "Не отправилось (проверь TG/логи)"
+    return RedirectResponse(f"/compare/{cid}?msg={quote(msg)}", status_code=303)
+
+
 @router.post("/compare/{cid}/restyle")
 def compare_restyle(request: Request, cid: int, style: str = Form("auto"),
                     ratio: str = Form(""), _: bool = Depends(require_user)):

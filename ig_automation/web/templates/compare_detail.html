@@ -54,6 +54,7 @@
         <div class="mt-1 flex items-center gap-2">
           <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cap').value); this.textContent='✓ скопировано'" class="text-xs bg-slate-800 hover:bg-slate-700 text-white rounded px-3 py-1.5">📋 Копировать подпись</button>
           <form action="/compare/{{ item.id }}/caption" method="post"><button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1.5">🔄 Переделать текст</button></form>
+          <form action="/compare/{{ item.id }}/to-telegram" method="post"><button class="text-xs bg-sky-600 hover:bg-sky-500 text-white rounded px-3 py-1.5">📨 В Telegram</button></form>
         </div>
       </div>
       {% endif %}
