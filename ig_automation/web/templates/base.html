@@ -11,22 +11,23 @@
 <body class="bg-slate-50 text-slate-900">
 <nav class="bg-slate-900 text-white">
   <div class="max-w-full px-3 sm:px-6 py-3 flex items-center gap-2 sm:gap-5 flex-wrap text-sm sm:text-base">
-    <a href="/" class="font-semibold">🏭 Контент-завод</a>
-    {# Готовые разделы — ссылки; будущие стадии конвейера — серым «скоро». #}
-    <a href="/recon" class="text-slate-300 hover:text-white">🔍 Разведка</a>
-    <a href="/sources" class="text-slate-300 hover:text-white">📡 Источники</a>
-    <a href="/plan" class="text-slate-300 hover:text-white">🗓️ План</a>
-    <a href="/ideas" class="text-slate-300 hover:text-white">💡 Идеи</a>
-    <a href="/storyboards" class="text-slate-300 hover:text-white">🎬 Раскадровки</a>
-    <a href="/posts" class="text-slate-300 hover:text-white">📝 Посты</a>
-    <a href="/compare" class="text-slate-300 hover:text-white">⚖️ Сравнение</a>
-    <a href="/seamless" class="text-slate-300 hover:text-white">🌊 Бесшовная</a>
-    <a href="/brand" class="text-slate-300 hover:text-white">🎨 Бренд</a>
-    <a href="/catalog" class="text-slate-300 hover:text-white">🏷️ Товары</a>
-    <a href="/analytics" class="text-slate-300 hover:text-white">📊 Аналитика</a>
-    <a href="/bloggers" class="text-amber-300 hover:text-white">📣 Блогеры</a>
-    <a href="/search" class="text-slate-300 hover:text-white">🔎 Поиск</a>
-    <a href="/status" class="text-slate-300 hover:text-white">⚙️ Статус</a>
+    <a href="/" class="font-semibold whitespace-nowrap">🏭 Завод</a>
+    {# Сгруппировано по смыслу в выпадающие меню (наведи мышь). #}
+    {% set navgroups = [
+      ('💡 Идеи', [('/recon','🔍 Разведка'),('/sources','📡 Источники'),('/ideas','💡 Банк идей'),('/plan','🗓️ План')]),
+      ('🎬 Производство', [('/storyboards','🎬 Раскадровки'),('/posts','📝 Посты'),('/compare','⚖️ Сравнение'),('/seamless','🌊 Бесшовная')]),
+      ('⚙️ Ещё', [('/brand','🎨 Бренд'),('/catalog','🏷️ Товары'),('/search','🔎 Поиск'),('/status','⚙️ Статус')]),
+    ] %}
+    {% for label, items in navgroups %}
+    <div class="relative group">
+      <button type="button" class="text-slate-300 group-hover:text-white flex items-center gap-1 whitespace-nowrap">{{ label }} <span class="text-[10px] opacity-70">▾</span></button>
+      <div class="absolute left-0 top-full hidden group-hover:block bg-slate-800 rounded-lg shadow-xl py-1 z-50 min-w-[180px] border border-slate-700">
+        {% for href, name in items %}<a href="{{ href }}" class="block px-4 py-2 text-slate-200 hover:bg-slate-700 hover:text-white whitespace-nowrap">{{ name }}</a>{% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    <a href="/analytics" class="text-slate-300 hover:text-white whitespace-nowrap">📊 Аналитика</a>
+    <a href="/bloggers" class="text-amber-300 hover:text-white whitespace-nowrap">📣 Блогеры</a>
     <div class="ml-auto flex items-center gap-3">
       <a href="https://dashboard.bandabogachey.online/" class="text-slate-400 hover:text-white text-sm">← Штаб</a>
       {% if not auth_disabled %}
