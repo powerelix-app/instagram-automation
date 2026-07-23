@@ -948,7 +948,6 @@ def _gen_caption(comparison_id: int) -> None:
     caption = desc
     if art_lines:
         caption += "\n\n🛒 Артикулы на Wildberries:\n" + "\n".join(art_lines)
-    caption += "\n\nБАД. Не является лекарственным средством. Есть противопоказания."
     with session_scope() as s:
         c = s.get(Comparison, comparison_id)
         if c:
