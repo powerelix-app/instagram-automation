@@ -182,7 +182,8 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
         (dest_dir / ref_name).write_bytes(ref_bytes)
         c.ref_path = f"/media/comparisons/{ref_name}"
     stored_style = style if style in ("lineup", "symptom", "aicopy") else "lineup"
-    fmt_ru = {"symptom": "симптом → продукт", "lineup": "банки в ряд + чек-листы"}[stored_style]
+    fmt_ru = {"symptom": "симптом → продукт", "lineup": "банки в ряд + чек-листы",
+              "aicopy": "точная копия макета"}.get(stored_style, stored_style)
     _clog(cid, "референс принят", reset=True)
     _clog(cid, f"формат макета: {fmt_ru}")
     names = ", ".join((products.product_by_id(p) or {}).get("name", p) for p in product_ids)
@@ -291,7 +292,8 @@ def restyle(comparison_id: int, style: str, ratio: str = "") -> dict:
         if ratio in _RATIOS:
             c.ratio = ratio
         cur_ratio = c.ratio
-    fmt_ru = {"symptom": "симптом → продукт", "lineup": "банки в ряд + чек-листы"}[style]
+    fmt_ru = {"symptom": "симптом → продукт", "lineup": "банки в ряд + чек-листы",
+              "aicopy": "точная копия макета"}.get(style, style)
     _clog(comparison_id, f"формат изменён на: {fmt_ru} ({cur_ratio})", reset=True)
     enqueue(comparison_id)
     return {"ok": True, "style": style, "fmt_ru": fmt_ru, "ratio": cur_ratio}
