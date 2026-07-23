@@ -23,6 +23,7 @@ from ..services import bloggers as bloggers_svc
 from ..services import compliance, generator, insights, planner, publisher, recon, reels, tokens
 from ..services import comparison as comparison_svc
 from ..services import seamless as seamless_svc
+from ..services import sources as sources_svc
 from .auth import auth_disabled, require_user
 
 log = logging.getLogger(__name__)
@@ -212,6 +213,38 @@ def recon_delete(request: Request, reel_id: int, topic: str = Form(""), _: bool 
     ok = recon.delete_reel(reel_id)
     msg = "Ролик удалён" if ok else "Ролик не найден"
     return RedirectResponse(f"/recon?topic={quote(topic)}&msg={quote(msg)}", status_code=303)
+
+
+# ── Источники идей (разведка инфографик по аккаунтам) ──
+@router.get("/sources", response_class=HTMLResponse)
+def sources_page(request: Request, msg: str = "", _: bool = Depends(require_user)):
+    return templates.TemplateResponse(request, "sources.html",
+                                      _ctx(request, accounts=sources_svc.list_accounts(), msg=msg))
+
+
+@router.post("/sources/add")
+def sources_add(request: Request, handle: str = Form(...), kind: str = Form("donor"),
+                note: str = Form(""), _: bool = Depends(require_user)):
+    aid = sources_svc.add_account(handle, kind, note)
+    msg = "Источник добавлен" if aid else "Не разобрал ник — проверь ссылку/@"
+    return RedirectResponse(f"/sources?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/sources/{account_id}/scrape")
+def sources_scrape(request: Request, account_id: int, _: bool = Depends(require_user)):
+    try:
+        added = sources_svc.scrape(account_id)
+        msg = f"Собрано постов: {added}" if added else "0 (приватный аккаунт, нет Reels или лимит Apify?)"
+    except Exception as e:
+        log.warning("sources scrape failed: %s", e)
+        msg = f"Ошибка: {e}"
+    return RedirectResponse(f"/sources?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/sources/{account_id}/delete")
+def sources_delete(request: Request, account_id: int, _: bool = Depends(require_user)):
+    sources_svc.delete(account_id)
+    return RedirectResponse(f"/sources?msg={quote('Источник удалён')}", status_code=303)
 
 
 @router.post("/recon/add-url")

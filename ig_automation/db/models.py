@@ -333,3 +333,16 @@ class PostMetric(Base):
     shares: Mapped[int] = mapped_column(Integer, default=0)
     plays: Mapped[int] = mapped_column(Integer, default=0)
     captured_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
+
+
+class SourceAccount(Base):
+    """Аккаунт-источник идей для разведки инфографик: конкурент или иностранный донор.
+    Его посты тянем через recon.scrape_account → TrendReel (topic=@handle)."""
+    __tablename__ = "source_accounts"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    handle: Mapped[str] = mapped_column(String(128), default="")       # @username
+    kind: Mapped[str] = mapped_column(String(16), default="donor")     # competitor|donor
+    note: Mapped[str] = mapped_column(String(255), default="")
+    active: Mapped[bool] = mapped_column(Boolean, default=True)
+    last_scraped: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
