@@ -247,6 +247,28 @@ def sources_delete(request: Request, account_id: int, _: bool = Depends(require_
     return RedirectResponse(f"/sources?msg={quote('Источник удалён')}", status_code=303)
 
 
+@router.post("/sources/{account_id}/ideas")
+def sources_ideas(request: Request, account_id: int, _: bool = Depends(require_user)):
+    try:
+        n = sources_svc.generate_ideas(account_id, n=6)
+        msg = f"Сгенерировано идей: {n} — смотри в Банке идей"
+    except Exception as e:
+        log.warning("sources ideas failed: %s", e)
+        msg = f"Ошибка (нужен баланс ProxyAPI?): {e}"
+    return RedirectResponse(f"/ideas?msg={quote(msg)}", status_code=303)
+
+
+@router.post("/sources/ideas-scratch")
+def sources_ideas_scratch(request: Request, _: bool = Depends(require_user)):
+    try:
+        n = sources_svc.generate_ideas(None, n=6)
+        msg = f"Сгенерировано идей с нуля: {n} — смотри в Банке идей"
+    except Exception as e:
+        log.warning("sources ideas-scratch failed: %s", e)
+        msg = f"Ошибка (нужен баланс ProxyAPI?): {e}"
+    return RedirectResponse(f"/ideas?msg={quote(msg)}", status_code=303)
+
+
 @router.post("/recon/add-url")
 def recon_add_url(request: Request, url: str = Form(...), _: bool = Depends(require_user)):
     """Разбор по прямой ссылке: скачиваем ролик + сразу глубокий разбор (кадры+vision)."""

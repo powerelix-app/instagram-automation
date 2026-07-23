@@ -66,3 +66,61 @@ def scrape(account_id: int) -> int:
         if a:
             a.last_scraped = _now()
     return added
+
+
+def generate_ideas(source_id: Optional[int] = None, n: int = 6) -> int:
+    """Кирпич 3 — банк идей: Claude генерит N ОРИГИНАЛЬНЫХ концептов инфографик под наши
+    товары по виральным форматам ниши. source_id → опираясь на посты этого источника
+    (что реально заходит); None → с нуля. Кладёт в общий Банк идей (таблица ideas)."""
+    import anthropic
+    from pydantic import BaseModel, Field
+    from .. import config, products
+    from .ideas import add_idea
+
+    brand = products.load_brand()
+    cat = "\n".join(f'#{p["id"]} {p.get("full_name", p["name"])} — {", ".join(p.get("key_benefits_3", []))}'
+                    for p in brand["products"])
+    src_ctx, src_tag = "", "manual"
+    if source_id:
+        with session_scope() as s:
+            a = s.get(SourceAccount, source_id)
+            handle = a.handle if a else ""
+        if handle:
+            with session_scope() as s:
+                reels = (s.query(TrendReel).filter(TrendReel.topic == handle)
+                         .order_by(TrendReel.play_count.desc()).limit(15).all())
+                lines = [f'- [{r.play_count} просм.] {(r.caption or "").strip()[:160]}' for r in reels if r.caption]
+            if lines:
+                src_ctx = (f"\n\nВИРАЛЬНЫЕ ПОСТЫ ИСТОЧНИКА {handle} (по убыванию просмотров) — учись на их "
+                           f"форматах/крючках, но НЕ копируй:\n" + "\n".join(lines))
+                src_tag = "trend"
+
+    class _Idea(BaseModel):
+        title: str = Field(description="цепляющий заголовок инфографики на русском")
+        format: str = Field(description="формат: симптом→продукт | список-чеклист | 2 колонки сравнение | таймлайн-стадии | миф-разоблачение")
+        concept: str = Field(description="описание концепта: что в кадре, структура блоков, посыл — 2-4 предложения")
+        product_ids: list[str] = Field(description="id наших товаров, которые ложатся в концепт")
+        formula: str = Field(description="почему зайдёт: виральная формула/крючок")
+
+    class _Out(BaseModel):
+        ideas: list[_Idea]
+
+    prompt = (
+        f"Ты — креативщик инфографик-Reels для БАД-бренда POWERELIX (козыри бренда: 274000+ продаж, "
+        f"нутрициологи в команде, европейское сырьё, стандарт GMP). Придумай {n} ОРИГИНАЛЬНЫХ концептов "
+        f"инфографик под наши товары, используя виральные форматы ниши (симптом→продукт, списки-чеклисты, "
+        f"сравнения 2 колонки, таймлайны стадий, мифы-разоблачения). ВАЖНО: не копируй референсы — свой угол, "
+        f"свои заголовки, наши товары и наши козыри. Юр-рамка БАД РФ: без «лечит/гарантирует», мягкие "
+        f"формулировки.{src_ctx}\n\nНАШИ ТОВАРЫ:\n{cat}"
+    )
+    client = anthropic.Anthropic()
+    resp = client.messages.parse(model=config.CLAUDE_MODEL, max_tokens=3500,
+                                 messages=[{"role": "user", "content": prompt}], output_format=_Out)
+    cnt = 0
+    for it in resp.parsed_output.ideas:
+        pnames = ", ".join(str(x).strip().lstrip("#") for x in it.product_ids)
+        text = (f"{it.concept}\n\n📐 Формат: {it.format}\n🎯 Почему зайдёт: {it.formula}"
+                + (f"\n🫙 Товары: {pnames}" if pnames else ""))
+        add_idea(text=text, hook=it.title, rubric=f"инфографика · {it.format}", product=pnames)
+        cnt += 1
+    return cnt

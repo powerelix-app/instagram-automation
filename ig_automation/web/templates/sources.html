@@ -8,6 +8,12 @@
 
 {% if msg %}<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-2 mb-4 text-sm">{{ msg }}</div>{% endif %}
 
+<div class="flex items-center gap-3 mb-4 flex-wrap">
+  <form action="/sources/ideas-scratch" method="post"><button class="text-sm bg-violet-600 hover:bg-violet-500 text-white rounded-lg px-4 py-2">💡 Сгенерировать идеи с нуля</button></form>
+  <a href="/ideas" class="text-sm text-blue-600 hover:underline">→ Банк идей</a>
+  <span class="text-xs text-slate-400">идеи — концепты инфографик под наши товары (Claude); из источника учится на его форматах</span>
+</div>
+
 <form action="/sources/add" method="post" class="bg-white border rounded-xl p-4 mb-6 flex flex-wrap items-end gap-3">
   <div>
     <div class="text-xs text-slate-600 mb-1"><b>Аккаунт</b> (@ник или ссылка на профиль)</div>
@@ -42,6 +48,7 @@
     <div class="flex items-center gap-2 ml-auto">
       <a href="/recon?topic={{ a.handle }}" class="text-sm text-blue-600 hover:underline">посты →</a>
       <form action="/sources/{{ a.id }}/scrape" method="post"><button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1.5">🔍 Разведать</button></form>
+      <form action="/sources/{{ a.id }}/ideas" method="post"><button class="text-sm bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1.5">💡 Идеи</button></form>
       <form action="/sources/{{ a.id }}/delete" method="post" onsubmit="return confirm('Удалить источник?')"><button class="text-sm border rounded px-3 py-1.5 hover:bg-slate-50 text-red-600">🗑</button></form>
     </div>
   </div>
