@@ -284,11 +284,30 @@ class TextOut(BaseModel):
 
 _TEXT_SYSTEM = """Ты — SMM-копирайтер бренда БАД POWERELIX (РФ). По хуку/идее напиши подпись поста.
 ЖЁСТКО: БАД — не лекарство; нельзя «лечит/вылечивает/диагностирует/гарантирует результат»;
-формулировки мягкие («поддерживает», «способствует», «помогает восполнить»); для продуктовых
-постов добавь короткую плашку «БАД. Не является лекарственным средством». Пиши живо, на «ты».
+формулировки мягкие («поддерживает», «способствует», «помогает восполнить»). Пиши живо, на «ты».
+НЕ добавляй в текст дисклеймер/плашку «не является лекарственным средством» и НЕ пиши про
+противопоказания — это уже стоит на самой картинке, в подписи дублировать НЕ нужно.
 НЕ пиши СПОСОБ ПРИМЕНЕНИЯ и дозировку: сколько капсул, когда/как принимать, длительность курса,
-сколько штук в упаковке — этого в тексте поста быть НЕ должно (фокус на пользе, эмоции, результате).
+сколько штук/мг в упаковке — этого в тексте поста быть НЕ должно (фокус на пользе, эмоции, результате).
 Верни строго структуру по схеме."""
+
+
+# Пост-фильтр подписи: даже если модель ослушалась системы, вырезаем строки со способом
+# применения/дозировкой и дисклеймером (дисклеймер живёт на картинке, не в тексте).
+_DOSAGE_RE = re.compile(
+    r"(как принимать|способ\s+применени|дозировк|по\s*\d+\s*капсул|\d+\s*капсул|капсул\w*\s+(в\s+день|по\s)|"
+    r"во\s+время\s+еды|натощак|за\s*\d+\s*минут|\bкурс[ау]?\b|\d+\s*мг\b|\d+\s*штук|шт\.?\s+в\s+упаковк|"
+    r"принима(й|ть|ем)|прин[её]м\s)", re.IGNORECASE)
+_DISCLAIMER_RE = re.compile(
+    r"(не\s+являет\w*\s+лекарствен|не\s+лекарство|имеются?\s+противопоказан|противопоказани|"
+    r"консультаци\w*\s+(со\s+)?специалист)", re.IGNORECASE)
+
+
+def _strip_policy(caption: str) -> str:
+    """Убирает из подписи строки со способом применения/дозировкой и дисклеймером."""
+    kept = [ln for ln in (caption or "").splitlines()
+            if not (_DOSAGE_RE.search(ln) or _DISCLAIMER_RE.search(ln))]
+    return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
 def set_post_product(post_id: int, product_id: str) -> None:
@@ -346,7 +365,7 @@ def generate_post_text(post_id: int) -> Optional[int]:
         output_format=TextOut,
     )
     out = resp.parsed_output
-    caption = out.caption
+    caption = _strip_policy(out.caption)   # вырезаем способ применения + дисклеймер (он на картинке)
     # Гарантируем артикул/ссылку WB В САМОЙ подписи (Claude иногда кладёт в CTA).
     if pid:
         lk = catalog.get_link(pid)
@@ -494,6 +513,8 @@ def suggest_overlay_text(post_id: int) -> dict:
         if not post:
             return {"headline": "", "subtitle": "", "tag": overlay.DEFAULT_TAG, "disclaimer": ""}
         is_carousel = post.format == "carousel"
+        n_slides = s.query(PostAsset).filter(
+            PostAsset.post_id == post_id, PostAsset.kind == "image").count()
         brief = (
             f"Хук: {post.hook or '—'}\nИдея визуала: {post.visual_idea or '—'}\n"
             f"Рубрика: {post.rubric or '—'}\nПродукт: {post.product or '—'}"
@@ -504,9 +525,7 @@ def suggest_overlay_text(post_id: int) -> dict:
         if ctx:
             brief += "\n\n" + ctx
     if not is_carousel:
-        # одиночная картинка (пост/Reels) — как раньше: ТОЛЬКО жирный заголовок-крючок.
-        # Ни подзаголовка, ни тега, ни дисклеймера на самой картинке — дисклеймер
-        # и так есть в тексте подписи поста, дублировать на фото не нужно.
+        # одиночная картинка (пост/Reels) — ТОЛЬКО жирный заголовок-крючок.
         brief += ("\n\nЭто ОДИНОЧНАЯ картинка (не карусель, публикуется как Reels/фото). "
                   "Нужен ТОЛЬКО заголовок-крючок. Подзаголовок, тег и дисклеймер НЕ нужны — "
                   "оставь их пустыми строками.")
@@ -517,10 +536,12 @@ def suggest_overlay_text(post_id: int) -> dict:
         output_format=OverlayText,
     )
     o = resp.parsed_output
+    # Дисклеймер убран ПОЛНОСТЬЮ — ни в тексте, ни на картинке (решение бренда).
     if not is_carousel:
         return {"headline": o.headline, "subtitle": "", "tag": "", "disclaimer": ""}
-    return {"headline": o.headline, "subtitle": o.subtitle,
-            "tag": o.tag or overlay.DEFAULT_TAG, "disclaimer": o.disclaimer}
+    # «ЛИСТАЙ →» только если реально есть что листать (≥2 слайда-картинки)
+    tag = (o.tag or overlay.DEFAULT_TAG) if n_slides >= 2 else ""
+    return {"headline": o.headline, "subtitle": o.subtitle, "tag": tag, "disclaimer": ""}
 
 
 def apply_text_overlay(post_id: int, source_asset_id: Optional[int] = None,

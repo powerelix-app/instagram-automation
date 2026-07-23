@@ -37,15 +37,16 @@ def check(hook: str, caption: str, visual_idea: str = "", cta: str = "", product
     cap_low = (caption or "").lower()
     has_disclaimer = any(m in cap_low for m in _DISCLAIMER_MARKERS)
     is_product = bool(product and product.strip() not in ("", "—"))
-    # дисклеймер обязателен для продуктовых постов
-    disclaimer_ok = has_disclaimer or not is_product
+    # Дисклеймер БАД теперь живёт НА картинке-обложке (не в подписи — политика бренда),
+    # поэтому его отсутствие в ТЕКСТЕ не блокирует публикацию. Блокируют только стоп-слова.
+    disclaimer_ok = True
 
     return {
         "violations": violations,
         "has_disclaimer": has_disclaimer,
         "is_product": is_product,
         "disclaimer_ok": disclaimer_ok,
-        "blocked": bool(violations) or not disclaimer_ok,
+        "blocked": bool(violations),
     }
 
 
