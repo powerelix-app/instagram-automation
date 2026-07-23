@@ -1140,12 +1140,12 @@ def compare_to_telegram(request: Request, cid: int, _: bool = Depends(require_us
         return RedirectResponse(f"/compare/{cid}?msg={quote('Сначала собери инфографику')}", status_code=303)
     photo_url = config.PUBLIC_BASE.rstrip("/") + d["output_path"]
     caption = d.get("caption") or d.get("title") or ""
-    # встроенная картинка + подпись через Aeza-бот (сам качает медиа, обходит гео-блок)
-    res = tg_crosspost.send_media(photo_url, caption, channel=config.TG_CHAT)
+    # ОРИГИНАЛ файлом (document) + подпись через Aeza-бот — качество не теряется при перепосте
+    res = tg_crosspost.send_media(photo_url, caption, channel=config.TG_CHAT, kind="document")
     if res.get("ok"):
-        if len(caption) > 1024:  # подпись длиннее лимита фото — дошлём полный текст
+        if len(caption) > 1024:  # подпись длиннее лимита — дошлём полный текст
             notify.send(caption, html=False)
-        msg = "📨 Отправлено в Telegram — картинка + подпись, забирай для выкладки"
+        msg = "📨 Отправлено в Telegram файлом (оригинал) + подпись — забирай для выкладки"
     elif notify.configured():  # фолбэк: текст + ссылка на картинку
         ok = notify.send_post(photo_url, caption)
         msg = "📨 Отправлено (текст + ссылка на картинку)" if ok else f"Не отправилось: {res.get('error')}"

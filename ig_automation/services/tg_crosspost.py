@@ -84,17 +84,19 @@ def _clean_caption(caption: str) -> str:
     return text
 
 
-def send_media(image_url: str, caption: str = "", channel: str = "") -> Dict:
-    """Отправляет одиночное фото (по публичному URL) + подпись в TG через Aeza-бот
-    (он сам скачивает медиа — обходит гео-блок РФ-домена и лимит релея на большие
-    файлы). channel пусто → CROSSPOST_CHANNEL. Для «готовый пост в TG вручную»."""
+def send_media(image_url: str, caption: str = "", channel: str = "", kind: str = "photo") -> Dict:
+    """Отправляет одиночное изображение (по публичному URL) + подпись в TG через
+    Aeza-бот (он сам скачивает медиа — обходит гео-блок РФ-домена и лимит релея на
+    большие файлы). channel пусто → CROSSPOST_CHANNEL.
+    kind='photo' — сжатое фото; kind='document' — ОРИГИНАЛ файлом без потери качества
+    (для ручной выкладки в IG — текст остаётся чётким)."""
     if not (config.CROSSPOST_ENDPOINT and config.CROSSPOST_SECRET):
         return {"ok": False, "error": "нет CF_CROSSPOST_ENDPOINT / CF_CROSSPOST_SECRET"}
     import html as _html
     cap = _html.escape((caption or "")[:_CAPTION_LIMIT])
     payload = {
         "channel": channel or config.CROSSPOST_CHANNEL,
-        "kind": "photo",
+        "kind": kind if kind in ("photo", "document") else "photo",
         "media_urls": [image_url],
         "caption": cap,
         "parse_mode": "HTML",
