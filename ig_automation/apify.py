@@ -162,22 +162,25 @@ def search_reels(topic: str, limit: int = 30, newer_than: str = "30 days") -> li
     return reels
 
 
-def account_reels(username: str, limit: int = 30) -> list[dict[str, Any]]:
-    """Топ-Reels конкретного аккаунта (по убыванию просмотров). Источник гарантированно
-    нишевый, если аккаунт нишевый — в отличие от мусорной выдачи по ключевому слову."""
+def account_reels(username: str, limit: int = 30, scan_limit: Optional[int] = None) -> list[dict[str, Any]]:
+    """Посты конкретного аккаунта. Actor отдаёт ленту НОВЫЕ→старые (по просмотрам не
+    сортирует). scan_limit>limit → тянем широкое окно последних постов и оставляем
+    топ-`limit` по просмотрам («что реально зашло»); scan_limit None/≤limit → просто
+    последние `limit` (свежие), тоже отсортированы по просмотрам среди них."""
     user = username.lstrip("@").strip("/").split("/")[-1]
     url = f"https://www.instagram.com/{user}/"
+    fetch = max(limit, scan_limit or 0)
     try:
         posts = _run_actor(ACTOR, {
             "directUrls": [url], "resultsType": "posts",
-            "resultsLimit": limit, "addParentData": False,
-        })
+            "resultsLimit": fetch, "addParentData": False,
+        }, max_charge_usd=max(1.0, fetch / 30.0))  # шире окно → выше потолок расхода
     except (requests.RequestException, RuntimeError) as e:
         log.warning("apify account_reels failed for %r: %s", user, e)
         return []
     reels = [r for r in (_normalize_reel(i) for i in posts) if r]
     reels.sort(key=lambda r: r["play_count"], reverse=True)
-    return reels
+    return reels[:limit]
 
 
 def scrape_profile(username: str, posts_limit: int = 30) -> dict[str, Any]:

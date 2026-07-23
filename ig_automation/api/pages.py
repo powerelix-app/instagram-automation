@@ -231,10 +231,11 @@ def sources_add(request: Request, handle: str = Form(...), kind: str = Form("don
 
 
 @router.post("/sources/{account_id}/scrape")
-def sources_scrape(request: Request, account_id: int, _: bool = Depends(require_user)):
+def sources_scrape(request: Request, account_id: int, top: bool = Form(False), _: bool = Depends(require_user)):
     try:
-        added = sources_svc.scrape(account_id)
-        msg = f"Собрано постов: {added}" if added else "0 (приватный аккаунт, нет Reels или лимит Apify?)"
+        added = sources_svc.scrape(account_id, top=top)
+        how = "топ по просмотрам" if top else "свежие"
+        msg = f"Собрано постов ({how}): {added}" if added else "0 (приватный аккаунт, нет Reels или лимит Apify?)"
     except Exception as e:
         log.warning("sources scrape failed: %s", e)
         msg = f"Ошибка: {e}"

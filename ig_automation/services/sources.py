@@ -51,8 +51,10 @@ def delete(account_id: int) -> None:
             s.delete(a)
 
 
-def scrape(account_id: int) -> int:
-    """Тянет свежие посты источника (Apify) → TrendReel(topic=@handle). Возвращает сколько добавлено."""
+def scrape(account_id: int, top: bool = False, limit: int = 30) -> int:
+    """Тянет посты источника (Apify) → TrendReel(topic=@handle). Возвращает сколько добавлено.
+    top=True → сканируем широкое окно (limit×3) и оставляем топ-`limit` по просмотрам
+    («что реально зашло»); top=False → последние `limit` (свежие)."""
     from . import recon
     from ..db.models import _now
     with session_scope() as s:
@@ -60,7 +62,8 @@ def scrape(account_id: int) -> int:
         if not a:
             return 0
         handle = a.handle
-    added = recon.scrape_account(handle, limit=30)
+    scan = limit * 3 if top else None
+    added = recon.scrape_account(handle, limit=limit, scan_limit=scan)
     with session_scope() as s:
         a = s.get(SourceAccount, account_id)
         if a:

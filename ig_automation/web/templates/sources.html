@@ -3,8 +3,9 @@
 {% block content %}
 <h1 class="text-2xl font-semibold mb-1">📡 Источники идей</h1>
 <p class="text-slate-500 mb-5 text-sm">Аккаунты, с которых берём идеи инфографик: <b>конкуренты</b> (qeep и их блогеры — что заходит)
-  и <b>иностранные доноры</b> (откуда конкурент берёт идеи). «Разведать» тянет свежие посты через Apify → они попадают в
-  <a href="/recon" class="text-blue-600 hover:underline">разведку</a>, оттуда делаем идеи и картинки «по мотивам».</p>
+  и <b>иностранные доноры</b> (откуда конкурент берёт идеи). Забор через Apify: <b>🔍 Свежие</b> — 30 последних по дате;
+  <b>🔥 Топ по просмотрам</b> — сканирует ~90 постов и оставляет 30 самых просматриваемых (что реально зашло; дороже по Apify).
+  Собранное попадает в <a href="/recon" class="text-blue-600 hover:underline">разведку</a>, оттуда делаем идеи и картинки «по мотивам».</p>
 
 {% if msg %}<div class="bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg px-3 py-2 mb-4 text-sm">{{ msg }}</div>{% endif %}
 
@@ -47,7 +48,8 @@
     {% if a.last_scraped %}<span class="text-xs text-slate-400">разведка: {{ a.last_scraped.strftime('%d.%m %H:%M') }}</span>{% endif %}
     <div class="flex items-center gap-2 ml-auto">
       <a href="/recon?topic={{ a.handle }}" class="text-sm text-blue-600 hover:underline">посты →</a>
-      <form action="/sources/{{ a.id }}/scrape" method="post"><button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1.5">🔍 Разведать</button></form>
+      <form action="/sources/{{ a.id }}/scrape" method="post" title="30 последних постов по дате"><button class="text-sm bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1.5">🔍 Свежие</button></form>
+      <form action="/sources/{{ a.id }}/scrape" method="post" title="Сканирует ~90 постов, оставляет топ-30 по просмотрам (дороже по Apify)"><input type="hidden" name="top" value="true"><button class="text-sm bg-amber-500 hover:bg-amber-400 text-white rounded px-3 py-1.5">🔥 Топ по просмотрам</button></form>
       <form action="/sources/{{ a.id }}/ideas" method="post"><button class="text-sm bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1.5">💡 Идеи</button></form>
       <form action="/sources/{{ a.id }}/delete" method="post" onsubmit="return confirm('Удалить источник?')"><button class="text-sm border rounded px-3 py-1.5 hover:bg-slate-50 text-red-600">🗑</button></form>
     </div>

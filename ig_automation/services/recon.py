@@ -127,12 +127,14 @@ def scrape_topic(topic: str, limit: int = 30) -> int:
     return _store_reels(reels, topic)
 
 
-def scrape_account(handle: str, limit: int = 30) -> int:
-    """Сбор топ-Reels нишевого аккаунта (релевантность по построению). topic = @handle."""
+def scrape_account(handle: str, limit: int = 30, scan_limit: Optional[int] = None) -> int:
+    """Сбор постов нишевого аккаунта (релевантность по построению). topic = @handle.
+    scan_limit>limit → берём топ-`limit` по просмотрам из широкого окна (популярные),
+    иначе последние `limit` (свежие)."""
     h = handle.lstrip("@").strip().strip("/").split("/")[-1]
     if not h:
         return 0
-    reels = apify.account_reels(h, limit=limit)
+    reels = apify.account_reels(h, limit=limit, scan_limit=scan_limit)
     if not reels:
         log.warning("scrape_account %r: 0 роликов", h)
         return 0
