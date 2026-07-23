@@ -1155,6 +1155,40 @@ def compare_to_telegram(request: Request, cid: int, _: bool = Depends(require_us
     return RedirectResponse(f"/compare/{cid}?msg={quote(msg)}", status_code=303)
 
 
+@router.post("/post/{post_id}/to-telegram")
+def post_to_telegram(request: Request, post_id: int, _: bool = Depends(require_user)):
+    """Шлёт слайды поста ФАЙЛАМИ (document, без сжатия) + подпись в личный бот для
+    ручной выкладки — как у сравнения. Карусель → каждый слайд отдельным документом,
+    подпись на первом."""
+    from ..services import notify, tg_crosspost, generator
+    from ..db.base import session_scope
+    from ..db.models import Post
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return RedirectResponse(f"/post/{post_id}?msg={quote('Пост не найден')}", status_code=303)
+        caption = post.caption or ""
+    urls = [config.PUBLIC_BASE.rstrip("/") + a.path for a in generator.get_publish_assets(post_id)]
+    if not urls:
+        return RedirectResponse(f"/post/{post_id}?msg={quote('Нет картинок — сначала сгенерируй слайды')}",
+                                status_code=303)
+    sent = 0
+    for i, u in enumerate(urls):
+        res = tg_crosspost.send_media(u, caption if i == 0 else "", channel=config.TG_CHAT, kind="document")
+        if res.get("ok"):
+            sent += 1
+    if sent:
+        if len(caption) > 1024:  # подпись длиннее лимита медиа — дошлём полный текст
+            notify.send(caption, html=False)
+        msg = f"📨 В Telegram отправлено файлами: {sent}/{len(urls)} слайд(ов) + подпись — забирай для выкладки"
+    elif notify.configured():
+        ok = notify.send_post(urls[0], caption)
+        msg = "📨 Отправлено (текст + ссылка на картинку)" if ok else "Не отправилось — проверь настройки Telegram"
+    else:
+        msg = "Telegram не настроен"
+    return RedirectResponse(f"/post/{post_id}?msg={quote(msg)}", status_code=303)
+
+
 @router.post("/compare/{cid}/restyle")
 def compare_restyle(request: Request, cid: int, style: str = Form("auto"),
                     ratio: str = Form(""), _: bool = Depends(require_user)):
