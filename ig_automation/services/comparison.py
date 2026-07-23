@@ -173,7 +173,7 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
     dest_dir.mkdir(parents=True, exist_ok=True)
     with session_scope() as s:
         c = Comparison(title=title.strip(), product_ids=list(product_ids),
-                       style=style if style in ("lineup", "symptom") else "lineup",
+                       style=style if style in ("lineup", "symptom", "aicopy") else "lineup",
                        ratio=ratio if ratio in _RATIOS else "4:5")
         s.add(c)
         s.flush()
@@ -181,7 +181,7 @@ def create(ref_bytes: bytes, ref_filename: str, product_ids: List[str], title: s
         ref_name = f"ref_{cid}{ext}"
         (dest_dir / ref_name).write_bytes(ref_bytes)
         c.ref_path = f"/media/comparisons/{ref_name}"
-    stored_style = style if style in ("lineup", "symptom") else "lineup"
+    stored_style = style if style in ("lineup", "symptom", "aicopy") else "lineup"
     fmt_ru = {"symptom": "симптом → продукт", "lineup": "банки в ряд + чек-листы"}[stored_style]
     _clog(cid, "референс принят", reset=True)
     _clog(cid, f"формат макета: {fmt_ru}")
@@ -284,7 +284,7 @@ def restyle(comparison_id: int, style: str, ratio: str = "") -> dict:
         ref_abs = config.DATA_DIR / (c.ref_path or "").lstrip("/")
     if style == "auto":
         style = analyze_reference(ref_abs.read_bytes()) if ref_abs.exists() else "symptom"
-    style = style if style in ("lineup", "symptom") else "lineup"
+    style = style if style in ("lineup", "symptom", "aicopy") else "lineup"
     with session_scope() as s:
         c = s.get(Comparison, comparison_id)
         c.style = style
@@ -692,6 +692,65 @@ def _execute_symptom(comparison_id: int, product_ids: List[str], ratio: str = "4
     _clog(comparison_id, "✅ готово — инфографика собрана")
 
 
+def _execute_aicopy(comparison_id: int, product_ids: List[str], ratio: str = "4:5") -> None:
+    """Режим «🎯 точная копия»: gpt-image-2 воссоздаёт МАКЕТ референса 1:1 с нашими
+    товарами + бренд-перекраска (лайм→мята), без чужого лого. Текст рисует сам AI
+    (крупный держит; критичные артикулы добьём оверлеем в следующей фазе)."""
+    from . import producer
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        if not c:
+            return
+        ref_path = config.DATA_DIR / c.ref_path.lstrip("/")
+    refs = [ref_path]
+    missing = []
+    for pid in product_ids:
+        p = producer._product_ref(pid)
+        if p:
+            refs.append(p)
+        else:
+            missing.append(pid)
+    if missing:
+        _fail(comparison_id, f"нет фото товара(ов) в каталоге: {', '.join(missing)}")
+        return
+    _clog(comparison_id, "🎯 точная копия макета (gpt-image-2), подставляю наши товары + бренд-цвета…")
+    n = len(product_ids)
+    prompt = (
+        "ПЕРВОЕ изображение — референс инфографики. ВОССОЗДАЙ его МАКСИМАЛЬНО ТОЧНО, 1:1: ту же "
+        "композицию, раскладку, структуру, расположение элементов, стрелки/связи/сетку, заголовок, "
+        "блоки, футер, стиль, фон, свечение, тени и настроение — как на референсе. "
+        f"Замени товары на НАШИ {n} банок бренда POWERELIX из следующих изображений — форма, крышка, "
+        "цвет и ЭТИКЕТКА строго как на этих референсах, каждая банка целиком в кадре. "
+        "ПЕРЕКРАСЬ акценты (свечение, иконки, стрелки, акцент заголовка и футера) в фирменную зелень "
+        "POWERELIX: от лайма #C3FF08 к мяте #16FFB3, сохраняя общую подачу референса, но цельно и "
+        "премиально (не кислотно). Добавь вордмарк «POWERELIX» сверху. УБЕРИ любой чужой бренд, лого, "
+        "водяной знак, значки соцсетей и посторонние badge. Весь текст — чистый, читаемый РУССКИЙ."
+    )
+    try:
+        img_bytes = producer.gen_image_gpt(prompt, refs, aspect="4:5")
+    except Exception as e:
+        _fail(comparison_id, f"генерация не удалась: {e}")
+        return
+    try:
+        import io
+        photo = Image.open(io.BytesIO(img_bytes))
+        final = _fit_canvas(photo, ratio)
+    except Exception as e:
+        _fail(comparison_id, f"обработка изображения не удалась: {e}")
+        return
+    out_dir = config.MEDIA_DIR / "comparisons"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{comparison_id}_final.png"
+    final.save(out_path)
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        if c:
+            c.output_path = f"/media/comparisons/{out_path.name}"
+            c.gen_status = "done"
+            c.gen_error = ""
+    _clog(comparison_id, "✅ готово — точная копия макета под наш бренд")
+
+
 def execute(comparison_id: int) -> None:
     from . import producer  # ленивый импорт — тот же паттерн, что в generator.py
     with session_scope() as s:
@@ -705,6 +764,9 @@ def execute(comparison_id: int) -> None:
         c.gen_status = "генерация фото…"
 
     _clog(comparison_id, f"▶️ старт генерации (формат {ratio})")
+    if style == "aicopy":
+        _execute_aicopy(comparison_id, product_ids, ratio)
+        return
     if style == "symptom":
         _execute_symptom(comparison_id, product_ids, ratio)
         return
