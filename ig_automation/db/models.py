@@ -102,6 +102,7 @@ class Idea(Base):
     rubric: Mapped[str] = mapped_column(String(64), default="")
     product: Mapped[str] = mapped_column(String(128), default="")
     status: Mapped[str] = mapped_column(String(16), default="new")  # new|in_work|used
+    image_path: Mapped[str] = mapped_column(String(512), default="")  # сгенерённая инфографика (Кирпич 4)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

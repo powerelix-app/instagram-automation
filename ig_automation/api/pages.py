@@ -608,6 +608,14 @@ def ideas_to_post(request: Request, idea_id: int, _: bool = Depends(require_user
     return RedirectResponse("/ideas?msg=Идея не найдена", status_code=303)
 
 
+@router.post("/ideas/{idea_id}/infographic")
+def ideas_infographic(request: Request, idea_id: int, ratio: str = Form("4:5"), _: bool = Depends(require_user)):
+    """Кирпич 4: из концепта идеи → готовая инфографика (фон gpt-image, ~2-3 мин)."""
+    sources_svc.start_from_idea(idea_id, ratio)
+    return RedirectResponse(f"/ideas?msg={quote('🎨 Генерирую инфографику — обновится через пару минут')}",
+                            status_code=303)
+
+
 # ── Бренд-ассеты (банки/логотип/лицо модели) ──
 
 @router.get("/brand", response_class=HTMLResponse)

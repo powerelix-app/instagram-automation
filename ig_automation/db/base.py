@@ -63,6 +63,9 @@ def _migrate(engine) -> None:
             ("output_paths", "JSON"),
             ("output_video", "VARCHAR DEFAULT ''"),
         ],
+        "ideas": [
+            ("image_path", "VARCHAR DEFAULT ''"),
+        ],
         "posts": [
             ("product_id", "VARCHAR DEFAULT ''"),
             ("reels_script", "TEXT"),

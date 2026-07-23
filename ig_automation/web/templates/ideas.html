@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Банк идей{% endblock %}
 {% block content %}
+{% if ideas | selectattr('status', 'equalto', 'gen') | list %}<meta http-equiv="refresh" content="15">{% endif %}
 <h1 class="text-2xl font-semibold mb-1">💡 Банк идей</h1>
-<p class="text-slate-500 mb-5 text-sm">Идеи из разведки, плана или добавленные вручную. Превращаются в черновик поста.</p>
+<p class="text-slate-500 mb-5 text-sm">Идеи из разведки, плана или добавленные вручную. → черновик поста или → 🎨 готовая инфографика (концепт в картинку).</p>
 
 <form action="/ideas/add" method="post" class="bg-white border rounded-xl p-4 mb-6 space-y-3">
   <textarea name="text" required rows="2" placeholder="Идея поста / сценария…" class="w-full px-3 py-2 border rounded"></textarea>
@@ -28,9 +29,17 @@
       {% if i.hook %}<div class="font-semibold text-sm">{{ i.hook }}</div>{% endif %}
       <div class="text-sm text-slate-600">{{ i.text }}</div>
     </div>
-    {% if i.status != 'used' %}
-    <form action="/ideas/{{ i.id }}/to-post" method="post"><button class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1 whitespace-nowrap">→ Черновик</button></form>
-    {% endif %}
+    <div class="flex flex-col items-end gap-2 shrink-0">
+      {% if i.image_path %}
+        <a href="{{ i.image_path }}" target="_blank"><img src="{{ i.image_path }}?r={{ range(1,999999)|random }}" class="w-24 rounded border"></a>
+      {% elif i.status == 'gen' %}
+        <span class="text-xs text-violet-600 whitespace-nowrap">🎨 генерится…</span>
+      {% endif %}
+      <form action="/ideas/{{ i.id }}/infographic" method="post"><button class="text-xs bg-violet-600 hover:bg-violet-500 text-white rounded px-3 py-1 whitespace-nowrap">🎨 {{ 'Пересобрать' if i.image_path else 'Инфографика' }}</button></form>
+      {% if i.status != 'used' %}
+      <form action="/ideas/{{ i.id }}/to-post" method="post"><button class="text-xs bg-emerald-600 hover:bg-emerald-500 text-white rounded px-3 py-1 whitespace-nowrap">→ Черновик</button></form>
+      {% endif %}
+    </div>
   </div>
   {% endfor %}
 </div>

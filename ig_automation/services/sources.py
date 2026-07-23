@@ -124,3 +124,66 @@ def generate_ideas(source_id: Optional[int] = None, n: int = 6) -> int:
         add_idea(text=text, hook=it.title, rubric=f"инфографика · {it.format}", product=pnames)
         cnt += 1
     return cnt
+
+
+def generate_from_idea(idea_id: int, ratio: str = "4:5") -> str:
+    """Кирпич 4: концепт идеи → готовая инфографика (gpt-image + наши банки + бренд-стиль)."""
+    import time
+    from .. import config
+    from . import producer
+    from ..db.models import Idea
+    with session_scope() as s:
+        idea = s.get(Idea, idea_id)
+        if not idea:
+            raise ValueError("идея не найдена")
+        title, concept, prod = idea.hook or "", idea.text or "", idea.product or ""
+    pids = [p.strip().lstrip("#") for p in prod.replace(";", ",").split(",") if p.strip()]
+    refs = []
+    for pid in pids:
+        r = producer._product_ref(pid)
+        if r:
+            refs.append(r)
+    ratio = ratio if ratio in ("4:5", "9:16", "1:1", "3:4") else "4:5"
+    prompt = (
+        f"Создай ВЕРТИКАЛЬНУЮ инфографику-Reels бренда БАД POWERELIX. Заголовок: «{title}». "
+        f"Концепт и структура: {concept}. "
+        "Премиальный современный дизайн, фирменная зелень POWERELIX (лайм #C3FF08 → мята #16FFB3) как акцент, "
+        "чистый фон, аккуратные иконки и блоки, вордмарк «POWERELIX» сверху. "
+        + ("Используй НАШИ банки из референс-изображений — форма и этикетка строго как на них. " if refs else "")
+        + "Весь текст — чистый, читаемый РУССКИЙ, крупные заголовки. Без чужого бренда и водяных знаков. "
+        "Юр-рамка БАД: без «лечит/гарантирует». Оставь поля по краям — ничего не обрезано по краям."
+    )
+    img = producer.gen_image_gpt(prompt, refs, aspect=ratio)
+    out_dir = config.MEDIA_DIR / "infographics"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"idea_{idea_id}_{int(time.time())}.png"
+    out.write_bytes(img)
+    rel = f"/media/infographics/{out.name}"
+    with session_scope() as s:
+        idea = s.get(Idea, idea_id)
+        if idea:
+            idea.image_path = rel
+            idea.status = "in_work"
+    return rel
+
+
+def start_from_idea(idea_id: int, ratio: str = "4:5") -> None:
+    """Запуск генерации инфографики из идеи в фоновом потоке (gpt-image ~2-3 мин)."""
+    import threading
+    with session_scope() as s:
+        from ..db.models import Idea
+        idea = s.get(Idea, idea_id)
+        if idea:
+            idea.status = "gen"  # «генерится»
+
+    def _run():
+        try:
+            generate_from_idea(idea_id, ratio)
+        except Exception as e:
+            log.warning("infographic from idea %s failed: %s", idea_id, e)
+            with session_scope() as s:
+                from ..db.models import Idea
+                idea = s.get(Idea, idea_id)
+                if idea:
+                    idea.status = "new"
+    threading.Thread(target=_run, daemon=True).start()
