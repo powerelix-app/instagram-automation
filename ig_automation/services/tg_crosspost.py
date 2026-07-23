@@ -84,6 +84,33 @@ def _clean_caption(caption: str) -> str:
     return text
 
 
+def send_media(image_url: str, caption: str = "", channel: str = "") -> Dict:
+    """Отправляет одиночное фото (по публичному URL) + подпись в TG через Aeza-бот
+    (он сам скачивает медиа — обходит гео-блок РФ-домена и лимит релея на большие
+    файлы). channel пусто → CROSSPOST_CHANNEL. Для «готовый пост в TG вручную»."""
+    if not (config.CROSSPOST_ENDPOINT and config.CROSSPOST_SECRET):
+        return {"ok": False, "error": "нет CF_CROSSPOST_ENDPOINT / CF_CROSSPOST_SECRET"}
+    import html as _html
+    cap = _html.escape((caption or "")[:_CAPTION_LIMIT])
+    payload = {
+        "channel": channel or config.CROSSPOST_CHANNEL,
+        "kind": "photo",
+        "media_urls": [image_url],
+        "caption": cap,
+        "parse_mode": "HTML",
+    }
+    try:
+        r = requests.post(config.CROSSPOST_ENDPOINT, json=payload,
+                          headers={"X-Crosspost-Secret": config.CROSSPOST_SECRET}, timeout=120)
+        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        if r.status_code != 200 or not body.get("ok"):
+            return {"ok": False, "error": f"{r.status_code}: {str(body or r.text)[:200]}"}
+        return {"ok": True, "message_id": body.get("message_id")}
+    except Exception as e:
+        log.warning("tg send_media failed: %s", e)
+        return {"ok": False, "error": str(e)[:200]}
+
+
 def crosspost(post_id: int, force: bool = False) -> Dict:
     """Постит контент поста в канал через Aeza-endpoint. force=True — слать даже
     при выключенном флаге (ручной тест). Возвращает {ok, ...}."""

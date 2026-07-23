@@ -1134,16 +1134,23 @@ def compare_caption(request: Request, cid: int, _: bool = Depends(require_user))
 
 @router.post("/compare/{cid}/to-telegram")
 def compare_to_telegram(request: Request, cid: int, _: bool = Depends(require_user)):
-    from ..services import notify
+    from ..services import notify, tg_crosspost
     d = comparison_svc.get(cid)
     if not d or not d.get("output_path"):
         return RedirectResponse(f"/compare/{cid}?msg={quote('Сначала собери инфографику')}", status_code=303)
     photo_url = config.PUBLIC_BASE.rstrip("/") + d["output_path"]
-    if not notify.configured():
-        return RedirectResponse(f"/compare/{cid}?msg={quote('Telegram не настроен (CF_TG_TOKEN/CF_TG_CHAT)')}",
-                                status_code=303)
-    ok = notify.send_post(photo_url, d.get("caption") or d.get("title") or "")
-    msg = "📨 Отправлено в Telegram — забирай для выкладки" if ok else "Не отправилось (проверь TG/логи)"
+    caption = d.get("caption") or d.get("title") or ""
+    # встроенная картинка + подпись через Aeza-бот (сам качает медиа, обходит гео-блок)
+    res = tg_crosspost.send_media(photo_url, caption, channel=config.TG_CHAT)
+    if res.get("ok"):
+        if len(caption) > 1024:  # подпись длиннее лимита фото — дошлём полный текст
+            notify.send(caption, html=False)
+        msg = "📨 Отправлено в Telegram — картинка + подпись, забирай для выкладки"
+    elif notify.configured():  # фолбэк: текст + ссылка на картинку
+        ok = notify.send_post(photo_url, caption)
+        msg = "📨 Отправлено (текст + ссылка на картинку)" if ok else f"Не отправилось: {res.get('error')}"
+    else:
+        msg = f"Telegram не настроен / {res.get('error')}"
     return RedirectResponse(f"/compare/{cid}?msg={quote(msg)}", status_code=303)
 
 
