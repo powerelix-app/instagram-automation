@@ -538,14 +538,14 @@ def _fit_canvas(canvas: Image.Image, ratio: str) -> Image.Image:
     W, H = canvas.size
     if abs(W / H - target) < 0.01:
         return canvas
-    if W / H > target:  # шире целевого → добавляем поля сверху/снизу
-        newH = int(round(W / target))
-        out = Image.new("RGB", (W, newH), _BG)
-        out.paste(canvas, (0, (newH - H) // 2))
-    else:               # уже/выше целевого → добавляем поля по бокам
-        newW = int(round(H * target))
-        out = Image.new("RGB", (newW, H), _BG)
-        out.paste(canvas, ((newW - W) // 2, 0))
+    from PIL import ImageFilter
+    nw, nh = (W, int(round(W / target))) if W / H > target else (int(round(H * target)), H)
+    scale = max(nw / W, nh / H) * 1.06
+    bg = canvas.resize((max(1, int(W * scale)), max(1, int(H * scale))), Image.LANCZOS)
+    bg = bg.filter(ImageFilter.GaussianBlur(max(12, nh // 40)))
+    bx, by = (bg.width - nw) // 2, (bg.height - nh) // 2
+    out = bg.crop((bx, by, bx + nw, by + nh))
+    out.paste(canvas, ((nw - W) // 2, (nh - H) // 2))
     return out
 
 
@@ -798,7 +798,7 @@ def _execute_aicopy(comparison_id: int, product_ids: List[str], ratio: str = "4:
         "читаемый РУССКИЙ."
     )
     try:
-        img_bytes = producer.gen_image_gpt(prompt, refs, aspect="4:5")
+        img_bytes = producer.gen_image_gpt(prompt, refs, aspect=ratio)  # нативный формат (9:16 и др.)
     except Exception as e:
         _fail(comparison_id, f"генерация не удалась: {e}")
         return

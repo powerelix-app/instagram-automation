@@ -194,7 +194,10 @@ def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
     if config.FAL_KEY:  # 0) fal ($0.165/кадр high — дешевле OpenAI direct, из РФ работает)
         try:
             from .. import scenes
-            fal_size = "landscape_4_3" if aspect in ("16:9", "3:2") else "portrait_4_3"
+            # формат → пресет fal (у gpt-image-2 на fal есть нативный 9:16 и др.)
+            fal_size = {"9:16": "portrait_16_9", "16:9": "landscape_16_9", "1:1": "square_hd",
+                        "3:4": "portrait_4_3", "2:3": "portrait_4_3", "4:5": "portrait_4_3",
+                        "4:3": "landscape_4_3", "3:2": "landscape_4_3"}.get(aspect, "portrait_4_3")
             payload = {"prompt": prompt, "quality": "high", "image_size": fal_size,
                        "image_urls": [scenes._data_url(r, 1024) for r in refs]}
             r = requests.post("https://fal.run/fal-ai/gpt-image-2/edit",
