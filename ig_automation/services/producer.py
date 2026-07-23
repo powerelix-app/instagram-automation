@@ -435,7 +435,32 @@ def smart_overlay(img_path: Path, title: str) -> None:
 
     tx = _Im.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(tx)
-    d.text((M, int(H * 0.04)), "POWERELIX", font=f_logo, fill=(255, 255, 255, 255))
+
+    # --- вордмарк в аккуратной «пилюле»: тёмная плашка + мятная точка + буквы с
+    # трекингом. Читается на ЛЮБОМ фоне и смотрится как фирменный тег, а не как
+    # полупрозрачный вотермарк поверх тела/фона. ---
+    _wm = "POWERELIX"
+    _trk = max(1, int(H * 0.003))                      # межбуквенный интервал
+    _wm_w = int(sum(d.textlength(ch, font=f_logo) + _trk for ch in _wm) - _trk)
+    _asc, _desc = f_logo.getmetrics()
+    _wm_h = _asc + _desc
+    _pad_x, _pad_y = int(H * 0.013), int(H * 0.009)
+    _dot_r = int(H * 0.005)
+    _gap = int(H * 0.010)
+    _pill_w = _pad_x + _dot_r * 2 + _gap + _wm_w + _pad_x
+    _pill_h = _wm_h + _pad_y * 2
+    _px, _py = M, int(H * 0.05)   # чуть ниже края — уходим от статус-бара IG, дышит
+    _pill_bottom = _py + _pill_h
+    d.rounded_rectangle([_px, _py, _px + _pill_w, _py + _pill_h],
+                        radius=_pill_h // 2, fill=(14, 20, 17, 210))
+    _cy = _py + _pill_h // 2
+    d.ellipse([_px + _pad_x, _cy - _dot_r, _px + _pad_x + _dot_r * 2, _cy + _dot_r],
+              fill=(22, 255, 179, 255))                # мятная точка бренда
+    _cx = _px + _pad_x + _dot_r * 2 + _gap
+    _ty = _py + _pad_y
+    for ch in _wm:                                     # буквы по одной — ради трекинга
+        d.text((_cx, _ty), ch, font=f_logo, fill=(255, 255, 255, 255))
+        _cx += d.textlength(ch, font=f_logo) + _trk
 
     # перенос заголовка по словам (макс. 3 строки) — считаем ДО выбора угла, т.к.
     # высота блока нужна геометрии, чтобы текст не наехал на лицо/продукт.
@@ -460,7 +485,8 @@ def smart_overlay(img_path: Path, title: str) -> None:
         pos = "bottom-left"
 
     if pos != "none":
-        y = int(H * 0.115) if "top" in pos else int(H - H * 0.06 - bh)
+        # верхний заголовок — ниже пилюли вордмарка (не наезжать)
+        y = max(int(H * 0.115), _pill_bottom + int(H * 0.03)) if "top" in pos else int(H - H * 0.06 - bh)
         yy = y
         right = "right" in pos
         for ln in lines:
