@@ -694,6 +694,53 @@ def _execute_symptom(comparison_id: int, product_ids: List[str], ratio: str = "4
     _clog(comparison_id, "✅ готово — инфографика собрана")
 
 
+def _article_strip(img: Image.Image, product_ids: List[str]) -> Image.Image:
+    """Чистая полоса артикулов WB снизу поверх AI-картинки — гарантированная
+    читаемость покупательской инфы (AI мелкий текст мылит). Тёмная плашка с
+    мятным лейблом; товары listed «НАЗВАНИЕ · nmId»."""
+    items = []
+    for pid in product_ids:
+        lk = catalog.get_link(str(pid)) or {}
+        nm = (lk.get("nmid") or "").strip()
+        if nm:
+            items.append(f"{_short_name(pid)} · {nm}")
+    if not items:
+        return img
+    img = img.convert("RGBA")
+    W, H = img.size
+    pad = int(W * 0.03)
+    fs = max(18, int(W * 0.028))
+    font = _font("Inter-SemiBold.otf", fs)
+    lbl_font = _font("Inter-Black.otf", int(fs * 0.9))
+    tmp = ImageDraw.Draw(img)
+    lines, cur = [], ""
+    for it in items:
+        test = (cur + "     " + it) if cur else it
+        if tmp.textlength(test, font=font) > W - 2.4 * pad and cur:
+            lines.append(cur)
+            cur = it
+        else:
+            cur = test
+    if cur:
+        lines.append(cur)
+    lh = fs + int(fs * 0.55)
+    label_h = int(fs * 1.15) + 8
+    strip_h = label_h + lh * len(lines) + pad
+    band = Image.new("RGBA", (W, strip_h), (0, 0, 0, 0))
+    bd = ImageDraw.Draw(band)
+    bd.rounded_rectangle([pad // 2, 0, W - pad // 2, strip_h - 3], radius=int(fs * 0.7),
+                         fill=(14, 20, 17, 236))
+    y = int(pad * 0.5)
+    bd.text((pad, y), "АРТИКУЛЫ НА WILDBERRIES", font=lbl_font, fill=_hex("#16FFB3"))
+    y += label_h
+    for ln in lines:
+        w = bd.textlength(ln, font=font)
+        bd.text(((W - w) // 2, y), ln, font=font, fill=(255, 255, 255, 255))
+        y += lh
+    img.alpha_composite(band, (0, H - strip_h - pad // 2))
+    return img.convert("RGB")
+
+
 def _execute_aicopy(comparison_id: int, product_ids: List[str], ratio: str = "4:5") -> None:
     """Режим «🎯 точная копия»: gpt-image-2 воссоздаёт МАКЕТ референса 1:1 с нашими
     товарами + бренд-перекраска (лайм→мята), без чужого лого. Текст рисует сам AI
@@ -740,6 +787,11 @@ def _execute_aicopy(comparison_id: int, product_ids: List[str], ratio: str = "4:
     except Exception as e:
         _fail(comparison_id, f"обработка изображения не удалась: {e}")
         return
+    try:  # чистый оверлей артикулов WB поверх (фаза 3)
+        final = _article_strip(final, product_ids)
+        _clog(comparison_id, "🛒 наложил артикулы Wildberries чистым слоем")
+    except Exception as e:
+        log.warning("aicopy article strip fail: %s", e)
     out_dir = config.MEDIA_DIR / "comparisons"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{comparison_id}_final.png"
