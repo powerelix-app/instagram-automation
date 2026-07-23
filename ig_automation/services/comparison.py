@@ -246,6 +246,7 @@ def get(comparison_id: int) -> Optional[dict]:
             "gen_error": r.gen_error, "output_path": r.output_path,
             "style": getattr(r, "style", "lineup") or "lineup",
             "ratio": getattr(r, "ratio", "4:5") or "4:5",
+            "caption": getattr(r, "caption", "") or "",
         }
 
 
@@ -697,6 +698,7 @@ def _execute_symptom(comparison_id: int, product_ids: List[str], ratio: str = "4
             c.gen_status = "done"
             c.gen_error = ""
     _clog(comparison_id, "✅ готово — инфографика собрана")
+    _gen_caption(comparison_id)
 
 
 def _article_strip(img: Image.Image, product_ids: List[str]) -> Image.Image:
@@ -813,6 +815,7 @@ def _execute_aicopy(comparison_id: int, product_ids: List[str], ratio: str = "4:
             c.gen_status = "done"
             c.gen_error = ""
     _clog(comparison_id, "✅ готово — точная копия макета под наш бренд")
+    _gen_caption(comparison_id)
 
 
 def execute(comparison_id: int) -> None:
@@ -898,6 +901,7 @@ def execute(comparison_id: int) -> None:
             c.gen_status = "done"
             c.gen_error = ""
     _clog(comparison_id, "✅ готово — инфографика собрана")
+    _gen_caption(comparison_id)
 
 
 def _fail(comparison_id: int, reason: str) -> None:
@@ -908,3 +912,45 @@ def _fail(comparison_id: int, reason: str) -> None:
         if c:
             c.gen_status = "error"
             c.gen_error = reason[:500]
+
+
+def _gen_caption(comparison_id: int) -> None:
+    """Автоподпись к готовой инфографике: короткое описание (Claude, БАД-корректно)
+    + все артикулы WB товаров в кадре + дисклеймер. Пишет в comparison.caption."""
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        if not c:
+            return
+        title = c.title or ""
+        pids = [str(p) for p in (c.product_ids or [])]
+    # артикулы WB
+    art_lines = []
+    for pid in pids:
+        p = products.product_by_id(pid) or {}
+        nm = p.get("full_name", p.get("name", "")) or f"товар {pid}"
+        lk = catalog.get_link(pid) or {}
+        if lk.get("nmid"):
+            art_lines.append(f"• {nm} — арт. {lk['nmid']}")
+    # короткое описание (Claude; при сбое — заголовок)
+    desc = title
+    try:
+        import anthropic
+        names = ", ".join((products.product_by_id(p) or {}).get("name", "") for p in pids if p)
+        prompt = (f"Напиши короткое (2-3 предложения) описание-подпись к инфографике бренда БАД POWERELIX "
+                  f"«{title}». Товары в кадре: {names}. Мягко (без «лечит/гарантирует»), живо, на «ты», "
+                  f"по-русски. Без хэштегов и без артикулов — их добавлю отдельно.")
+        client = anthropic.Anthropic()
+        r = client.messages.create(model=config.CLAUDE_MODEL, max_tokens=300,
+                                   messages=[{"role": "user", "content": prompt}])
+        desc = (r.content[0].text or "").strip() or title
+    except Exception as e:
+        log.warning("caption desc fail: %s", e)
+    caption = desc
+    if art_lines:
+        caption += "\n\n🛒 Артикулы на Wildberries:\n" + "\n".join(art_lines)
+    caption += "\n\nБАД. Не является лекарственным средством. Есть противопоказания."
+    with session_scope() as s:
+        c = s.get(Comparison, comparison_id)
+        if c:
+            c.caption = caption
+    _clog(comparison_id, "📝 автоподпись с артикулами готова")

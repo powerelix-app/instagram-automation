@@ -47,6 +47,13 @@
     {% if item.output_path %}
       <img src="{{ item.output_path }}?r={{ range(1, 999999) | random }}" class="w-full rounded border">
       <a href="{{ item.output_path }}" download class="text-xs text-blue-600 hover:underline mt-2 inline-block">⬇️ скачать</a>
+      {% if item.caption %}
+      <div class="mt-3">
+        <div class="text-xs text-slate-500 mb-1">📝 Подпись (описание + артикулы WB):</div>
+        <textarea id="cap" readonly rows="8" class="w-full text-xs border rounded p-2 bg-slate-50 leading-snug">{{ item.caption }}</textarea>
+        <button type="button" onclick="navigator.clipboard.writeText(document.getElementById('cap').value); this.textContent='✓ скопировано'" class="mt-1 text-xs bg-slate-800 hover:bg-slate-700 text-white rounded px-3 py-1.5">📋 Копировать подпись</button>
+      </div>
+      {% endif %}
     {% else %}
       <div class="aspect-[4/5] bg-slate-100 rounded flex items-center justify-center text-slate-300 text-sm">пока нет</div>
     {% endif %}

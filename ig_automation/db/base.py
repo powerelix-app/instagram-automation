@@ -66,6 +66,9 @@ def _migrate(engine) -> None:
         "ideas": [
             ("image_path", "VARCHAR DEFAULT ''"),
         ],
+        "comparisons": [
+            ("caption", "TEXT DEFAULT ''"),
+        ],
         "posts": [
             ("product_id", "VARCHAR DEFAULT ''"),
             ("reels_script", "TEXT"),

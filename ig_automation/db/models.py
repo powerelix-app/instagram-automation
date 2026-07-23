@@ -184,6 +184,7 @@ class Comparison(Base):
     gen_status: Mapped[str] = mapped_column(String(64), default="")
     gen_error: Mapped[str] = mapped_column(Text, default="")
     output_path: Mapped[str] = mapped_column(String(512), default="")
+    caption: Mapped[str] = mapped_column(Text, default="")  # автоподпись: описание + артикулы WB
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 
