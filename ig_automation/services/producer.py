@@ -471,25 +471,35 @@ def smart_overlay(img_path: Path, title: str) -> None:
     W, H = im.size
 
     f_logo = ImageFont.truetype(str(_MONT), int(H * 0.030))
-    f_big = ImageFont.truetype(str(_MONT), int(H * 0.060))
-    lh = int(H * 0.067)
     M = int(W * 0.055)
 
     tx = _Im.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(tx)
     _pill_bottom = _wordmark(d, W, H, M, f_logo)   # простой вордмарк (опущен ниже)
 
-    # перенос заголовка по словам (макс. 3 строки) — считаем ДО выбора угла, т.к.
-    # высота блока нужна геометрии, чтобы текст не наехал на лицо/продукт.
-    words = title.upper().split()
-    lines, cur = [], ""
-    for w_ in words:
-        t = (cur + " " + w_).strip()
-        if d.textlength(t, font=f_big) > W * 0.48 and cur:
-            lines.append(cur); cur = w_
-        else:
-            cur = t
-    lines.append(cur)
+    # Заголовок с АВТО-подгонкой кегля (макс. 3 строки). Длинные слова (ГОРМОНАЛЬНАЯ)
+    # не переносятся по словам и раньше вылезали за край — теперь ужимаем шрифт, пока
+    # самая широкая строка не влезет в поля (W - 2*M). Считаем ДО выбора угла — высота
+    # блока нужна геометрии, чтобы текст не наехал на лицо/продукт.
+    max_w = W - 2 * M
+    fs = int(H * 0.060)
+    min_fs = int(H * 0.034)
+    while True:
+        f_big = ImageFont.truetype(str(_MONT), fs)
+        lh = int(fs * 1.12)
+        words = title.upper().split()
+        lines, cur = [], ""
+        for w_ in words:
+            t = (cur + " " + w_).strip()
+            if d.textlength(t, font=f_big) > max_w and cur:
+                lines.append(cur); cur = w_
+            else:
+                cur = t
+        lines.append(cur)
+        widest = max((d.textlength(ln, font=f_big) for ln in lines), default=0)
+        if (widest <= max_w and len(lines) <= 3) or fs <= min_fs:
+            break
+        fs -= max(2, int(H * 0.003))
     lines = lines[:3]
     bh = len(lines) * lh
     tw = int(max((d.textlength(ln, font=f_big) for ln in lines), default=0))
@@ -792,7 +802,9 @@ def _produce_slides(sb_id: int):
             if face:
                 parts.append(
                     f"Если в кадре есть человек — замени его на НАШУ модель {model_phrase} "
-                    "(то же лицо и внешность, что на референсе модели; поза и действие как в референсе). "
+                    "(то же лицо и внешность, что на референсе модели). ТОЧНО повтори позу тела, "
+                    "ракурс, кадрирование, положение рук и то, КАК человек держит продукт — строго как "
+                    "на первом (референсном) изображении. НЕ придумывай другую позу/композицию. "
                     "В КАДРЕ РОВНО ОДИН ЧЕЛОВЕК — наша модель, никаких других людей (ни на фоне, ни в "
                     "отражении, ни размытым силуэтом). ")
             else:
