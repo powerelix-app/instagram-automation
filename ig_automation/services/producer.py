@@ -152,11 +152,11 @@ def gen_image(prompt: str, ref: Optional[Path] = None, aspect: str = "9:16",
 
 
 def _fit_ratio(img: bytes, ratio: str) -> bytes:
-    """Подгоняет под соотношение вида '4:5' ЛЕТТЕРБОКСОМ (поля цветом краёв), НЕ обрезая
-    контент. Иначе центр-кроп резал верх/низ инфографик (иконки, банку, текст).
-    Цвет полей — среднее по 4 углам (для однотонного фона — почти бесшовно)."""
+    """Подгоняет под соотношение вида '4:5'/'9:16' БЕЗ обрезки контента. Поля заполняются
+    РАЗМЫТОЙ увеличенной версией самой картинки (как фон у Reels) — 9:16 читается цельно,
+    без бежевых полос, а весь контент (иконки, банки, текст) сохраняется."""
     import io
-    from PIL import Image as _Im
+    from PIL import Image as _Im, ImageFilter
     rw, rh = (int(x) for x in ratio.split(":"))
     im = _Im.open(io.BytesIO(img)).convert("RGB")
     w, h = im.size
@@ -164,15 +164,15 @@ def _fit_ratio(img: bytes, ratio: str) -> bytes:
     cur = w / h
     if abs(cur - target) <= 0.01:
         buf = io.BytesIO(); im.save(buf, "PNG"); return buf.getvalue()
-    corners = [im.getpixel(p) for p in ((0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1))]
-    bg = tuple(sum(c[i] for c in corners) // 4 for i in range(3))
-    if cur > target:  # изображение шире цели → поля сверху/снизу
-        nh = int(round(w / target))
-        out = _Im.new("RGB", (w, nh), bg); out.paste(im, (0, (nh - h) // 2))
-    else:             # изображение выше цели → поля по бокам
-        nw = int(round(h * target))
-        out = _Im.new("RGB", (nw, h), bg); out.paste(im, ((nw - w) // 2, 0))
-    buf = io.BytesIO(); out.save(buf, "PNG")
+    nw, nh = (w, int(round(w / target))) if cur > target else (int(round(h * target)), h)
+    # фон-cover: размытая версия картинки, растянутая на весь кадр
+    scale = max(nw / w, nh / h) * 1.06
+    bg = im.resize((max(1, int(w * scale)), max(1, int(h * scale))), _Im.LANCZOS)
+    bg = bg.filter(ImageFilter.GaussianBlur(max(12, nh // 40)))
+    bx, by = (bg.width - nw) // 2, (bg.height - nh) // 2
+    canvas = bg.crop((bx, by, bx + nw, by + nh))
+    canvas.paste(im, ((nw - w) // 2, (nh - h) // 2))
+    buf = io.BytesIO(); canvas.save(buf, "PNG")
     return buf.getvalue()
 
 
