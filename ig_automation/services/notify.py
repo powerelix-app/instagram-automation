@@ -55,11 +55,13 @@ def send_photo(photo_url: str, caption: str = "") -> bool:
 
 
 def send_post(photo_url: str, caption: str = "") -> bool:
-    """Готовый пост в TG для ручной выкладки: фото + подпись. Если подпись длиннее
-    лимита к фото (1024) — шлём фото отдельно, затем полный текст сообщением."""
-    caption = caption or ""
-    if len(caption) <= 1024:
-        return send_photo(photo_url, caption)
-    ok = send_photo(photo_url, "📸 Готовый пост — полный текст ниже 👇")
-    send(caption, html=False)
-    return ok
+    """Готовый пост в TG для ручной выкладки. Telegram НЕ может скачать картинку с
+    РФ-домена (geo-блок), а релей давится большими файлами — поэтому шлём подпись
+    ТЕКСТОМ + прямую ссылку на скачивание картинки (её открываешь с телефона сам:
+    РФ-устройства домен видят). Возвращает True при успехе."""
+    caption = (caption or "").strip()
+    parts = []
+    if caption:
+        parts.append(caption)
+    parts.append(f"📥 Картинка для выкладки (скачай и запости):\n{photo_url}")
+    return send("\n\n".join(parts), html=False)
