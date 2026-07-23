@@ -779,8 +779,11 @@ def _execute_aicopy(comparison_id: int, product_ids: List[str], ratio: str = "4:
         f"{n} (убери лишние слоты, НЕ дублируй наши банки и НЕ оставляй пустых мест); если меньше — не добавляй. "
         "ПЕРЕКРАСЬ акценты (свечение, иконки, стрелки, акцент заголовка и футера) в фирменную зелень "
         "POWERELIX: от лайма #C3FF08 к мяте #16FFB3, сохраняя общую подачу референса, но цельно и "
-        "премиально (не кислотно). Добавь вордмарк «POWERELIX» сверху. УБЕРИ любой чужой бренд, лого, "
-        "водяной знак, значки соцсетей и посторонние badge. Весь текст — чистый, читаемый РУССКИЙ."
+        "премиально (не кислотно). Добавь НЕБОЛЬШОЙ вордмарк «POWERELIX» в свободном месте, НЕ перекрывая "
+        "заголовок. УБЕРИ любой чужой бренд, лого, водяной знак, значки соцсетей и посторонние badge. "
+        "ВАЖНО: оставь поля/отступы по краям — заголовок, ВСЕ банки и весь текст должны ПОЛНОСТЬЮ помещаться "
+        "в кадр, ничего не обрезано по краям (ни сверху, ни снизу, ни по бокам). Весь текст — чистый, "
+        "читаемый РУССКИЙ."
     )
     try:
         img_bytes = producer.gen_image_gpt(prompt, refs, aspect="4:5")
@@ -794,11 +797,6 @@ def _execute_aicopy(comparison_id: int, product_ids: List[str], ratio: str = "4:
     except Exception as e:
         _fail(comparison_id, f"обработка изображения не удалась: {e}")
         return
-    try:  # чистый оверлей артикулов WB поверх (фаза 3)
-        final = _article_strip(final, product_ids)
-        _clog(comparison_id, "🛒 наложил артикулы Wildberries чистым слоем")
-    except Exception as e:
-        log.warning("aicopy article strip fail: %s", e)
     out_dir = config.MEDIA_DIR / "comparisons"
     out_dir.mkdir(parents=True, exist_ok=True)
     out_path = out_dir / f"{comparison_id}_final.png"
