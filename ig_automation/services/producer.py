@@ -176,6 +176,18 @@ def _fit_ratio(img: bytes, ratio: str) -> bytes:
     return buf.getvalue()
 
 
+def _native_size(aspect: str, cap: int = 1536) -> dict:
+    """{'width','height'} точно в заданном соотношении, длинная сторона = cap.
+    Просим у модели НАТИВНЫЙ формат → _fit_ratio ничего не добивает (нет размытых полос)."""
+    try:
+        rw, rh = (int(x) for x in aspect.split(":"))
+    except Exception:
+        rw, rh = 4, 5
+    if rw >= rh:
+        return {"width": cap, "height": int(round(cap * rh / rw))}
+    return {"width": int(round(cap * rw / rh)), "height": cap}
+
+
 def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
     """gpt-image-2 images/edits. Приоритет: OpenAI напрямую (наш ключ, без наценки),
     при гео-блоке (РФ-VPS) — тот же запрос через Apify media-fetcher,
@@ -274,6 +286,7 @@ def gen_image_seedream(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
                       headers={"Authorization": f"Key {config.FAL_KEY}",
                                "Content-Type": "application/json"},
                       json={"prompt": prompt,
+                            "image_size": _native_size(aspect),   # нативный формат (9:16 без размытых полос)
                             "image_urls": [scenes._data_url(x, 1024) for x in refs]},
                       timeout=600)
     r.raise_for_status()
@@ -420,37 +433,18 @@ def _pick_spot(boxes: dict, W: int, H: int, bh: int, tw: int) -> str:
     return "none"
 
 
-def _wordmark_pill(d, W, H, M, f_logo, y_frac: float = 0.05) -> int:
-    """Рисует фирменный тег POWERELIX «пилюлей» (тёмная скруглённая плашка + мятная
-    точка + буквы с трекингом) на переданный ImageDraw. Читается на ЛЮБОМ фоне —
-    не как полупрозрачный вотермарк. Возвращает нижнюю Y пилюли (для раскладки)."""
-    _wm = "POWERELIX"
-    _trk = max(1, int(H * 0.003))                      # межбуквенный интервал
-    _wm_w = int(sum(d.textlength(ch, font=f_logo) + _trk for ch in _wm) - _trk)
+def _wordmark(d, W, H, M, f_logo, y_frac: float = 0.075) -> int:
+    """Рисует простой вордмарк POWERELIX (белый текст, как было) — опущенный ниже
+    от края. Тень добавляется вызывающим слоем. Возвращает нижнюю Y (для раскладки)."""
     _asc, _desc = f_logo.getmetrics()
-    _wm_h = _asc + _desc
-    _pad_x, _pad_y = int(H * 0.013), int(H * 0.009)
-    _dot_r = int(H * 0.005)
-    _gap = int(H * 0.010)
-    _pill_w = _pad_x + _dot_r * 2 + _gap + _wm_w + _pad_x
-    _pill_h = _wm_h + _pad_y * 2
-    _px, _py = M, int(H * y_frac)   # чуть ниже края — уходим от статус-бара IG, дышит
-    d.rounded_rectangle([_px, _py, _px + _pill_w, _py + _pill_h],
-                        radius=_pill_h // 2, fill=(14, 20, 17, 210))
-    _cy = _py + _pill_h // 2
-    d.ellipse([_px + _pad_x, _cy - _dot_r, _px + _pad_x + _dot_r * 2, _cy + _dot_r],
-              fill=(22, 255, 179, 255))                # мятная точка бренда
-    _cx = _px + _pad_x + _dot_r * 2 + _gap
-    _ty = _py + _pad_y
-    for ch in _wm:                                     # буквы по одной — ради трекинга
-        d.text((_cx, _ty), ch, font=f_logo, fill=(255, 255, 255, 255))
-        _cx += d.textlength(ch, font=f_logo) + _trk
-    return _py + _pill_h
+    _y = int(H * y_frac)
+    d.text((M, _y), "POWERELIX", font=f_logo, fill=(255, 255, 255, 255))
+    return _y + _asc + _desc
 
 
-def stamp_wordmark(img_path: Path, y_frac: float = 0.05) -> None:
-    """Штампует фирменную пилюлю POWERELIX (с мягкой тенью) в левый-верх готовой
-    картинки. Единый бренд-тег для ЛЮБЫХ сгенерированных изображений (сравнение
+def stamp_wordmark(img_path: Path, y_frac: float = 0.075) -> None:
+    """Штампует вордмарк POWERELIX (белый текст + мягкая тень) в левый-верх готовой
+    картинки. Единый бренд-значок для ЛЮБЫХ сгенерированных изображений (сравнение
     «по мотивам», инфографика, 9:16 и пр.) — вместо кривого вордмарка, запечённого AI."""
     from PIL import Image as _Im, ImageDraw, ImageFilter, ImageFont
     im = _Im.open(img_path).convert("RGBA")
@@ -459,7 +453,7 @@ def stamp_wordmark(img_path: Path, y_frac: float = 0.05) -> None:
     M = int(W * 0.055)
     tx = _Im.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(tx)
-    _wordmark_pill(d, W, H, M, f_logo, y_frac)
+    _wordmark(d, W, H, M, f_logo, y_frac)
     sh = tx.split()[3].filter(ImageFilter.GaussianBlur(7))
     shadow = _Im.new("RGBA", (W, H), (0, 0, 0, 0))
     shadow.putalpha(sh.point(lambda a: int(a * 0.6)))
@@ -483,7 +477,7 @@ def smart_overlay(img_path: Path, title: str) -> None:
 
     tx = _Im.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(tx)
-    _pill_bottom = _wordmark_pill(d, W, H, M, f_logo)   # фирменный тег-пилюля
+    _pill_bottom = _wordmark(d, W, H, M, f_logo)   # простой вордмарк (опущен ниже)
 
     # перенос заголовка по словам (макс. 3 строки) — считаем ДО выбора угла, т.к.
     # высота блока нужна геометрии, чтобы текст не наехал на лицо/продукт.
