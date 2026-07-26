@@ -863,7 +863,7 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
 
     class CaptionOut(BaseModel):
         caption: str = Field(description="Подпись к посту: живой полезный текст про продукт (почему/кому/эмоция/результат), на «ты», с эмодзи и абзацами, 500-900 знаков, БЕЗ хэштегов")
-        hashtags: List[str] = Field(description="РОВНО 5 самых релевантных русских хэштегов без # (Instagram режет охват при большем числе)")
+        hashtags: List[str] = Field(description="РОВНО 4 самых релевантных русских хэштега без # (Instagram режет охват при большем числе)")
 
     vo_lines = "\n".join(f"- {sc.get('vo','')}" for sc in scenes if sc.get("vo"))
     client = anthropic.Anthropic()
@@ -896,7 +896,7 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
         post = Post(
             format="carousel" if sb_data["outputs"] and not sb_data["video"] else "reels",
             product=sb_data["product_name"], product_id=str(sb_data["product_id"]),
-            hook=sb_data["title"], caption=caption, hashtags=(out.hashtags or [])[:5],
+            hook=sb_data["title"], caption=caption, hashtags=(out.hashtags or [])[:4],
             visual_idea=sb_data["concept"], status="review",
             cta="ссылка и артикул в подписи")
         s.add(post)

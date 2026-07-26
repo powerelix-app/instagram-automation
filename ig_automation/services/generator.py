@@ -276,7 +276,7 @@ def generate_carousel(post_id: int, slides: int = 4) -> int:
 
 class TextOut(BaseModel):
     caption: str = Field(description="Готовая подпись к посту на русском, с эмодзи и абзацами, без хэштегов в конце")
-    hashtags: List[str] = Field(description="РОВНО 5 самых релевантных хэштегов на русском без "
+    hashtags: List[str] = Field(description="РОВНО 4 самых релевантных хэштега на русском без "
                                 "решёток — Instagram сейчас режет охват по большему числу тегов, "
                                 "меньше и точнее работает лучше, чем длинный список")
     cta: str = Field(description="Короткий призыв к действию")
@@ -373,12 +373,13 @@ def generate_post_text(post_id: int) -> Optional[int]:
         lk = catalog.get_link(pid)
         if lk and lk.get("nmid") and str(lk["nmid"]) not in caption:
             # БЕЗ сырого URL — в Instagram он не кликается; ссылка идёт только в
-            # кнопки/поля публикации VK и Telegram. В тексте — только артикул.
-            caption = caption.rstrip() + f"\n\n🛒 На Wildberries — артикул {lk['nmid']}"
+            # кнопки/поля публикации VK и Telegram. В тексте — артикул решёткой
+            # (#WW... тапабелен как хэштег).
+            caption = caption.rstrip() + f"\n\n🛒 Артикул на Wildberries: #{lk['nmid']}"
     with session_scope() as s:
         post = s.get(Post, post_id)
         post.caption = caption
-        post.hashtags = out.hashtags
+        post.hashtags = (out.hashtags or [])[:4]
         post.cta = out.cta
         return post_id
 
