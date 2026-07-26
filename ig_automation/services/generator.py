@@ -529,9 +529,25 @@ def suggest_overlay_text(post_id: int) -> dict:
         brief += ("\n\nЭто ОДИНОЧНАЯ картинка (не карусель, публикуется как Reels/фото). "
                   "Нужен ТОЛЬКО заголовок-крючок. Подзаголовок, тег и дисклеймер НЕ нужны — "
                   "оставь их пустыми строками.")
+    # Разнообразие: избегаем недавних заголовков (частил «Чистота изнутри») и просим
+    # свежий угол. Иначе модель для одной темы скатывается в один и тот же штамп.
+    with session_scope() as s:
+        recent = (s.query(PostAsset.prompt)
+                  .filter(PostAsset.model == "overlay", PostAsset.prompt != "")
+                  .order_by(PostAsset.id.desc()).limit(40).all())
+    seen: List[str] = []
+    for (pr,) in recent:
+        h = (pr or "").split(" — ")[0].strip()
+        if h and h.lower() not in {x.lower() for x in seen}:
+            seen.append(h)
+    if seen:
+        brief += ("\n\nНЕ ПОВТОРЯЙ эти уже использованные заголовки (и близкие по смыслу/штампы): "
+                  + "; ".join(seen[:20]) + ". Дай СВЕЖИЙ заголовок под ДРУГИМ углом — каждый раз "
+                  "меняй приём: вопрос, цифра/факт, провокация, боль→решение, обещание-выгода, "
+                  "эмоция, метафора, «до/после». Избегай клише «чистота изнутри», «энергия каждый день».")
     client = anthropic.Anthropic()
     resp = client.messages.parse(
-        model=config.CLAUDE_MODEL, max_tokens=600, system=_OVERLAY_SYSTEM,
+        model=config.CLAUDE_MODEL, max_tokens=600, system=_OVERLAY_SYSTEM, temperature=1.0,
         messages=[{"role": "user", "content": f"Текст обложки поста:\n\n{brief}"}],
         output_format=OverlayText,
     )
