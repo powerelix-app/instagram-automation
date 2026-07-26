@@ -301,12 +301,14 @@ _DOSAGE_RE = re.compile(
 _DISCLAIMER_RE = re.compile(
     r"(не\s+являет\w*\s+лекарствен|не\s+лекарство|имеются?\s+противопоказан|противопоказани|"
     r"консультаци\w*\s+(со\s+)?специалист)", re.IGNORECASE)
+# Сырые ссылки: в Instagram не кликаются — убираем из подписи (ссылка идёт в кнопки VK/IG).
+_URL_RE = re.compile(r"(https?://|www\.|wildberries\.ru|wb\.ru)", re.IGNORECASE)
 
 
 def _strip_policy(caption: str) -> str:
-    """Убирает из подписи строки со способом применения/дозировкой и дисклеймером."""
+    """Убирает из подписи строки со способом применения/дозировкой, дисклеймером и сырыми ссылками."""
     kept = [ln for ln in (caption or "").splitlines()
-            if not (_DOSAGE_RE.search(ln) or _DISCLAIMER_RE.search(ln))]
+            if not (_DOSAGE_RE.search(ln) or _DISCLAIMER_RE.search(ln) or _URL_RE.search(ln))]
     return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
@@ -369,11 +371,10 @@ def generate_post_text(post_id: int) -> Optional[int]:
     # Гарантируем артикул/ссылку WB В САМОЙ подписи (Claude иногда кладёт в CTA).
     if pid:
         lk = catalog.get_link(pid)
-        if lk and lk.get("nmid") and lk["nmid"] not in caption:
-            buy = f"\n\n🛒 На Wildberries — артикул {lk['nmid']}"
-            if lk.get("wb_url"):
-                buy += f"\n{lk['wb_url']}"
-            caption = caption.rstrip() + buy
+        if lk and lk.get("nmid") and str(lk["nmid"]) not in caption:
+            # БЕЗ сырого URL — в Instagram он не кликается; ссылка идёт только в
+            # кнопки/поля публикации VK и Telegram. В тексте — только артикул.
+            caption = caption.rstrip() + f"\n\n🛒 На Wildberries — артикул {lk['nmid']}"
     with session_scope() as s:
         post = s.get(Post, post_id)
         post.caption = caption
