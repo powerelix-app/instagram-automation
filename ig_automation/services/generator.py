@@ -155,14 +155,15 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
             config.MEDIA_DIR / a.path.replace("/media/", "", 1)
             for a in s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "ref").all()
         ]
-        # последний ЧИСТЫЙ визуал (без наложенного текста) — если он уже есть и это не слайд
-        # карусели (extra задан для слайдов не-героя), берём его за референс и просто пересобираем
-        # под новый формат/ракурс — как в разведке, вместо случайной генерации с нуля.
-        clean = (
-            s.query(PostAsset)
-            .filter(PostAsset.post_id == post_id, PostAsset.kind == "image", PostAsset.model != "overlay")
-            .order_by(PostAsset.ord.desc()).first()
-        ) if not extra else None
+        # референс для пересборки: ПРИОРИТЕТ — оригинальный слайд раскадровки (model='producer',
+        # напр. маскот/креатив концепта), а не последняя генерация — иначе регенерации дрейфуют
+        # всё дальше от исходного референса. Нет producer-слайда → последний чистый визуал.
+        clean = None
+        if not extra:
+            qc = s.query(PostAsset).filter(
+                PostAsset.post_id == post_id, PostAsset.kind == "image", PostAsset.model != "overlay")
+            clean = (qc.filter(PostAsset.model == "producer").order_by(PostAsset.ord.asc()).first()
+                     or qc.order_by(PostAsset.ord.desc()).first())
         clean_ref = (config.MEDIA_DIR / clean.path.replace("/media/", "", 1)) if clean else None
         post.status = "generating"
 
