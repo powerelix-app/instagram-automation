@@ -1194,21 +1194,35 @@ def post_to_telegram(request: Request, post_id: int, _: bool = Depends(require_u
         if not post:
             return RedirectResponse(f"/post/{post_id}?msg={quote('Пост не найден')}", status_code=303)
         caption = post.caption or ""
-    urls = [config.PUBLIC_BASE.rstrip("/") + a.path for a in generator.get_publish_assets(post_id)]
-    if not urls:
+        from ..db.models import PostAsset
+        assets = (s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
+                  .order_by(PostAsset.ord).all())
+        ratios = sorted({a.ratio for a in assets if a.ratio})
+    # если есть версии в разных форматах — шлём КАЖДЫЙ формат (юзер сам разложит по площадкам)
+    groups = [(rt, generator.get_publish_assets(post_id, platform=_p))
+              for rt, _p in ([(r, ("ig" if r == "9:16" else "vk")) for r in ratios] or [("", None)])]
+    sent = 0
+    first = True
+    for rt, agroup in groups:
+        for a in agroup:
+            u = config.PUBLIC_BASE.rstrip("/") + a.path
+            cap = caption if first else ""
+            res = tg_crosspost.send_media(u, cap, channel=config.TG_CHAT, kind="document")
+            if res.get("ok"):
+                sent += 1
+            first = False
+    if not sent and not groups:
         return RedirectResponse(f"/post/{post_id}?msg={quote('Нет картинок — сначала сгенерируй слайды')}",
                                 status_code=303)
-    sent = 0
-    for i, u in enumerate(urls):
-        res = tg_crosspost.send_media(u, caption if i == 0 else "", channel=config.TG_CHAT, kind="document")
-        if res.get("ok"):
-            sent += 1
     if sent:
         if len(caption) > 1024:  # подпись длиннее лимита медиа — дошлём полный текст
             notify.send(caption, html=False)
-        msg = f"📨 В Telegram отправлено файлами: {sent}/{len(urls)} слайд(ов) + подпись — забирай для выкладки"
+        ftxt = (" (форматы: " + ", ".join(ratios) + ")") if ratios else ""
+        msg = f"📨 В Telegram отправлено файлами: {sent} шт{ftxt} + подпись — забирай для выкладки"
     elif notify.configured():
-        ok = notify.send_post(urls[0], caption)
+        _first_url = next((config.PUBLIC_BASE.rstrip("/") + a.path
+                           for _, ag in groups for a in ag), "")
+        ok = notify.send_post(_first_url, caption)
         msg = "📨 Отправлено (текст + ссылка на картинку)" if ok else "Не отправилось — проверь настройки Telegram"
     else:
         msg = "Telegram не настроен"

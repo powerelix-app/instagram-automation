@@ -122,7 +122,7 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
     # path хранится URL-путём вида /media/...  → локальный файл в DATA_DIR
     from . import generator
     images: List[Path] = [
-        config.DATA_DIR / a.path.lstrip("/") for a in generator.get_publish_assets(post_id)
+        config.DATA_DIR / a.path.lstrip("/") for a in generator.get_publish_assets(post_id, platform="vk")
     ]
     images = [p for p in images if p.exists()]
     gid = str(config.VK_GROUP_ID).lstrip("-")

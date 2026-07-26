@@ -102,7 +102,7 @@ def publish(post_id: int, platforms: Optional[list] = None) -> Dict:
         caption_src, hashtags_src = post.caption, post.hashtags
 
     from . import generator
-    assets = generator.get_publish_assets(post_id)
+    assets = generator.get_publish_assets(post_id, platform="ig")  # IG → формат 9:16, если есть
     if not assets:
         return {"ok": False, "error": "нет картинки для публикации (сгенерируй визуал)"}
     caption = _full_caption(caption_src, hashtags_src)

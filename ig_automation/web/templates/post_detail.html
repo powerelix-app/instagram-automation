@@ -103,6 +103,7 @@
         <div class="relative mb-2">
           <img src="{{ a.path }}" class="w-full rounded border {% if post.format != 'carousel' and a.id == post.effective_selected_id %}ring-4 ring-blue-500{% endif %}">
           {% if a.model == 'overlay' %}<span class="absolute top-1 left-1 bg-emerald-600 text-white text-[10px] rounded px-1.5 py-0.5">с текстом</span>{% endif %}
+          {% if a.ratio %}<span class="absolute bottom-1 right-1 bg-slate-800 text-white text-[10px] rounded px-1.5 py-0.5">📐 {{ a.ratio }}</span>{% endif %}
           {% if post.format != 'carousel' %}
             {% if a.id == post.effective_selected_id %}
               <span class="absolute bottom-1 left-1 bg-blue-600 text-white text-[10px] rounded px-1.5 py-0.5">✓ публикуется эта</span>

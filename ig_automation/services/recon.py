@@ -857,6 +857,8 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
             post_model_key = "none"
         sb_data = {"product_id": sb.product_id, "product_name": sb.product_name,
                    "title": sb.title, "concept": sb.concept, "model_key": post_model_key,
+                   "ratio": (sb.img_ratio or "4:5"),
+                   "formats": dict(getattr(sb, "output_formats", None) or {}),
                    "outputs": [x for i, x in enumerate(sb.output_paths or [])
                                if selected is None or i in selected],
                    "video": sb.output_video or "", "vo_full": sb.vo_full}
@@ -910,6 +912,20 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
         if sb_data["video"]:
             s.add(PostAsset(post_id=pid, kind="video", path=sb_data["video"],
                             model="producer", ord=0))
+        base_ratio = sb_data.get("ratio", "4:5")
         for i, ap in enumerate(sb_data["outputs"]):
-            s.add(PostAsset(post_id=pid, kind="image", path=ap, model="producer", ord=i))
+            s.add(PostAsset(post_id=pid, kind="image", path=ap, model="producer",
+                            ratio=base_ratio, ord=i))
+        # доп. форматы (outpaint из раскадровки) — тегируем своим соотношением,
+        # publisher выберет нужный под площадку (IG→9:16, VK/TG→4:5)
+        ord2 = len(sb_data["outputs"])
+        for rt, paths in (sb_data.get("formats") or {}).items():
+            if rt == base_ratio:
+                continue
+            for i, ap in enumerate(paths):
+                if selected is not None and i not in selected:
+                    continue
+                s.add(PostAsset(post_id=pid, kind="image", path=ap, model="producer",
+                                ratio=rt, ord=ord2))
+                ord2 += 1
     return pid

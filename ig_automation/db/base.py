@@ -82,6 +82,9 @@ def _migrate(engine) -> None:
             ("gen_error", "TEXT DEFAULT ''"),
             ("selected_asset_id", "INTEGER"),
         ],
+        "post_assets": [
+            ("ratio", "VARCHAR DEFAULT ''"),
+        ],
         "gen_jobs": [
             ("post_id", "INTEGER"),
             ("comparison_id", "INTEGER"),

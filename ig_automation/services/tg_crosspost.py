@@ -136,7 +136,7 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         vid_url = (config.PUBLIC_BASE + video.path) if video else None
 
     from . import generator
-    img_urls = [config.PUBLIC_BASE + a.path for a in generator.get_publish_assets(post_id)]
+    img_urls = [config.PUBLIC_BASE + a.path for a in generator.get_publish_assets(post_id, platform="tg")]
 
     vid_dims = None
     if vid_url:

@@ -748,7 +748,8 @@ def get_post(post_id: int) -> Optional[dict]:
             "scheduled_at": p.scheduled_at, "ig_media_id": p.ig_media_id,
             "permalink": p.permalink, "error": p.error, "reels_script": p.reels_script,
             "blogger_id": p.blogger_id, "model_key": getattr(p, "model_key", "") or "",
-            "assets": [{"id": a.id, "path": a.path, "model": a.model} for a in images],
+            "assets": [{"id": a.id, "path": a.path, "model": a.model,
+                        "ratio": getattr(a, "ratio", "") or ""} for a in images],
             "refs": [{"id": a.id, "path": a.path} for a in assets if a.kind == "ref"],
             "videos": [{"id": a.id, "path": a.path} for a in assets if a.kind == "video"],
             "selected_asset_id": getattr(p, "selected_asset_id", None),
@@ -768,14 +769,18 @@ def select_post_image(post_id: int, asset_id: int) -> bool:
         return True
 
 
-def get_publish_assets(post_id: int) -> List[PostAsset]:
+# Какой формат картинки предпочитает площадка (если у поста есть версии в разных форматах)
+PLATFORM_RATIO = {"ig": "9:16", "vk": "4:5", "tg": "4:5"}
+
+
+def get_publish_assets(post_id: int, platform: Optional[str] = None) -> List[PostAsset]:
     """Единый источник правды для publisher/vk_crosspost/tg_crosspost/manual-pack:
     какие именно картинки идут в публикацию.
-    - carousel: ВСЕ картинки по порядку (как и раньше).
-    - photo/reels: РОВНО ОДНА — selected_asset_id, если выбрана явно; иначе
-      последняя обложка-с-текстом (model='overlay'); иначе последняя чистая.
-      Раньше тут брались ВСЕ оставшиеся варианты (включая старые перегенерации),
-      и IG получал их как нежданную карусель из мусора — теперь только одна."""
+    - Если у поста есть версии в разных форматах (ratio) — выбираем формат под площадку
+      (IG→9:16, VK/TG→4:5); platform=None → базовый формат поста.
+    - carousel: ВСЕ картинки выбранного формата по порядку.
+    - photo/reels: РОВНО ОДНА — selected_asset_id, если выбрана; иначе обложка-с-текстом
+      (model='overlay'); иначе последняя чистая (в рамках выбранного формата)."""
     with session_scope() as s:
         post = s.get(Post, post_id)
         if not post:
@@ -786,6 +791,14 @@ def get_publish_assets(post_id: int) -> List[PostAsset]:
         )
         if not assets:
             return []
+        # если есть варианты разных форматов — отфильтровать под площадку
+        avail = {a.ratio for a in assets if a.ratio}
+        if len(avail) > 1:
+            base = "9:16" if post.format == "reels" else "4:5"
+            target = PLATFORM_RATIO.get(platform or "")
+            target = target if target in avail else (base if base in avail else next(iter(avail)))
+            filt = [a for a in assets if a.ratio == target]
+            assets = filt or [a for a in assets if not a.ratio] or assets
         if post.format == "carousel":
             return assets
         sel_id = getattr(post, "selected_asset_id", None)

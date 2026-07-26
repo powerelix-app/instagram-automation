@@ -167,6 +167,7 @@ class PostAsset(Base):
     path: Mapped[str] = mapped_column(String(512), default="")
     model: Mapped[str] = mapped_column(String(64), default="")
     prompt: Mapped[str] = mapped_column(Text, default="")
+    ratio: Mapped[str] = mapped_column(String(8), default="")  # 4:5|9:16|1:1 — формат под площадку
     ord: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
