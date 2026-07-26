@@ -85,20 +85,26 @@ def _scene_description(visual_idea: str, hook: str, product: str) -> str:
 
 
 def _visual_prompt(scene: str, product: str, with_product_ref: bool, model_key: str = "") -> str:
+    from .brand import NO_PERSON_KEY
+    no_person = model_key == NO_PERSON_KEY
     parts: List[str] = ["профессиональная чистая лайфстайл-фотография для Instagram, фотореализм, реалистичная"]
     if scene:
         parts.append(scene)
     if with_product_ref:
+        who = "БЕЗ людей, продукт сам по себе (на подложке/подиуме)" if no_person \
+            else f"в руках у {_person_phrase(model_key).split(' — ')[0]}"
         parts.append(
-            "на прикреплённом референсе — реальная банка добавки; в кадре ТА ЖЕ банка в руках у "
-            f"{_person_phrase(model_key).split(' — ')[0]} с референса лица, "
+            f"на прикреплённом референсе — реальная банка добавки; в кадре ТА ЖЕ банка, {who}; "
             "повтори форму, ЦВЕТ СТЕКЛА/крышки и этикетку точно как на референсе, не искажай и "
             "не дорисовывай текст на этикетке; НЕ перекрашивай банку под цвет темы или содержимого "
             "(зелёный продукт ≠ зелёная/прозрачная банка — стекло остаётся как на референсе)"
         )
     elif product and product not in ("", "—"):
         parts.append(f"уместно показать баночку добавки {product}")
-    parts.append(_brand_style(model_key))
+    if no_person:
+        parts.append("В КАДРЕ НЕТ ЛЮДЕЙ вообще — только продукт и окружение, предметная съёмка")
+    else:
+        parts.append(_brand_style(model_key))
     parts.append(
         "КАТЕГОРИЧЕСКИ БЕЗ ТЕКСТА В КАДРЕ: никаких букв, цифр, слов, надписей, плашек, подписей, "
         "логотипов, заголовков, субтитров, водяных знаков; no text, no letters, no numbers, no words, "
@@ -168,17 +174,23 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
         prod_ref = brand.product_ref(product)  # фолбэк по имени, если product_id не привязан
     face_ref = brand.model_by_key(model_key)   # None для детей (child_*) — без лица-референса
     existing_user_refs = [p for p in user_refs if p.exists()]
-    # ребёнок в кадре без лица-референса: подменяем «нашу модель со ВТОРОГО изображения»
-    # и сдвигаем нумерацию (банка становится ВТОРОЙ, а не ТРЕТЬЕЙ)
+    # три состояния: взрослая модель (лицо-референс) | ребёнок (без лица) | без человека.
+    # Без лица нумерация картинок сдвигается (банка становится ВТОРОЙ, а не ТРЕТЬЕЙ).
     _child_desc = brand.CHILD_KEYS.get(model_key, "")
+    _no_person = model_key == brand.NO_PERSON_KEY
     _has_face = face_ref is not None
     if _has_face:
         _person_img = "НАШУ модель со ВТОРОГО изображения (то же лицо, та же внешность)"
         _person_same = "ТА ЖЕ модель со ВТОРОГО изображения (то же лицо, не меняй внешность)"
         _prod_ord, _prod_ord2 = "ТРЕТЬЕГО", "ТРЕТЬЕМ"
-    else:
+    elif _child_desc:
         _person_img = f"РЕБЁНКА ({_child_desc}), радостного и здорового, БЕЗ конкретного лица-референса"
         _person_same = f"РЕБЁНОК ({_child_desc}), радостный, БЕЗ конкретного лица-референса"
+        _prod_ord, _prod_ord2 = "ВТОРОГО", "ВТОРОМ"
+    else:  # без человека — в кадре только продукт
+        _person_img = ("НИКОГО: в кадре НЕ должно быть людей вообще (убери человека полностью, "
+                       "без рук и силуэтов) — только продукт крупно и окружение")
+        _person_same = "БЕЗ людей — в кадре только продукт (никаких людей, рук и силуэтов)"
         _prod_ord, _prod_ord2 = "ВТОРОГО", "ВТОРОМ"
 
     strict_mode = bool(existing_user_refs and not extra and prod_ref)
@@ -230,10 +242,13 @@ def generate_post_assets(post_id: int, ratio: Optional[str] = None, extra: str =
         if extra:
             prompt += ". " + extra
 
-    refs = [r for r in refs if r]   # у ребёнка нет лица-референса → убрать None из списка
-    if _child_desc and not _has_face:
+    refs = [r for r in refs if r]   # у ребёнка/без-человека нет лица-референса → убрать None
+    if _child_desc:
         prompt += (f" ВАЖНО: в кадре РОВНО ОДИН РЕБЁНОК ({_child_desc}), здоровый и радостный, "
                    "БЕЗ конкретного лица-референса; никаких взрослых и других людей.")
+    elif _no_person:
+        prompt += (" ВАЖНО: в кадре НЕТ ЛЮДЕЙ вообще — ни человека, ни рук, ни силуэтов. "
+                   "Только продукт и окружение (предметный/концептуальный кадр).")
     try:
         from . import producer
         img = producer.gen_product_image(prompt, refs, aspect=ratio, bottle=prod_ref, strict=strict_mode)

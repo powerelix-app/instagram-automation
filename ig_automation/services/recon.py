@@ -851,8 +851,12 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
         if not sb or not (sb.output_paths or sb.output_video):
             return None
         scenes = list(sb.scenes or [])
+        # переносим настройку «человек в кадре» из раскадровки: без человека → model_key='none'
+        post_model_key = getattr(sb, "model_key", "") or ""
+        if not getattr(sb, "include_model", True):
+            post_model_key = "none"
         sb_data = {"product_id": sb.product_id, "product_name": sb.product_name,
-                   "title": sb.title, "concept": sb.concept,
+                   "title": sb.title, "concept": sb.concept, "model_key": post_model_key,
                    "outputs": [x for i, x in enumerate(sb.output_paths or [])
                                if selected is None or i in selected],
                    "video": sb.output_video or "", "vo_full": sb.vo_full}
@@ -896,6 +900,7 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
         post = Post(
             format="carousel" if sb_data["outputs"] and not sb_data["video"] else "reels",
             product=sb_data["product_name"], product_id=str(sb_data["product_id"]),
+            model_key=sb_data.get("model_key", ""),
             hook=sb_data["title"], caption=caption, hashtags=(out.hashtags or [])[:4],
             visual_idea=sb_data["concept"], status="review",
             cta="ссылка и артикул в подписи")

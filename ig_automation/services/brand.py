@@ -78,16 +78,19 @@ def list_models() -> list:
     # генерятся описанием в промпте (ребёнку не нужна консистентность лица бренда)
     out.append({"key": "child_boy", "name": "👦 Мальчик 7-9", "path": ""})
     out.append({"key": "child_girl", "name": "👧 Девочка 7-9", "path": ""})
+    # «без человека» — в кадре только продукт (перенос фильтра раскадровки в пост)
+    out.append({"key": "none", "name": "🚫 Без человека (только продукт)", "path": ""})
     return out
 
 
 CHILD_KEYS = {"child_boy": "мальчик 7-9 лет", "child_girl": "девочка 7-9 лет"}
+NO_PERSON_KEY = "none"
 
 
 def model_by_key(key: str):
-    """Лицо по ключу ростера; для детей (child_*) -> None (генерим описанием, без
-    референса); пусто/не найдено -> основная модель."""
-    if key in CHILD_KEYS:
+    """Лицо по ключу ростера; для детей (child_*) и «без человека» (none) -> None
+    (генерим описанием/без человека); пусто/не найдено -> основная модель."""
+    if key in CHILD_KEYS or key == NO_PERSON_KEY:
         return None
     if key:
         f = config.ROOT / "assets" / "brand" / "models" / f"{key}.png"
