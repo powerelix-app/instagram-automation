@@ -845,8 +845,9 @@ def _produce_slides(sb_id: int):
     ref_dir = config.MEDIA_DIR / "frames" / str(reel_id)
     ref_slides = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
     paths = []
-    from .brand import model_by_key
-    face = model_by_key(model_key) if inc_model else None
+    from .brand import model_by_key, CHILD_KEYS
+    child = CHILD_KEYS.get(model_key or "", "") if inc_model else ""   # ребёнок в кадре без лица-референса
+    face = model_by_key(model_key) if (inc_model and not child) else None
     if ref_slides:
         for i, rs in enumerate(ref_slides):
             _set(sb_id, gen_status=f"слайд {i + 1}/{len(ref_slides)} (по референсу)…")
@@ -871,6 +872,12 @@ def _produce_slides(sb_id: int):
                     "на первом (референсном) изображении. НЕ придумывай другую позу/композицию. "
                     "В КАДРЕ РОВНО ОДИН ЧЕЛОВЕК — наша модель, никаких других людей (ни на фоне, ни в "
                     "отражении, ни размытым силуэтом). ")
+            elif child:
+                parts.append(
+                    f"Если в кадре есть человек — замени его на РЕБЁНКА ({child}), европейской внешности, "
+                    "радостного, живого, здорового (БЕЗ конкретного лица-референса — просто симпатичный "
+                    "ребёнок этого возраста). ТОЧНО повтори позу, ракурс, кадрирование и действие как на "
+                    "референсе. В КАДРЕ РОВНО ОДИН РЕБЁНОК, никаких других людей и никаких взрослых. ")
             else:
                 parts.append(
                     "В КАДРЕ НЕТ ЛЮДЕЙ ВООБЩЕ — убери всех людей из сцены. Только предметы, продукт и "
@@ -905,8 +912,13 @@ def _produce_slides(sb_id: int):
     else:  # фолбэк: по описаниям сцен
         for i, sc in enumerate(scenes):
             _set(sb_id, gen_status=f"слайд {i + 1}/{len(scenes)}…")
-            people = ("В кадре РОВНО ОДИН человек — наша модель; никаких других людей." if face
-                      else "В КАДРЕ НЕТ ЛЮДЕЙ — только предметы/сцена/концепт.")
+            if face:
+                people = "В кадре РОВНО ОДИН человек — наша модель; никаких других людей."
+            elif child:
+                people = (f"В кадре РОВНО ОДИН РЕБЁНОК ({child}), радостный, здоровый, без конкретного "
+                          "лица-референса; никаких взрослых и других людей.")
+            else:
+                people = "В КАДРЕ НЕТ ЛЮДЕЙ — только предметы/сцена/концепт."
             prod = ("Товар — наша банка (форма/этикетка как на референсе)." if bottle
                     else "БЕЗ фирменной баночки — продукт как концепт (капсула/абстракция).")
             prompt = (f"Слайд {i + 1} Instagram-карусели.\nВИЗУАЛ: {sc.get('scene', '')}\n"
@@ -930,8 +942,9 @@ def _video_ctx(sb_id: int) -> dict:
                "reel_id": sb.trend_reel_id,
                "model_key": getattr(sb, "model_key", "") or "",
                "video_engine": getattr(sb, "video_engine", "") or DEFAULT_VIDEO_ENGINE}
-    from .brand import model_by_key
+    from .brand import model_by_key, CHILD_KEYS
     ctx["bottle"] = _product_ref(ctx["product_id"])
+    ctx["child"] = CHILD_KEYS.get(ctx["model_key"] or "", "")
     ctx["face"] = model_by_key(ctx["model_key"])
     ref_dir = config.MEDIA_DIR / "frames" / str(ctx["reel_id"])
     ctx["ref_frames"] = sorted(ref_dir.glob("f*.jpg")) if ref_dir.exists() else []
@@ -967,7 +980,13 @@ def _gen_scene_still(sb_id: int, i: int, ctx: dict) -> None:
             "Вертикальный кадр 9:16.")
         refs_i = [rs] + ([face] if face else []) + ([ref] if ref else [])
         if not face:
-            prompt = prompt.replace("со ВТОРОГО изображения", "— наша модель бренда")
+            child = ctx.get("child", "")
+            if child:
+                prompt = prompt.replace(
+                    "замени его на НАШУ модель со ВТОРОГО изображения",
+                    f"замени его на РЕБЁНКА ({child}), радостного, БЕЗ конкретного лица-референса")
+            else:
+                prompt = prompt.replace("со ВТОРОГО изображения", "— наша модель бренда")
             prompt = prompt.replace("с ТРЕТЬЕГО изображения", "со ВТОРОГО изображения")
         if prev:
             refs_i.append(prev)

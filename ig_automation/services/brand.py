@@ -74,11 +74,21 @@ def list_models() -> list:
             if f.stem.startswith("_"):
                 continue
             out.append({"key": f.stem, "name": names.get(f.stem, f.stem), "path": str(f)})
+    # виртуальные модели-дети (для детских продуктов): без лица-референса,
+    # генерятся описанием в промпте (ребёнку не нужна консистентность лица бренда)
+    out.append({"key": "child_boy", "name": "👦 Мальчик 7-9", "path": ""})
+    out.append({"key": "child_girl", "name": "👧 Девочка 7-9", "path": ""})
     return out
 
 
-def model_by_key(key: str) -> Path:
-    """Лицо по ключу ростера; пусто/не найдено -> основная модель."""
+CHILD_KEYS = {"child_boy": "мальчик 7-9 лет", "child_girl": "девочка 7-9 лет"}
+
+
+def model_by_key(key: str):
+    """Лицо по ключу ростера; для детей (child_*) -> None (генерим описанием, без
+    референса); пусто/не найдено -> основная модель."""
+    if key in CHILD_KEYS:
+        return None
     if key:
         f = config.ROOT / "assets" / "brand" / "models" / f"{key}.png"
         if f.exists():
