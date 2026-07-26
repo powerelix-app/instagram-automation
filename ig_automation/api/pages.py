@@ -1181,6 +1181,19 @@ def compare_to_telegram(request: Request, cid: int, _: bool = Depends(require_us
     return RedirectResponse(f"/compare/{cid}?msg={quote(msg)}", status_code=303)
 
 
+@router.post("/post/{post_id}/format/{ratio}")
+def post_make_format(request: Request, post_id: int, ratio: str, _: bool = Depends(require_user)):
+    """Достраивает визуал поста в выбранный формат (outpaint) — фоном."""
+    import threading
+    from ..services import producer
+    if ratio not in ("4:5", "9:16", "1:1"):
+        raise HTTPException(400)
+    threading.Thread(target=producer.make_post_format, args=(post_id, ratio), daemon=True).start()
+    return RedirectResponse(
+        f"/post/{post_id}?msg=" + quote(f"📐 Делаю версию {ratio} (достраиваю фон) — обнови через минуту"),
+        status_code=303)
+
+
 @router.post("/post/{post_id}/to-telegram")
 def post_to_telegram(request: Request, post_id: int, _: bool = Depends(require_user)):
     """Шлёт слайды поста ФАЙЛАМИ (document, без сжатия) + подпись в личный бот для

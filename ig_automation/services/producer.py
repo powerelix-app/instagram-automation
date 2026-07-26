@@ -679,6 +679,47 @@ def make_storyboard_format(sb_id: int, target_ratio: str) -> int:
     return len(paths)
 
 
+def make_post_format(post_id: int, target_ratio: str) -> int:
+    """Достраивает готовый визуал ПОСТА в target_ratio (outpaint) и добавляет как ассет
+    с тегом ratio. Базовые ассеты помечает базовым форматом поста, чтобы publisher мог
+    выбирать формат под площадку. Возвращает число сделанных картинок (-1 уже есть,
+    -2 это и есть базовый формат)."""
+    from . import generator
+    from ..db.models import Post, PostAsset
+    with session_scope() as s:
+        post = s.get(Post, post_id)
+        if not post:
+            return 0
+        base_ratio = "9:16" if post.format == "reels" else "4:5"
+        imgs = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image").all()
+        for a in imgs:                        # базовые без тега → помечаем базовым форматом
+            if not a.ratio:
+                a.ratio = base_ratio
+        has_target = any(a.ratio == target_ratio for a in imgs)
+    if target_ratio == base_ratio:
+        return -2
+    if has_target:
+        return -1
+    src_assets = generator.get_publish_assets(post_id)   # publish-ready база (карусель-все / одиночный-один)
+    srcs = [a.path for a in src_assets]
+    with session_scope() as s:
+        ord0 = s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image").count()
+    rtag = target_ratio.replace(":", "x")
+    n = 0
+    for i, rel in enumerate(srcs):
+        src = config.MEDIA_DIR / rel.replace("/media/", "", 1)
+        if not src.exists():
+            continue
+        data = outpaint_to_ratio(src, target_ratio)
+        dst = config.MEDIA_DIR / f"post_{post_id}_{rtag}_{i}.png"
+        dst.write_bytes(data)
+        with session_scope() as s:
+            s.add(PostAsset(post_id=post_id, kind="image", path=f"/media/{dst.name}",
+                            model="outpaint", ratio=target_ratio, ord=ord0 + i))
+        n += 1
+    return n
+
+
 def _label_verdict(img: bytes, bottle: Path) -> dict:
     """Claude-vision сверяет этикетку на кадре с реальной банкой.
     -> {ok, reason}. Ошибка проверки = ok (не блокируем производство)."""
