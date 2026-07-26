@@ -533,6 +533,70 @@ def smart_overlay(img_path: Path, title: str) -> None:
     im.convert("RGB").save(img_path)
 
 
+def _gen_slide_title(concept: str, scene: str, product: str, avoid: list, old: str = "") -> str:
+    """Свежая короткая надпись на слайд (2-4 слова), НЕ повторяющая недавние заголовки
+    (частил «Чистота изнутри»). Разные приёмы + temperature для вариативности."""
+    import anthropic
+    from pydantic import BaseModel
+
+    class _T(BaseModel):
+        title: str
+
+    seen: list = []
+    src = [old] + list(avoid or [])
+    with session_scope() as s:  # + недавние заголовки из других раскадровок
+        rows = s.query(Storyboard.scenes).order_by(Storyboard.id.desc()).limit(30).all()
+    for (scs,) in rows:
+        for sc in (scs or []):
+            src.append((sc.get("slide_title") or "").strip())
+    for t in src:
+        if t and t.lower() not in {x.lower() for x in seen}:
+            seen.append(t)
+    sys = ("Ты — арт-директор бренда БАД POWERELIX (RU). Придумай ОДНУ короткую надпись на слайд "
+           "карусели: 2-4 слова, про пользу/эмоцию продукта, БЕЗ «лечит/гарантирует». Каждый раз "
+           "меняй приём: вопрос, обещание-выгода, эмоция, метафора, провокация, цифра/факт. "
+           "НЕ повторяй эти уже использованные (и близкие по смыслу): " + "; ".join(seen[:25]) +
+           ". Избегай клише «чистота изнутри», «энергия каждый день».")
+    client = anthropic.Anthropic()
+    r = client.messages.parse(
+        model=config.CLAUDE_MODEL, max_tokens=100, system=sys, temperature=1.0,
+        messages=[{"role": "user", "content": f"Продукт: {product}\nКонцепция: {concept}\nСцена: {scene}"}],
+        output_format=_T)
+    return (r.parsed_output.title or old).strip() or old
+
+
+def retitle_slide(sb_id: int, i: int) -> str:
+    """Ре-ролл заголовка одного слайда: новый разнообразный slide_title → перекладываем
+    фирменный оверлей поверх ЧИСТОЙ базы кадра (картинку не перегенерируем)."""
+    import shutil
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if not sb:
+            raise RuntimeError("раскадровка не найдена")
+        scenes = list(sb.scenes or [])
+        if i >= len(scenes):
+            raise RuntimeError("нет такого слайда")
+        concept, product = sb.concept or "", sb.product_name or ""
+        scene_desc = scenes[i].get("scene", "")
+        old = (scenes[i].get("slide_title") or "").strip()
+        avoid = [(sc.get("slide_title") or "").strip() for sc in scenes]
+    out = _out_dir(sb_id)
+    clean, dest = out / f"slide_{i}_clean.png", out / f"slide_{i}.png"
+    if not clean.exists():
+        raise RuntimeError("нет чистой базы слайда — нажми «Сгенерировать слайды заново» один раз, "
+                           "дальше ре-ролл заголовка заработает без перегенерации картинки")
+    new_title = _gen_slide_title(concept, scene_desc, product, avoid, old)
+    shutil.copyfile(clean, dest)
+    smart_overlay(dest, new_title)
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        sc = list(sb.scenes or [])
+        if i < len(sc):
+            sc[i] = {**sc[i], "slide_title": new_title}
+            sb.scenes = sc
+    return new_title
+
+
 def _label_verdict(img: bytes, bottle: Path) -> dict:
     """Claude-vision сверяет этикетку на кадре с реальной банкой.
     -> {ok, reason}. Ошибка проверки = ok (не блокируем производство)."""
@@ -828,6 +892,7 @@ def _produce_slides(sb_id: int):
                                     bottle=bottle, check_label=bool(bottle))
             p = out / f"slide_{i}.png"
             p.write_bytes(img)
+            (out / f"slide_{i}_clean.png").write_bytes(img)   # чистая база для ре-ролла заголовка
             # фирменный оверлей: Claude-vision выбирает чистую зону; если текст
             # некуда класть (перекроет продукт/этикетку/лицо) — слайд без текста
             title = (scenes[i].get("slide_title") or "").strip() if i < len(scenes) else ""

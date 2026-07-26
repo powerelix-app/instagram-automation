@@ -430,6 +430,18 @@ def storyboard_stage(request: Request, sb_id: int, stage: str, _: bool = Depends
     return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(msg), status_code=303)
 
 
+@router.post("/storyboard/{sb_id}/slide/{i}/retitle")
+def storyboard_slide_retitle(request: Request, sb_id: int, i: int, _: bool = Depends(require_user)):
+    """Ре-ролл заголовка слайда — новая надпись поверх той же (чистой) картинки."""
+    from ..services import producer
+    try:
+        new_title = producer.retitle_slide(sb_id, i)
+        msg = f"🎲 Новый заголовок слайда: «{new_title}»"
+    except Exception as e:
+        msg = f"Не вышло: {e}"
+    return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(msg), status_code=303)
+
+
 @router.post("/storyboard/{sb_id}/still/{i}/regen")
 def storyboard_still_regen(request: Request, sb_id: int, i: int, _: bool = Depends(require_user)):
     from ..services import producer
