@@ -360,6 +360,7 @@ def storyboard_page(request: Request, sb_id: int, _: bool = Depends(require_user
               "include_product": bool(getattr(r, "include_product", True)),
               "gen_status": r.gen_status or "", "gen_error": r.gen_error or "",
               "outputs": r.output_paths or [], "video": r.output_video or "",
+              "output_formats": getattr(r, "output_formats", None) or {},
               "is_carousel": bool(r.scenes) and all(float(x.get("duration_s") or 0) == 0 for x in (r.scenes or []))}
     return templates.TemplateResponse(request, "storyboard.html", _ctx(request, sb=sb, models=brand_svc.list_models(),
              video_engines=[{"key": k, "name": v[1]} for k, v in __import__("ig_automation.services.producer", fromlist=["x"]).VIDEO_ENGINES.items()]))
@@ -440,6 +441,19 @@ def storyboard_slide_retitle(request: Request, sb_id: int, i: int, _: bool = Dep
     except Exception as e:
         msg = f"Не вышло: {e}"
     return RedirectResponse(f"/storyboard/{sb_id}?msg=" + quote(msg), status_code=303)
+
+
+@router.post("/storyboard/{sb_id}/format/{ratio}")
+def storyboard_make_format(request: Request, sb_id: int, ratio: str, _: bool = Depends(require_user)):
+    """Достраивает готовые слайды под выбранный формат (outpaint) — фоном."""
+    import threading
+    from ..services import producer
+    if ratio not in ("4:5", "9:16", "1:1"):
+        raise HTTPException(400)
+    threading.Thread(target=producer.make_storyboard_format, args=(sb_id, ratio), daemon=True).start()
+    return RedirectResponse(
+        f"/storyboard/{sb_id}?msg=" + quote(f"📐 Делаю версию {ratio} (достраиваю фон) — обнови через минуту"),
+        status_code=303)
 
 
 @router.post("/storyboard/{sb_id}/still/{i}/regen")

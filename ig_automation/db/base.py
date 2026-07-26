@@ -62,6 +62,7 @@ def _migrate(engine) -> None:
             ("gen_error", "TEXT DEFAULT ''"),
             ("output_paths", "JSON"),
             ("output_video", "VARCHAR DEFAULT ''"),
+            ("output_formats", "JSON"),
         ],
         "ideas": [
             ("image_path", "VARCHAR DEFAULT ''"),

@@ -88,6 +88,7 @@ class Storyboard(Base):
     gen_error: Mapped[str] = mapped_column(Text, default="")
     output_paths: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     output_video: Mapped[str] = mapped_column(String(255), default="")
+    output_formats: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # {ratio: [paths]} — доп. форматы (outpaint)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_now)
 
 

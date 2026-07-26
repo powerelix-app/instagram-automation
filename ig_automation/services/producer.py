@@ -597,6 +597,88 @@ def retitle_slide(sb_id: int, i: int) -> str:
     return new_title
 
 
+def outpaint_to_ratio(src_path: Path, target_ratio: str) -> bytes:
+    """Достраивает (outpaint, fal bria/expand) кадр под target_ratio БЕЗ перегенерации:
+    сам кадр остаётся один-в-один, AI дорисовывает только фон по краям (по короткой
+    стороне). Возвращает PNG-байты. Тот же приём, что спас маскот 4:5→9:16."""
+    import io
+    from PIL import Image as _Im
+    from .. import scenes, apify
+    im = _Im.open(src_path).convert("RGB")
+    w, h = im.size
+    rw, rh = (int(x) for x in target_ratio.split(":"))
+    T = rw / rh
+    cur = w / h
+    if abs(cur - T) < 0.01:
+        buf = io.BytesIO(); im.save(buf, "PNG"); return buf.getvalue()
+    if cur > T:                      # кадр шире цели → добавляем высоту (сверху/снизу)
+        cw, ch = w, round(w / T)
+        ox, oy = 0, (ch - h) // 2
+    else:                            # кадр уже цели → добавляем ширину (по бокам)
+        cw, ch = round(h * T), h
+        ox, oy = (cw - w) // 2, 0
+    payload = {
+        "image_url": scenes._data_url(src_path, max(w, h)),
+        "canvas_size": [cw, ch],
+        "original_image_size": [w, h],
+        "original_image_location": [ox, oy],
+        "prompt": ("продолжи фон и окружение в ТОМ ЖЕ стиле, цвете и освещении; "
+                   "без текста, надписей и новых объектов — только фон/атмосфера"),
+    }
+    r = requests.post("https://fal.run/fal-ai/bria/expand",
+                      headers={"Authorization": f"Key {config.FAL_KEY}",
+                               "Content-Type": "application/json"},
+                      json=payload, timeout=300)
+    r.raise_for_status()
+    url = (r.json().get("images", [{}])[0] or {}).get("url") or (r.json().get("image") or {}).get("url")
+    if not url:
+        raise RuntimeError("bria expand: пустой ответ")
+    try:
+        g = requests.get(url, timeout=120)
+        data = g.content if g.ok else b""
+    except Exception:                # fal.media режется РКН с РФ-VPS → тянем через актор
+        data = apify.fetch_via_actor(url) or b""
+    if not data:
+        raise RuntimeError("outpaint: результат не скачался")
+    return data
+
+
+def make_storyboard_format(sb_id: int, target_ratio: str) -> int:
+    """Достраивает ВСЕ готовые слайды раскадровки под target_ratio (outpaint) и
+    складывает в output_formats[target_ratio]. Возвращает число слайдов."""
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if not sb or not sb.output_paths:
+            return 0
+        outs = list(sb.output_paths)
+        cur_ratio = sb.img_ratio or "4:5"
+    if target_ratio == cur_ratio:
+        # запрошенный формат == основному: просто копируем ссылки
+        with session_scope() as s:
+            sb = s.get(Storyboard, sb_id)
+            formats = dict(sb.output_formats or {}); formats[target_ratio] = outs
+            sb.output_formats = formats
+        return len(outs)
+    out_dir = _out_dir(sb_id)
+    rtag = target_ratio.replace(":", "x")
+    paths = []
+    for i, rel in enumerate(outs):
+        src = config.MEDIA_DIR / rel.replace("/media/", "", 1)
+        if not src.exists():
+            continue
+        _set(sb_id, gen_status=f"формат {target_ratio}: слайд {i + 1}/{len(outs)}…")
+        data = outpaint_to_ratio(src, target_ratio)
+        dst = out_dir / f"slide_{i}_{rtag}.png"
+        dst.write_bytes(data)
+        paths.append(f"/media/produced/{sb_id}/{dst.name}")
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        formats = dict(sb.output_formats or {}); formats[target_ratio] = paths
+        sb.output_formats = formats
+        sb.gen_status = "done"
+    return len(paths)
+
+
 def _label_verdict(img: bytes, bottle: Path) -> dict:
     """Claude-vision сверяет этикетку на кадре с реальной банкой.
     -> {ok, reason}. Ошибка проверки = ok (не блокируем производство)."""
