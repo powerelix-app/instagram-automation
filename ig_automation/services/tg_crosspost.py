@@ -84,17 +84,19 @@ def _clean_caption(caption: str) -> str:
     return text
 
 
-def send_text(text: str, channel: str = "") -> Dict:
+def send_text(text: str, channel: str = "", html_ready: bool = False) -> Dict:
     """Отправляет ПРОСТОЕ текстовое сообщение (до 4096) через Aeza-бот в тот же чат,
-    что и файлы. Для полной подписи, когда она не влезла в caption медиа (лимит 1024)."""
+    что и файлы. Для полной подписи, когда она не влезла в caption медиа (лимит 1024).
+    html_ready=True — text уже HTML (ссылки-анкоры), не экранируем."""
     if not (config.CROSSPOST_ENDPOINT and config.CROSSPOST_SECRET):
         return {"ok": False, "error": "нет CF_CROSSPOST_ENDPOINT / CF_CROSSPOST_SECRET"}
     import html as _html
+    body_text = (text or "")[:4096] if html_ready else _html.escape((text or "")[:4096])
     payload = {
         "channel": channel or config.CROSSPOST_CHANNEL,
         "kind": "text",
         "media_urls": [],
-        "caption": _html.escape((text or "")[:4096]),
+        "caption": body_text,
         "parse_mode": "HTML",
     }
     try:
@@ -189,12 +191,17 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         links.append(f'<a href="{config.CROSSPOST_BUTTON_URL}">'
                      f'{_html.escape(config.CROSSPOST_BUTTON_TEXT)}</a>')
     links_block = ("\n\n" + "\n".join(links)) if links else ""
-    # видимый текст ссылок тоже входит в лимит 1024 — режем базовый текст с запасом
-    visible_links_len = len(re.sub(r"<[^>]+>", "", links_block))
-    max_base = _CAPTION_LIMIT - visible_links_len
-    if len(caption) > max_base:
-        caption = caption[:max_base - 1].rsplit(" ", 1)[0].rstrip() + "…"
-    caption = _html.escape(caption) + links_block
+    # ПОЛНАЯ подпись (HTML): базовый текст + ссылки-анкоры
+    full_html = _html.escape(caption) + links_block
+    visible_full = len(re.sub(r"<[^>]+>", "", full_html))
+    followup_html = ""
+    if visible_full > _CAPTION_LIMIT:
+        # не влезает в caption медиа (лимит TG 1024) → картинка БЕЗ подписи,
+        # полный текст пойдёт ОТДЕЛЬНЫМ сообщением следом (в канал целиком)
+        followup_html = full_html
+        caption = ""
+    else:
+        caption = full_html
 
     payload = {
         "channel": config.CROSSPOST_CHANNEL,
@@ -220,6 +227,12 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         return {"ok": False, "error": str(e)[:300]}
 
     message_id = str(body.get("message_id", ""))
+    # полный текст следом (если не влез в подпись картинки)
+    if followup_html:
+        try:
+            send_text(followup_html, channel=config.CROSSPOST_CHANNEL, html_ready=True)
+        except Exception as e:
+            log.warning("tg crosspost follow-up text post %s failed: %s", post_id, e)
     with session_scope() as s:
         post = s.get(Post, post_id)
         if post:
