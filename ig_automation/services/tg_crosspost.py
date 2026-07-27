@@ -191,17 +191,14 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         links.append(f'<a href="{config.CROSSPOST_BUTTON_URL}">'
                      f'{_html.escape(config.CROSSPOST_BUTTON_TEXT)}</a>')
     links_block = ("\n\n" + "\n".join(links)) if links else ""
-    # ПОЛНАЯ подпись (HTML): базовый текст + ссылки-анкоры
-    full_html = _html.escape(caption) + links_block
-    visible_full = len(re.sub(r"<[^>]+>", "", full_html))
-    followup_html = ""
-    if visible_full > _CAPTION_LIMIT:
-        # не влезает в caption медиа (лимит TG 1024) → картинка БЕЗ подписи,
-        # полный текст пойдёт ОТДЕЛЬНЫМ сообщением следом (в канал целиком)
-        followup_html = full_html
-        caption = ""
-    else:
-        caption = full_html
+    # ОДНО сообщение: картинка + подпись. Подпись в caption медиа ограничена 1024 (лимит
+    # TG) — режем базовый текст по границе слова с запасом под ссылки (сами подписи
+    # генерим короче, чтобы обрезка почти не срабатывала).
+    visible_links_len = len(re.sub(r"<[^>]+>", "", links_block))
+    max_base = _CAPTION_LIMIT - visible_links_len
+    if len(caption) > max_base:
+        caption = caption[:max_base - 1].rsplit(" ", 1)[0].rstrip() + "…"
+    caption = _html.escape(caption) + links_block
 
     payload = {
         "channel": config.CROSSPOST_CHANNEL,
