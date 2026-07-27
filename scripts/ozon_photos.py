@@ -130,12 +130,20 @@ def main():
     headless = os.environ.get("OZON_HEADLESS", "0") == "1"
     total = 0
     with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=headless,
-            args=["--disable-blink-features=AutomationControlled", "--no-sandbox",
-                  "--disable-dev-shm-usage"])
-        ctx = browser.new_context(user_agent=UA, locale="ru-RU", timezone_id="Europe/Moscow",
-                                  viewport={"width": 1400, "height": 1000})
+        # НАСТОЯЩИЙ Google Chrome с постоянным профилем — отпечаток реального браузера,
+        # антибот Ozon пропускает (плейрайтовский Chromium он режет даже на домашнем IP).
+        # Профиль персистентный: капчу/куки достаточно пройти один раз.
+        profile = str(Path.home() / ".ozon_chrome_profile")
+        common = dict(headless=headless, locale="ru-RU", timezone_id="Europe/Moscow",
+                      viewport={"width": 1400, "height": 1000},
+                      args=["--disable-blink-features=AutomationControlled", "--no-sandbox",
+                            "--disable-dev-shm-usage"])
+        try:
+            ctx = p.chromium.launch_persistent_context(profile, channel="chrome", **common)
+            print("→ браузер: настоящий Google Chrome")
+        except Exception as e:
+            print(f"→ Chrome не найден ({e}) — fallback на Chromium")
+            ctx = p.chromium.launch_persistent_context(profile, **common)
         ctx.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
         page = ctx.new_page()
 
@@ -158,7 +166,7 @@ def main():
         print(f"\nВсего товаров к скачиванию: {len(product_urls)}")
         for u in product_urls:
             total += download_product(page, u, root)
-        browser.close()
+        ctx.close()
 
     print(f"\n=== ИТОГО: {total} фото, папки в {root} ===")
 
