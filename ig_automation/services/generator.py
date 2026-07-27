@@ -347,6 +347,22 @@ def _strip_policy(caption: str) -> str:
     return re.sub(r"\n{3,}", "\n\n", "\n".join(kept)).strip()
 
 
+# Жёсткая подгонка ОПИСАНИЯ под лимит (модель не держит длину надёжно). Артикул/ссылки
+# добавляются ПОСЛЕ — резерв под них. 880 = 1024 − артикул(~40) − ссылки канала(~50) − запас.
+CAPTION_DESC_LIMIT = 880
+
+
+def _fit_caption(text: str, limit: int = CAPTION_DESC_LIMIT) -> str:
+    """Обрезает текст до limit по границе абзаца (иначе слова), без огрызков."""
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    cut = text[:limit]
+    if "\n\n" in cut:
+        return cut.rsplit("\n\n", 1)[0].rstrip()
+    return cut.rsplit(" ", 1)[0].rstrip() + "…"
+
+
 def set_post_product(post_id: int, product_id: str) -> None:
     """Привязывает пост к конкретному товару каталога (id + каноничное название)."""
     p = products.product_by_id(product_id)
@@ -402,7 +418,7 @@ def generate_post_text(post_id: int) -> Optional[int]:
         output_format=TextOut,
     )
     out = resp.parsed_output
-    caption = _strip_policy(out.caption)   # вырезаем способ применения + дисклеймер (он на картинке)
+    caption = _fit_caption(_strip_policy(out.caption))   # чистим политику + жёстко в лимит (модель не держит длину)
     # Гарантируем артикул/ссылку WB В САМОЙ подписи (Claude иногда кладёт в CTA).
     if pid:
         lk = catalog.get_link(pid)

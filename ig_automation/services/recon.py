@@ -890,10 +890,10 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
         output_format=CaptionOut)
     out = resp.parsed_output
     from .catalog import get_link
-    from .generator import _strip_policy
+    from .generator import _strip_policy, _fit_caption
     lk = get_link(str(sb_data["product_id"])) or {}
     nm = (lk.get("nmid") or "").strip()
-    caption = _strip_policy(out.caption.strip())   # срезаем способ применения/дисклеймер, даже если модель ослушалась
+    caption = _fit_caption(_strip_policy(out.caption.strip()))   # чистим политику + жёстко в лимит
     if nm:
         # без URL (в IG не кликается), артикул хэштегом — тап открывает поиск
         caption += f"\n\n✅ Артикул на Wildberries: #{nm}"
