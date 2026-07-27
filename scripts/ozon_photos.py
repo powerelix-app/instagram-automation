@@ -100,6 +100,14 @@ def download_product(page, url: str, root: Path) -> int:
     print(f"\n→ товар: {url}")
     page.goto(url, wait_until="domcontentloaded", timeout=60000)
     wait_captcha(page)
+    # после JS-челленджа куки выданы — повторный заход открывает настоящую страницу
+    if "multimedia" not in page.content():
+        page.goto(url, wait_until="domcontentloaded", timeout=60000)
+        time.sleep(3)
+        try:
+            page.screenshot(path="ozon_after.png")
+        except Exception:
+            pass
     scroll(page)
     urls = collect_image_urls(page)
     outdir = root / slug_of(url)
