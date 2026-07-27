@@ -868,7 +868,7 @@ def storyboard_to_post(sb_id: int, selected: Optional[List[int]] = None) -> Opti
                  if str(p["id"]) == str(sb_data["product_id"])), {})
 
     class CaptionOut(BaseModel):
-        caption: str = Field(description="Подпись к посту: живой полезный текст про продукт (почему/кому/эмоция/результат), на «ты», с эмодзи и абзацами, СТРОГО 400-750 знаков (не длиннее — иначе не влезет в подпись Telegram), БЕЗ хэштегов")
+        caption: str = Field(description="Подпись к посту: живой полезный текст про продукт (почему/кому/эмоция/результат), на «ты», с эмодзи и абзацами, 800-950 знаков (используй объём по максимуму, но НЕ длиннее 950 — жёсткий лимит Telegram 1024 с учётом артикула), БЕЗ хэштегов")
         hashtags: List[str] = Field(description="РОВНО 4 самых релевантных русских хэштега без # (Instagram режет охват при большем числе)")
 
     vo_lines = "\n".join(f"- {sc.get('vo','')}" for sc in scenes if sc.get("vo"))
