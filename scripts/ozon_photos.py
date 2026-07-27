@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Скачивание всех фото карточки товара с Ozon (для референса «по мотивам»).
+"""Скачивание фото карточек Ozon (референсы «по мотивам»). Умеет НЕСКОЛЬКО ссылок за
+один запуск и ссылки на ПОИСК/КАТЕГОРИЮ (сам соберёт топ-N товаров из выдачи).
 
-Использование:
-    .venv/bin/python scripts/ozon_photos.py "<ozon_product_url>" [папка_вывода]
+Использование (VPN ВЫКЛЮЧИ — нужен домашний российский IP):
+    .venv/bin/python scripts/ozon_photos.py <url1> <url2> ...
+    .venv/bin/python scripts/ozon_photos.py --n 8 "<ссылка на поиск>"
 
-Ozon режет ботов на самой странице, поэтому открываем реальным браузером (Playwright,
-headed) — с твоего Мака (резидентный IP) проходит. Если всплывёт капча — реши её в окне,
-скрипт подождёт. Собираем все URL картинок галереи, апскейлим (wc1000→wc1920) и качаем.
+Опции:  --out DIR   корневая папка (default output/ozon_competitor)
+        --n N       сколько товаров брать из поисковой выдачи (default 6)
+
+Каждый товар → своя подпапка. Браузер открывается ОДИН раз (одна капча на всё).
 """
+import os
 import re
 import sys
 import time
@@ -21,44 +25,110 @@ UA = ("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
 
 
 def upscale(url: str) -> str:
-    """Ozon-URL с /wcNNN/ → крупнее (wc1920). Оставляем как есть, если размера нет."""
     return re.sub(r"/wc\d+/", "/wc1920/", url)
 
 
-def collect_image_urls(page) -> list[str]:
-    """Все URL картинок товара со страницы: из <img src/srcset> + из JSON-стейта."""
+def slug_of(url: str) -> str:
+    m = re.search(r"/product/([^/?]+)", url)
+    s = (m.group(1) if m else "product")[:60]
+    return re.sub(r"-+\d{6,}$", "", s) or s
+
+
+def wait_captcha(page):
+    low = page.content()[:3000].lower()
+    if "Доступ" in page.title() or "captcha" in page.url.lower() or "challenge" in low:
+        if sys.stdin.isatty():
+            print("⚠️  Капча/антибот — реши в окне браузера, потом Enter здесь…")
+            input()
+        else:
+            print("⚠️  Капча — жду 30с…")
+            time.sleep(30)
+
+
+def collect_image_urls(page) -> list:
     urls = page.eval_on_selector_all(
         "img",
         """els => els.flatMap(e => [e.currentSrc, e.src,
              ...(e.srcset||'').split(',').map(s=>s.trim().split(' ')[0])])"""
     ) or []
-    # + вытащить из сырого HTML (Ozon кладёт ссылки в JSON-стейт)
     html = page.content()
     urls += re.findall(r'https://[^"\\\\ ]*?ozone?\.ru/[^"\\\\ ]*?multimedia[^"\\\\ ]*?\.(?:jpg|jpeg|png|webp)', html)
-    # только мультимедиа-картинки товара, крупные, без иконок
     out, seen = [], set()
     for u in urls:
         if not u or "multimedia" not in u:
             continue
         u = upscale(u)
-        # ключ = id картинки без размера (дедуп разных размеров)
         key = re.sub(r"/wc\d+/", "/", u)
-        if key in seen:
-            continue
-        seen.add(key)
-        out.append(u)
+        if key not in seen:
+            seen.add(key)
+            out.append(u)
     return out
 
 
-def main():
-    if len(sys.argv) < 2:
-        print("usage: ozon_photos.py <url> [outdir]"); sys.exit(1)
-    url = sys.argv[1]
-    outdir = Path(sys.argv[2] if len(sys.argv) > 2 else "output/ozon_competitor")
-    outdir.mkdir(parents=True, exist_ok=True)
+def collect_product_links(page, n: int) -> list:
+    """Со страницы поиска/категории — ссылки первых n товаров."""
+    hrefs = page.eval_on_selector_all(
+        'a[href*="/product/"]', "els => els.map(e => e.href)") or []
+    out, seen = [], set()
+    for h in hrefs:
+        m = re.search(r"(https://www\.ozon\.ru/product/[^/?#]+/)", h)
+        if not m:
+            continue
+        u = m.group(1)
+        if u not in seen:
+            seen.add(u)
+            out.append(u)
+        if len(out) >= n:
+            break
+    return out
 
-    import os
-    headless = os.environ.get("OZON_HEADLESS", "0") == "1"   # =1 на сервере (нет дисплея)
+
+def scroll(page, times=6):
+    for _ in range(times):
+        page.mouse.wheel(0, 1200)
+        time.sleep(0.7)
+    time.sleep(1.5)
+
+
+def download_product(page, url: str, root: Path) -> int:
+    print(f"\n→ товар: {url}")
+    page.goto(url, wait_until="domcontentloaded", timeout=60000)
+    wait_captcha(page)
+    scroll(page)
+    urls = collect_image_urls(page)
+    outdir = root / slug_of(url)
+    outdir.mkdir(parents=True, exist_ok=True)
+    n = 0
+    for i, u in enumerate(urls, 1):
+        try:
+            r = requests.get(u, headers={"User-Agent": UA}, timeout=30)
+            if r.ok and len(r.content) > 5000:
+                ext = ".png" if ".png" in u else ".jpg"
+                (outdir / f"ozon_{i:02d}{ext}").write_bytes(r.content)
+                n += 1
+        except Exception as e:
+            print(f"  ✗ {i}: {e}")
+    print(f"  ✓ скачано {n} фото → {outdir}")
+    return n
+
+
+def main():
+    args = sys.argv[1:]
+    root, n_search, urls = Path("output/ozon_competitor"), 6, []
+    i = 0
+    while i < len(args):
+        if args[i] == "--out":
+            root = Path(args[i + 1]); i += 2
+        elif args[i] == "--n":
+            n_search = int(args[i + 1]); i += 2
+        else:
+            urls.append(args[i]); i += 1
+    if not urls:
+        print(__doc__)
+        sys.exit(1)
+
+    headless = os.environ.get("OZON_HEADLESS", "0") == "1"
+    total = 0
     with sync_playwright() as p:
         browser = p.chromium.launch(
             headless=headless,
@@ -66,39 +136,31 @@ def main():
                   "--disable-dev-shm-usage"])
         ctx = browser.new_context(user_agent=UA, locale="ru-RU", timezone_id="Europe/Moscow",
                                   viewport={"width": 1400, "height": 1000})
-        # прячем webdriver-флаг (антибот его читает)
         ctx.add_init_script("Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
         page = ctx.new_page()
-        print("→ открываю карточку…")
-        page.goto(url, wait_until="domcontentloaded", timeout=60000)
-        # прокрутка, чтобы галерея и ниже-контент подгрузились (ленивые картинки)
-        for _ in range(6):
-            page.mouse.wheel(0, 1200); time.sleep(0.8)
-        time.sleep(2)
-        # если капча/заглушка — дать время решить вручную
-        if "Доступ" in page.title() or "captcha" in page.url.lower() or "challenge" in page.content()[:2000].lower():
-            if sys.stdin.isatty():
-                print("⚠️  Похоже на антибот/капчу. Реши в открытом окне, потом Enter здесь…")
-                input()
-            else:
-                print("⚠️  Антибот/капча — жду 30с на ручное решение в окне…")
-                time.sleep(30)
-        urls = collect_image_urls(page)
-        print(f"→ найдено картинок: {len(urls)}")
+
+        product_urls = []
+        for u in urls:
+            if "/product/" in u:
+                product_urls.append(u)
+            else:  # поиск / категория → собрать товары из выдачи
+                print(f"→ поисковая выдача: {u}")
+                page.goto(u, wait_until="domcontentloaded", timeout=60000)
+                wait_captcha(page)
+                scroll(page, 8)
+                found = collect_product_links(page, n_search)
+                print(f"  найдено товаров: {len(found)}")
+                product_urls += found
+
+        # дедуп, сохраняя порядок
+        seen = set()
+        product_urls = [u for u in product_urls if not (u in seen or seen.add(u))]
+        print(f"\nВсего товаров к скачиванию: {len(product_urls)}")
+        for u in product_urls:
+            total += download_product(page, u, root)
         browser.close()
 
-    n = 0
-    for i, u in enumerate(urls, 1):
-        try:
-            r = requests.get(u, headers={"User-Agent": UA}, timeout=30)
-            if r.ok and len(r.content) > 5000:
-                ext = ".jpg" if "png" not in u else ".png"
-                (outdir / f"ozon_{i:02d}{ext}").write_bytes(r.content)
-                n += 1
-                print(f"  ✓ {i:02d} — {len(r.content)//1024} КБ")
-        except Exception as e:
-            print(f"  ✗ {i}: {e}")
-    print(f"\nГотово: {n} фото → {outdir}")
+    print(f"\n=== ИТОГО: {total} фото, папки в {root} ===")
 
 
 if __name__ == "__main__":
