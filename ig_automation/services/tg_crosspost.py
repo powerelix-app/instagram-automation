@@ -84,6 +84,31 @@ def _clean_caption(caption: str) -> str:
     return text
 
 
+def send_text(text: str, channel: str = "") -> Dict:
+    """Отправляет ПРОСТОЕ текстовое сообщение (до 4096) через Aeza-бот в тот же чат,
+    что и файлы. Для полной подписи, когда она не влезла в caption медиа (лимит 1024)."""
+    if not (config.CROSSPOST_ENDPOINT and config.CROSSPOST_SECRET):
+        return {"ok": False, "error": "нет CF_CROSSPOST_ENDPOINT / CF_CROSSPOST_SECRET"}
+    import html as _html
+    payload = {
+        "channel": channel or config.CROSSPOST_CHANNEL,
+        "kind": "text",
+        "media_urls": [],
+        "caption": _html.escape((text or "")[:4096]),
+        "parse_mode": "HTML",
+    }
+    try:
+        r = requests.post(config.CROSSPOST_ENDPOINT, json=payload,
+                          headers={"X-Crosspost-Secret": config.CROSSPOST_SECRET}, timeout=60)
+        body = r.json() if r.headers.get("content-type", "").startswith("application/json") else {}
+        if r.status_code != 200 or not body.get("ok"):
+            return {"ok": False, "error": f"{r.status_code}: {str(body or r.text)[:200]}"}
+        return {"ok": True, "message_id": body.get("message_id")}
+    except Exception as e:
+        log.warning("tg send_text failed: %s", e)
+        return {"ok": False, "error": str(e)[:200]}
+
+
 def send_media(image_url: str, caption: str = "", channel: str = "", kind: str = "photo") -> Dict:
     """Отправляет одиночное изображение (по публичному URL) + подпись в TG через
     Aeza-бот (он сам скачивает медиа — обходит гео-блок РФ-домена и лимит релея на

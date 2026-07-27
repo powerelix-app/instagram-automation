@@ -1167,12 +1167,13 @@ def compare_to_telegram(request: Request, cid: int, _: bool = Depends(require_us
         return RedirectResponse(f"/compare/{cid}?msg={quote('Сначала собери инфографику')}", status_code=303)
     photo_url = config.PUBLIC_BASE.rstrip("/") + d["output_path"]
     caption = d.get("caption") or d.get("title") or ""
-    # ОРИГИНАЛ файлом (document) + подпись через Aeza-бот — качество не теряется при перепосте
-    res = tg_crosspost.send_media(photo_url, caption, channel=config.TG_CHAT, kind="document")
+    # ПОЛНЫЙ текст отдельным сообщением (в caption документа влезает только 1024) +
+    # ОРИГИНАЛ файлом без подписи — качество и весь текст сохраняются
+    if caption.strip():
+        tg_crosspost.send_text(caption, channel=config.TG_CHAT)
+    res = tg_crosspost.send_media(photo_url, "", channel=config.TG_CHAT, kind="document")
     if res.get("ok"):
-        if len(caption) > 1024:  # подпись длиннее лимита — дошлём полный текст
-            notify.send(caption, html=False)
-        msg = "📨 Отправлено в Telegram файлом (оригинал) + подпись — забирай для выкладки"
+        msg = "📨 Отправлено в Telegram: полный текст + файл (оригинал) — забирай для выкладки"
     elif notify.configured():  # фолбэк: текст + ссылка на картинку
         ok = notify.send_post(photo_url, caption)
         msg = "📨 Отправлено (текст + ссылка на картинку)" if ok else f"Не отправилось: {res.get('error')}"
@@ -1214,24 +1215,23 @@ def post_to_telegram(request: Request, post_id: int, _: bool = Depends(require_u
     # если есть версии в разных форматах — шлём КАЖДЫЙ формат (юзер сам разложит по площадкам)
     groups = [(rt, generator.get_publish_assets(post_id, platform=_p))
               for rt, _p in ([(r, ("ig" if r == "9:16" else "vk")) for r in ratios] or [("", None)])]
+    # ПОЛНЫЙ текст — отдельным сообщением тем же ботом (в caption документа влезает только
+    # 1024, поэтому подпись слали урезанной; теперь весь текст приходит целиком, до 4096)
+    txt_res = tg_crosspost.send_text(caption, channel=config.TG_CHAT) if caption.strip() else {"ok": True}
     sent = 0
-    first = True
     for rt, agroup in groups:
         for a in agroup:
             u = config.PUBLIC_BASE.rstrip("/") + a.path
-            cap = caption if first else ""
-            res = tg_crosspost.send_media(u, cap, channel=config.TG_CHAT, kind="document")
+            res = tg_crosspost.send_media(u, "", channel=config.TG_CHAT, kind="document")  # файлы без подписи
             if res.get("ok"):
                 sent += 1
-            first = False
     if not sent and not groups:
         return RedirectResponse(f"/post/{post_id}?msg={quote('Нет картинок — сначала сгенерируй слайды')}",
                                 status_code=303)
     if sent:
-        if len(caption) > 1024:  # подпись длиннее лимита медиа — дошлём полный текст
-            notify.send(caption, html=False)
         ftxt = (" (форматы: " + ", ".join(ratios) + ")") if ratios else ""
-        msg = f"📨 В Telegram отправлено файлами: {sent} шт{ftxt} + подпись — забирай для выкладки"
+        tnote = "" if txt_res.get("ok") else " (текст не ушёл — проверь бота)"
+        msg = f"📨 В Telegram: текст{tnote} + {sent} файл(ов){ftxt} — забирай для выкладки"
     elif notify.configured():
         _first_url = next((config.PUBLIC_BASE.rstrip("/") + a.path
                            for _, ag in groups for a in ag), "")
