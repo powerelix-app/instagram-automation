@@ -195,9 +195,15 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
     # TG) — режем базовый текст по границе слова с запасом под ссылки (сами подписи
     # генерим короче, чтобы обрезка почти не срабатывала).
     visible_links_len = len(re.sub(r"<[^>]+>", "", links_block))
-    max_base = _CAPTION_LIMIT - visible_links_len
+    max_base = _CAPTION_LIMIT - visible_links_len - 2
     if len(caption) > max_base:
-        caption = caption[:max_base - 1].rsplit(" ", 1)[0].rstrip() + "…"
+        cut = caption[:max_base]
+        # обрезаем по границе АБЗАЦА (чтобы не оставлять огрызок вроде «✅…»);
+        # если абзаца нет — по границе слова
+        if "\n\n" in cut:
+            caption = cut.rsplit("\n\n", 1)[0].rstrip()
+        else:
+            caption = cut.rsplit(" ", 1)[0].rstrip() + "…"
     caption = _html.escape(caption) + links_block
 
     payload = {
