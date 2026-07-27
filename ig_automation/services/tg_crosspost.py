@@ -224,12 +224,6 @@ def crosspost(post_id: int, force: bool = False) -> Dict:
         return {"ok": False, "error": str(e)[:300]}
 
     message_id = str(body.get("message_id", ""))
-    # полный текст следом (если не влез в подпись картинки)
-    if followup_html:
-        try:
-            send_text(followup_html, channel=config.CROSSPOST_CHANNEL, html_ready=True)
-        except Exception as e:
-            log.warning("tg crosspost follow-up text post %s failed: %s", post_id, e)
     with session_scope() as s:
         post = s.get(Post, post_id)
         if post:
