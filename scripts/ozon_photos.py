@@ -50,13 +50,16 @@ def wait_captcha(page):
             print("  (скриншот антибота: ozon_challenge.png)")
         except Exception:
             pass
-        if sys.stdin.isatty():
+        wait_s = int(os.environ.get("OZON_WAIT", "0") or 0)
+        if wait_s:                       # авто-режим: ждём, пока человек решит капчу в окне
+            print(f"⚠️  Капча/антибот — РЕШИ В ОКНЕ БРАУЗЕРА, жду {wait_s}с…", flush=True)
+            time.sleep(wait_s)
+        elif sys.stdin.isatty():
             print("⚠️  Капча/антибот — реши в окне браузера, потом Enter здесь…")
             input()
         else:
-            wait_s = int(os.environ.get("OZON_WAIT", "30"))
-            print(f"⚠️  Капча — жду {wait_s}с…")
-            time.sleep(wait_s)
+            print("⚠️  Капча — жду 30с… (задай OZON_WAIT=90 для большего окна)")
+            time.sleep(30)
 
 
 def collect_image_urls(page) -> list:
