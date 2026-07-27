@@ -37,12 +37,18 @@ def slug_of(url: str) -> str:
 def wait_captcha(page):
     low = page.content()[:3000].lower()
     if "Доступ" in page.title() or "captcha" in page.url.lower() or "challenge" in low:
+        try:
+            page.screenshot(path="ozon_challenge.png")   # что именно показал антибот
+            print("  (скриншот антибота: ozon_challenge.png)")
+        except Exception:
+            pass
         if sys.stdin.isatty():
             print("⚠️  Капча/антибот — реши в окне браузера, потом Enter здесь…")
             input()
         else:
-            print("⚠️  Капча — жду 30с…")
-            time.sleep(30)
+            wait_s = int(os.environ.get("OZON_WAIT", "30"))
+            print(f"⚠️  Капча — жду {wait_s}с…")
+            time.sleep(wait_s)
 
 
 def collect_image_urls(page) -> list:
