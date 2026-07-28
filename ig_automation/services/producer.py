@@ -29,7 +29,7 @@ IMG_MODEL = "gemini-3.1-flash-image"
 import os as _os
 # nano = nano-banana-2 на Replicate (~$0.07 ≈ 5-6₽/кадр) — в 3-4 раза дешевле
 # того же gemini flash на ProxyAPI (~20₽/кадр); ProxyAPI-gemini остаётся фолбэком.
-IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "seedream,nano,gemini,gptimage2,grok").split(","))
+IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "seedream,nanopro,gptimage2,nano,gemini,grok").split(","))
 # Движки анимации (все на fal, единая касса). Дефолт — Seedance 2.0.
 VIDEO_ENGINES = {
     "seedance":      ("bytedance/seedance-2.0/image-to-video",      "Seedance 2.0"),
@@ -300,6 +300,34 @@ def gen_image_seedream(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
         data = apify.fetch_via_actor(url) or b""
     if not data:
         raise RuntimeError("seedream: результат не скачался")
+    return _fit_ratio(data, aspect)
+
+
+
+def gen_image_nano_pro(prompt: str, refs: list, aspect: str = "4:5",
+                       resolution: str = "2K") -> bytes:
+    """nano-banana-pro (Gemini 3 Pro Image) на fal — лучший кадр и КРУПНЫЙ текст на этикетке.
+    ⚠️ мелкую кириллицу склонен перерисовывать, поэтому просим 2K (детальнее) и держим
+    в цепочке ПОСЛЕ seedream. ~$0.15/кадр (4K ~$0.30), принимает до 14 референсов."""
+    from .. import scenes, apify
+    payload = {"prompt": prompt,
+               "image_urls": [scenes._data_url(x, 1024) for x in refs],
+               "image_size": _native_size(aspect),
+               "resolution": resolution}
+    r = requests.post("https://fal.run/fal-ai/nano-banana-pro/edit",
+                      headers={"Authorization": f"Key {config.FAL_KEY}",
+                               "Content-Type": "application/json"},
+                      json=payload, timeout=600)
+    r.raise_for_status()
+    url = r.json()["images"][0]["url"]
+    try:
+        img = requests.get(url, timeout=120)
+        img.raise_for_status()
+        data = img.content
+    except Exception:                      # fal.media режется РКН с РФ-VPS
+        data = apify.fetch_via_actor(url) or b""
+    if not data:
+        raise RuntimeError("nano-banana-pro: результат не скачался")
     return _fit_ratio(data, aspect)
 
 
@@ -789,6 +817,8 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
                 _set(sb_id, gen_status=f"генерация ({name})…")
             if name == "seedream":
                 img = gen_image_seedream(prompt, refs, aspect)
+            elif name == "nanopro":
+                img = gen_image_nano_pro(prompt, refs, aspect)
             elif name == "nano":
                 img = gen_image_nano(prompt, refs, aspect)
             elif name == "gptimage2":
