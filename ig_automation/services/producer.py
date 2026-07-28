@@ -793,10 +793,32 @@ def _shrink(p: Path, max_w: int = 900) -> bytes:
     return buf.getvalue()
 
 
+
+def label_guard(product_id: str) -> str:
+    """Промпт-защита этикетки: явно перечисляем ВЕСЬ лицевой текст банки из каталога.
+    Рецепт (проверен 29.07.2026 на nano-banana-pro 2K): модель воспроизводит кириллицу
+    корректно, только если текст перечислен дословно, а этикетка крупно и в фокусе.
+    Мелкий состав на боковой панели всё равно «каша» — на макетах он не читается."""
+    from .. import products
+    p = products.product_by_id(str(product_id)) or {}
+    if not p:
+        return ""
+    parts = ["POWERELIX", (p.get("name") or "").upper()]
+    if p.get("slogan_main"):
+        parts.append(p["slogan_main"])
+    parts += list(p.get("key_benefits_3") or [])
+    form = p.get("form") or ""
+    if form:
+        parts.append(form)
+    txt = ", ".join(x for x in parts if x)
+    return (f" ЭТИКЕТКА КРУПНО И В ФОКУСЕ, весь лицевой текст скопировать ДОСЛОВНО: {txt}. "
+            "НЕ выдумывать буквы и не менять шрифт; кириллица чёткая и читаемая.")
+
+
 def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
                       chain=IMG_CHAIN, sb_id: Optional[int] = None,
                       bottle: Optional[Path] = None, strict: bool = False,
-                      check_label: bool = True) -> bytes:
+                      check_label: bool = True, product_id: str = "") -> bytes:
     """Кадр с продуктом: идём по цепочке нейросетей, после каждой Claude-vision
     проверяет этикетку; кривая этикетка -> следующая модель.
     strict=False (дефолт): если ни одна не прошла, отдаём последний вариант —
@@ -809,6 +831,7 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
     bottle = Path(bottle) if bottle else (Path(refs[-1]) if (refs and check_label) else None)
     if not check_label:
         bottle = None
+    _pid = product_id or (bottle.stem if bottle and bottle.stem.isdigit() else "")
     last = b""
     last_reason = "модели не вернули результат"
     for name in chain:
@@ -818,7 +841,9 @@ def gen_product_image(prompt: str, refs: list, aspect: str = "4:5",
             if name == "seedream":
                 img = gen_image_seedream(prompt, refs, aspect)
             elif name == "nanopro":
-                img = gen_image_nano_pro(prompt, refs, aspect)
+                # рецепт 29.07.2026: 2K + дословный текст этикетки → кириллица держится
+                pr = prompt + (label_guard(_pid) if _pid else "")
+                img = gen_image_nano_pro(pr, refs, aspect)
             elif name == "nano":
                 img = gen_image_nano(prompt, refs, aspect)
             elif name == "gptimage2":
