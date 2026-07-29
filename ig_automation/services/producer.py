@@ -29,7 +29,10 @@ IMG_MODEL = "gemini-3.1-flash-image"
 import os as _os
 # nano = nano-banana-2 на Replicate (~$0.07 ≈ 5-6₽/кадр) — в 3-4 раза дешевле
 # того же gemini flash на ProxyAPI (~20₽/кадр); ProxyAPI-gemini остаётся фолбэком.
-IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "seedream,nanopro,gptimage2,nano,gemini,grok").split(","))
+# Рейтинг по тесту 2026-07-29 (кириллица на этикетке): Seedream 5 Pro > GPT Image 2 hi-fi >
+# Nano Banana Pro. Старые версии (nano v1/v2, seedream v4/lite, gpt-image-1) кириллицу варпят —
+# из цепочки исключены. Gemini/Grok — не для картинок (правило юзера).
+IMG_CHAIN = tuple((_os.getenv("CF_IMAGE_CHAIN") or "seedream,gptimage2,nanopro").split(","))
 # Движки анимации (все на fal, единая касса). Дефолт — Seedance 2.0.
 VIDEO_ENGINES = {
     "seedance":      ("bytedance/seedance-2.0/image-to-video",      "Seedance 2.0"),
@@ -210,7 +213,9 @@ def gen_image_gpt(prompt: str, refs: list, aspect: str = "4:5") -> bytes:
             fal_size = {"9:16": "portrait_16_9", "16:9": "landscape_16_9", "1:1": "square_hd",
                         "3:4": "portrait_4_3", "2:3": "portrait_4_3", "4:5": "portrait_4_3",
                         "4:3": "landscape_4_3", "3:2": "landscape_4_3"}.get(aspect, "portrait_4_3")
-            payload = {"prompt": prompt, "quality": "high", "image_size": fal_size,
+            # input_fidelity=high — ключ к сохранению этикетки (тест 2026-07-29)
+            payload = {"prompt": prompt, "quality": "high", "input_fidelity": "high",
+                       "image_size": fal_size,
                        "image_urls": [scenes._data_url(r, 1024) for r in refs]}
             r = requests.post("https://fal.run/fal-ai/gpt-image-2/edit",
                               headers={"Authorization": f"Key {config.FAL_KEY}",
