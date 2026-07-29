@@ -94,15 +94,51 @@ def _record_tick(event) -> None:
         pass
 
 
+def _watchdog_stuck_jobs() -> None:
+    """Сторож зависших фоновых задач.
+
+    Фоновые генерации (формат, слайды, видео) живут потоками ВНУТРИ веб-процесса:
+    при рестарте сервиса поток умирает, а статус в БД остаётся «в процессе» навсегда.
+    Задачу старше STUCK_MIN минут помечаем ошибкой — карточка перестаёт «висеть»
+    и её можно перезапустить кнопкой.
+    """
+    from datetime import datetime, timedelta
+    from .db.base import session_scope
+    from .db.models import Storyboard, Post
+
+    STUCK_MIN = 25
+    cutoff = datetime.utcnow() - timedelta(minutes=STUCK_MIN)
+    freed = 0
+    with session_scope() as s:
+        for sb in s.query(Storyboard).filter(
+                Storyboard.gen_status.notin_(["", "done", "error"])).all():
+            started = sb.gen_started_at or sb.created_at
+            if started and started < cutoff:
+                sb.gen_error = (f"задача прервана (была «{sb.gen_status}» более "
+                                f"{STUCK_MIN} мин — вероятно, перезапуск сервиса). "
+                                "Запусти заново.")
+                sb.gen_status = "error"
+                freed += 1
+        for p in s.query(Post).filter(Post.status == "generating").all():
+            if p.created_at and p.created_at < cutoff:
+                p.status = "draft"
+                p.gen_error = f"генерация прервана (>{STUCK_MIN} мин) — запусти заново"
+                freed += 1
+    if freed:
+        log.warning("watchdog: разморожено зависших задач: %s", freed)
+
+
 def start_scheduler() -> BackgroundScheduler:
     sched = BackgroundScheduler(timezone="UTC")
     sched.add_job(_refresh_ig_token, "interval", hours=24, id="refresh_ig_token")
     sched.add_job(_publish_due, "interval", minutes=1, id="publish_due")
     sched.add_job(_pull_insights, "interval", hours=6, id="pull_insights")
+    sched.add_job(_watchdog_stuck_jobs, "interval", minutes=5, id="watchdog_stuck")
     # Ежедневная сводка задач в Telegram — 06:00 UTC = 09:00 МСК.
     sched.add_job(_followup_reminders, "cron", hour=6, minute=0, id="followup_reminders")
     sched.add_listener(_record_tick, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
     sched.start()
     log.info("scheduler started: refresh_ig_token 24ч, publish_due 1мин, pull_insights 6ч, "
+             "watchdog 5мин, "
              "followup_reminders 09:00 МСК")
     return sched

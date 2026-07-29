@@ -676,9 +676,19 @@ def outpaint_to_ratio(src_path: Path, target_ratio: str) -> bytes:
     return data
 
 
+def _mark_started(sb_id: int) -> None:
+    """Отметка старта фоновой задачи — по ней сторож находит зависшие (см. scheduler)."""
+    from datetime import datetime
+    with session_scope() as s:
+        sb = s.get(Storyboard, sb_id)
+        if sb:
+            sb.gen_started_at = datetime.utcnow()
+
+
 def make_storyboard_format(sb_id: int, target_ratio: str) -> int:
     """Достраивает ВСЕ готовые слайды раскадровки под target_ratio (outpaint) и
     складывает в output_formats[target_ratio]. Возвращает число слайдов."""
+    _mark_started(sb_id)
     with session_scope() as s:
         sb = s.get(Storyboard, sb_id)
         if not sb or not sb.output_paths:

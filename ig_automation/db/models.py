@@ -86,6 +86,7 @@ class Storyboard(Base):
     status: Mapped[str] = mapped_column(String(16), default="draft")  # draft|approved
     gen_status: Mapped[str] = mapped_column(String(64), default="")  # ''|старт…|…|done|error
     gen_error: Mapped[str] = mapped_column(Text, default="")
+    gen_started_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
     output_paths: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
     output_video: Mapped[str] = mapped_column(String(255), default="")
     output_formats: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # {ratio: [paths]} — доп. форматы (outpaint)
