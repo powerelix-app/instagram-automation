@@ -73,8 +73,9 @@ def _meta_reachable_url(asset_path: str) -> str:
     """URL картинки, скачиваемый краулером Meta: прямая ссылка, иначе — перекладка."""
     asset_path = _as_jpeg(asset_path)
     direct = config.PUBLIC_BASE + asset_path
-    if _direct_url_ok(direct):
-        return direct
+    # ⚠️ НЕ проверяем доступность direct с нашего сервера: с РФ-IP домен открывается,
+    # а серверам Meta DDoS-Guard его не отдаёт («Не удалось скачать медиафайл»).
+    # Поэтому сразу перекладываем на хостинг, который Meta точно скачивает.
     # 1) Aeza-бот: заливает файл в Telegram и отдаёт ссылку api.telegram.org
     #    (он не в РФ, поэтому multipart проходит — в отличие от нашего релея).
     if config.CROSSPOST_ENDPOINT and config.CROSSPOST_SECRET:
