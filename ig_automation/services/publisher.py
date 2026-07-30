@@ -75,6 +75,23 @@ def _meta_reachable_url(asset_path: str) -> str:
     direct = config.PUBLIC_BASE + asset_path
     if _direct_url_ok(direct):
         return direct
+    # 1) Aeza-бот: заливает файл в Telegram и отдаёт ссылку api.telegram.org
+    #    (он не в РФ, поэтому multipart проходит — в отличие от нашего релея).
+    if config.CROSSPOST_ENDPOINT and config.CROSSPOST_SECRET:
+        try:
+            import requests as _r
+            resp = _r.post(config.CROSSPOST_ENDPOINT,
+                           json={"channel": config.TG_CHAT.split(",")[0],
+                                 "kind": "host", "media_urls": [direct]},
+                           headers={"X-Crosspost-Secret": config.CROSSPOST_SECRET}, timeout=120)
+            body = resp.json() if resp.text else {}
+            if resp.status_code == 200 and body.get("url"):
+                log.info("медиа для Meta захостено через Aeza-бот")
+                return body["url"]
+            log.warning("Aeza-хостинг не дал ссылку: %s %s", resp.status_code, str(body)[:150])
+        except Exception as e:
+            log.warning("Aeza-хостинг недоступен (%s)", e)
+
     log.info("прямая ссылка недоступна краулеру Meta — перекладываю через Telegram/Apify")
     if not (config.TG_TOKEN and config.TG_CHAT):
         return direct
