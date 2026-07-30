@@ -26,11 +26,35 @@ def _full_caption(caption: str, hashtags) -> str:
     return (caption or "").strip() + ("\n\n" + tags if tags else "")
 
 
+# UA краулера Meta — им же проверяем доступность прямой ссылки
+_META_UA = "facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)"
+
+
+def _direct_url_ok(url: str) -> bool:
+    """Открывается ли наш файл краулером Meta напрямую (2-сек проверка).
+
+    Раньше домен за DDoS-Guard резал иностранных ботов и приходилось перекладывать
+    файл через Telegram/Apify — это стоило минут и часто падало по таймауту.
+    Сейчас домен отдаёт 200, поэтому сначала пробуем прямую ссылку.
+    """
+    import requests as _rq
+    try:
+        r = _rq.get(url, headers={"User-Agent": _META_UA}, timeout=8, stream=True)
+        ok = r.status_code == 200
+        r.close()
+        return ok
+    except Exception:
+        return False
+
+
 def _meta_reachable_url(asset_path: str) -> str:
-    """URL картинки, скачиваемый краулером Meta. Наш домен за DDoS-Guard режет
-    иностранных ботов, поэтому хостим файл через Telegram (sendDocument -> file URL)."""
+    """URL картинки, скачиваемый краулером Meta: прямая ссылка, иначе — перекладка."""
+    direct = config.PUBLIC_BASE + asset_path
+    if _direct_url_ok(direct):
+        return direct
+    log.info("прямая ссылка недоступна краулеру Meta — перекладываю через Telegram/Apify")
     if not (config.TG_TOKEN and config.TG_CHAT):
-        return config.PUBLIC_BASE + asset_path
+        return direct
     import requests as _rq
     local = Path("data") / asset_path.lstrip("/")
     if not local.exists():
