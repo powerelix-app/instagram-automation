@@ -47,8 +47,31 @@ def _direct_url_ok(url: str) -> bool:
         return False
 
 
+def _as_jpeg(asset_path: str) -> str:
+    """Instagram принимает только JPEG («Only photo or video can be accepted as media
+    type» на PNG). Отдаём JPEG-копию рядом с оригиналом, создавая её при необходимости."""
+    if not asset_path.lower().endswith(".png"):
+        return asset_path
+    local = Path("data") / asset_path.lstrip("/")
+    jpg_path = asset_path[:-4] + "_ig.jpg"
+    jpg_local = Path("data") / jpg_path.lstrip("/")
+    if not local.exists():
+        return asset_path
+    if not jpg_local.exists() or jpg_local.stat().st_mtime < local.stat().st_mtime:
+        try:
+            from PIL import Image
+            im = Image.open(local).convert("RGB")
+            im.save(jpg_local, "JPEG", quality=92, optimize=True)
+            log.info("для IG сконвертировано в JPEG: %s", jpg_path)
+        except Exception as e:
+            log.warning("не смог сконвертировать %s в JPEG: %s", asset_path, e)
+            return asset_path
+    return jpg_path
+
+
 def _meta_reachable_url(asset_path: str) -> str:
     """URL картинки, скачиваемый краулером Meta: прямая ссылка, иначе — перекладка."""
+    asset_path = _as_jpeg(asset_path)
     direct = config.PUBLIC_BASE + asset_path
     if _direct_url_ok(direct):
         return direct
