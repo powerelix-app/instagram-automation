@@ -77,6 +77,10 @@ PUBLIC_BASE = os.getenv("CF_PUBLIC_BASE", "https://content.bandabogachey.online"
 TG_TOKEN = os.getenv("CF_TG_TOKEN", "")
 TG_CHAT = os.getenv("CF_TG_CHAT", "")
 TG_RELAY = os.getenv("CF_TG_RELAY", "https://tg-relay.makc-rogozhnikov.workers.dev").rstrip("/")
+# Темы (topics) супергруппы: у каждого проекта своя вкладка в одном чате.
+# Пусто — шлём в общий поток, как раньше.
+TG_THREAD = os.getenv("CF_TG_THREAD", "")            # контент-завод
+TG_THREAD_VK = os.getenv("CF_TG_THREAD_VK", "")      # сообщество VK
 
 # ── Кросс-пост в Telegram-канал @powerelix (бот @powerelix_brand_bot — админ канала) ──
 CROSSPOST_ENABLED = os.getenv("CF_CROSSPOST", "0") == "1"

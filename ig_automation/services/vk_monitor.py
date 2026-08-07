@@ -166,7 +166,7 @@ def check(notify_tg: bool = True) -> int:
     items = msgs + cmts
     if notify_tg and notify.configured():
         for m in items:
-            notify.send(m)
+            notify.send(m, thread=config.TG_THREAD_VK)   # своя тема сообщества
     if items:
         log.info("vk_monitor: новых сообщений %d, комментариев %d", len(msgs), len(cmts))
     return len(items)

@@ -15,14 +15,23 @@ def configured() -> bool:
     return bool(config.TG_TOKEN and config.TG_CHAT)
 
 
-def send(text: str, html: bool = True) -> bool:
-    """Отправляет сообщение в Telegram-чат. Возвращает True при успехе."""
+def _thread(explicit) -> str:
+    """id темы супергруппы: явный аргумент → дефолт проекта → без темы."""
+    return str(explicit if explicit not in (None, "") else config.TG_THREAD or "")
+
+
+def send(text: str, html: bool = True, thread=None) -> bool:
+    """Отправляет сообщение в Telegram-чат. Возвращает True при успехе.
+    thread — id темы супергруппы (message_thread_id), если чат с темами."""
     if not configured():
         log.info("telegram не настроен (CF_TG_TOKEN/CF_TG_CHAT) — пропуск")
         return False
     url = f"{config.TG_RELAY}/bot{config.TG_TOKEN}/sendMessage"
     try:
         body = {"chat_id": config.TG_CHAT, "text": text, "disable_web_page_preview": True}
+        th = _thread(thread)
+        if th:
+            body["message_thread_id"] = int(th)
         if html:
             body["parse_mode"] = "HTML"
         r = requests.post(url, json=body, timeout=15)
@@ -35,16 +44,18 @@ def send(text: str, html: bool = True) -> bool:
         return False
 
 
-def send_photo(photo_url: str, caption: str = "") -> bool:
+def send_photo(photo_url: str, caption: str = "", thread=None) -> bool:
     """Отправляет фото по ПУБЛИЧНОМУ URL с подписью (маленький JSON — релей тянет).
     Telegram сам скачивает картинку по URL. Подпись ≤1024 (лимит Bot API)."""
     if not configured():
         return False
     url = f"{config.TG_RELAY}/bot{config.TG_TOKEN}/sendPhoto"
     try:
-        r = requests.post(url, json={
-            "chat_id": config.TG_CHAT, "photo": photo_url, "caption": caption[:1024],
-        }, timeout=25)
+        body = {"chat_id": config.TG_CHAT, "photo": photo_url, "caption": caption[:1024]}
+        th = _thread(thread)
+        if th:
+            body["message_thread_id"] = int(th)
+        r = requests.post(url, json=body, timeout=25)
         if r.status_code != 200:
             log.warning("telegram sendPhoto %s: %s", r.status_code, r.text[:250])
             return False
