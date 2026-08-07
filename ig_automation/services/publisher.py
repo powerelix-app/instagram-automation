@@ -69,6 +69,12 @@ def _as_jpeg(asset_path: str) -> str:
     return jpg_path
 
 
+def _host_chat() -> str:
+    """Куда заливать файл для перекладки. Не путать с TG_CHAT: туда уходят
+    уведомления, и после переезда в супергруппу Aeza-бота там нет."""
+    return (config.TG_HOST_CHAT or config.TG_CHAT or "").split(",")[0]
+
+
 def _meta_reachable_url(asset_path: str) -> str:
     """URL картинки, скачиваемый краулером Meta: прямая ссылка, иначе — перекладка."""
     asset_path = _as_jpeg(asset_path)
@@ -82,7 +88,7 @@ def _meta_reachable_url(asset_path: str) -> str:
         try:
             import requests as _r
             resp = _r.post(config.CROSSPOST_ENDPOINT,
-                           json={"channel": config.TG_CHAT.split(",")[0],
+                           json={"channel": _host_chat(),
                                  "kind": "host", "media_urls": [direct]},
                            headers={"X-Crosspost-Secret": config.CROSSPOST_SECRET}, timeout=120)
             body = resp.json() if resp.text else {}
@@ -104,7 +110,7 @@ def _meta_reachable_url(asset_path: str) -> str:
         file_id = ""
         try:  # 1) напрямую через relay (может не уметь multipart)
             r = _rq.post(f"{config.TG_RELAY}/bot{config.TG_TOKEN}/sendDocument",
-                         data={"chat_id": config.TG_CHAT, "disable_notification": True},
+                         data={"chat_id": _host_chat(), "disable_notification": True},
                          files={"document": (local.name, local.read_bytes())}, timeout=120)
             r.raise_for_status()
             file_id = r.json()["result"]["document"]["file_id"]
@@ -116,7 +122,7 @@ def _meta_reachable_url(asset_path: str) -> str:
             boundary = "----cfBoundary7MA4YWxkTrZu0gW"
             data = local.read_bytes()
             body = b""
-            for k, v in (("chat_id", str(config.TG_CHAT)),
+            for k, v in (("chat_id", _host_chat()),
                          ("disable_notification", "true")):
                 body += (f"--{boundary}\r\nContent-Disposition: form-data; "
                          f"name=\"{k}\"\r\n\r\n{v}\r\n").encode()
