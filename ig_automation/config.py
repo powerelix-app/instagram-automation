@@ -81,6 +81,10 @@ TG_RELAY = os.getenv("CF_TG_RELAY", "https://tg-relay.makc-rogozhnikov.workers.d
 # Пусто — шлём в общий поток, как раньше.
 TG_THREAD = os.getenv("CF_TG_THREAD", "")            # контент-завод
 TG_THREAD_VK = os.getenv("CF_TG_THREAD_VK", "")      # сообщество VK
+# Чат для ПЕРЕКЛАДКИ медиа под краулер Meta. Отдельно от TG_CHAT: уведомления
+# уехали в супергруппу, а Aeza-бот в неё не добавлен и отвечает «chat not found».
+# Пусто — берём TG_CHAT, как было раньше.
+TG_HOST_CHAT = os.getenv("CF_TG_HOST_CHAT", "")
 
 # ── Кросс-пост в Telegram-канал @powerelix (бот @powerelix_brand_bot — админ канала) ──
 CROSSPOST_ENABLED = os.getenv("CF_CROSSPOST", "0") == "1"
