@@ -1169,9 +1169,10 @@ def compare_to_telegram(request: Request, cid: int, _: bool = Depends(require_us
     caption = d.get("caption") or d.get("title") or ""
     # ПОЛНЫЙ текст отдельным сообщением (в caption документа влезает только 1024) +
     # ОРИГИНАЛ файлом без подписи — качество и весь текст сохраняются
+    _manual_chat = (config.TG_HOST_CHAT or config.TG_CHAT).split(",")[0]
     if caption.strip():
-        tg_crosspost.send_text(caption, channel=config.TG_CHAT)
-    res = tg_crosspost.send_media(photo_url, "", channel=config.TG_CHAT, kind="document")
+        tg_crosspost.send_text(caption, channel=_manual_chat)
+    res = tg_crosspost.send_media(photo_url, "", channel=_manual_chat, kind="document")
     if res.get("ok"):
         msg = "📨 Отправлено в Telegram: полный текст + файл (оригинал) — забирай для выкладки"
     elif notify.configured():  # фолбэк: текст + ссылка на картинку
@@ -1217,12 +1218,15 @@ def post_to_telegram(request: Request, post_id: int, _: bool = Depends(require_u
               for rt, _p in ([(r, ("ig" if r == "9:16" else "vk")) for r in ratios] or [("", None)])]
     # ПОЛНЫЙ текст — отдельным сообщением тем же ботом (в caption документа влезает только
     # 1024, поэтому подпись слали урезанной; теперь весь текст приходит целиком, до 4096)
-    txt_res = tg_crosspost.send_text(caption, channel=config.TG_CHAT) if caption.strip() else {"ok": True}
+    # Личный чат: TG_CHAT теперь супергруппа, в которой Aeza-бота нет («chat not
+    # found» → фолбэк со ссылкой). Файлы ручной выкладки идут как раньше — в личку.
+    _manual_chat = (config.TG_HOST_CHAT or config.TG_CHAT).split(",")[0]
+    txt_res = tg_crosspost.send_text(caption, channel=_manual_chat) if caption.strip() else {"ok": True}
     sent = 0
     for rt, agroup in groups:
         for a in agroup:
             u = config.PUBLIC_BASE.rstrip("/") + a.path
-            res = tg_crosspost.send_media(u, "", channel=config.TG_CHAT, kind="document")  # файлы без подписи
+            res = tg_crosspost.send_media(u, "", channel=_manual_chat, kind="document")  # файлы без подписи
             if res.get("ok"):
                 sent += 1
     if not sent and not groups:
