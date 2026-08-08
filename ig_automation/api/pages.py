@@ -1208,7 +1208,9 @@ def post_to_telegram(request: Request, post_id: int, _: bool = Depends(require_u
         post = s.get(Post, post_id)
         if not post:
             return RedirectResponse(f"/post/{post_id}?msg={quote('Пост не найден')}", status_code=303)
-        caption = post.caption or ""
+        # тот же сборщик, что при публикации в IG: текст + первые 5 хештегов
+        from ..services.publisher import _full_caption
+        caption = _full_caption(post.caption or "", post.hashtags)
         from ..db.models import PostAsset
         assets = (s.query(PostAsset).filter(PostAsset.post_id == post_id, PostAsset.kind == "image")
                   .order_by(PostAsset.ord).all())
