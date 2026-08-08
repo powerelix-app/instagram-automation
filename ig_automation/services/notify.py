@@ -75,4 +75,20 @@ def send_post(photo_url: str, caption: str = "") -> bool:
     if caption:
         parts.append(caption)
     parts.append(f"📥 Картинка для выкладки (скачай и запости):\n{photo_url}")
-    return send("\n\n".join(parts), html=False)
+    text = "\n\n".join(parts)
+    # Ручная выкладка идёт В ЛИЧКУ (как и файлы), а не в супергруппу уведомлений:
+    # иначе фолбэк падал в тему «Контент-завод» вперемешку с алертами.
+    chat = (config.TG_HOST_CHAT or config.TG_CHAT or "").split(",")[0]
+    if not (config.TG_TOKEN and chat):
+        return False
+    try:
+        r = requests.post(f"{config.TG_RELAY}/bot{config.TG_TOKEN}/sendMessage",
+                          json={"chat_id": chat, "text": text,
+                                "disable_web_page_preview": True}, timeout=15)
+        if r.status_code != 200:
+            log.warning("send_post %s: %s", r.status_code, r.text[:200])
+            return False
+        return True
+    except Exception as e:
+        log.warning("send_post error: %s", e)
+        return False
