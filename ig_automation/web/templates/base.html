@@ -38,9 +38,9 @@
   </div>
 </nav>
 
-{% if auth_disabled %}
+{% if unguarded %}
 <div class="bg-amber-100 text-amber-900 text-sm px-6 py-2 border-b border-amber-300">
-  ⚠️ Dev-режим: вход без пароля. Перед деплоем задай <code>CF_ADMIN_PASSWORD</code> в .env.
+  ⚠️ Локальный запуск: вход открыт. На сервере доступ закрыт общим входом Штаба.
 </div>
 {% endif %}
 {% if simulate %}

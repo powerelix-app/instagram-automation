@@ -1,7 +1,12 @@
-"""Простая auth для внутреннего сервиса: один админ, пароль из CF_ADMIN_PASSWORD.
+"""Вход в контент-завод.
 
-Пусто = dev-режим (вход открыт, в UI висит баннер). Перед деплоем (Фаза 8)
-пароль обязателен + nginx-поддомен под auth.
+С 2026-08-22 сервис закрыт общим входом Штаба: nginx спрашивает
+/auth/check?service=content у приложения биддера и без сессии сюда не пускает.
+Поэтому CF_ADMIN_PASSWORD пуст — второй пароль только мешал бы.
+
+Пароль остаётся как запасной путь: если он задан, работает как раньше.
+Пусто И запрос пришёл не через nginx (нет X-Forwarded-For) = локальная
+разработка, вход открыт и в интерфейсе висит предупреждение.
 """
 from __future__ import annotations
 
@@ -19,6 +24,15 @@ templates = Jinja2Templates(directory="ig_automation/web/templates")
 
 def auth_disabled() -> bool:
     return not config.ADMIN_PASSWORD
+
+
+def unguarded(request: Request) -> bool:
+    """Сервис реально открыт: пароля нет И зашли не через nginx.
+
+    Через nginx приходит X-Forwarded-For — значит проверка Штаба уже
+    отработала, предупреждать не о чем.
+    """
+    return auth_disabled() and "x-forwarded-for" not in request.headers
 
 
 def is_authed(request: Request) -> bool:

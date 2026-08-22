@@ -24,7 +24,7 @@ from ..services import compliance, generator, insights, planner, publisher, reco
 from ..services import comparison as comparison_svc
 from ..services import seamless as seamless_svc
 from ..services import sources as sources_svc
-from .auth import auth_disabled, require_user
+from .auth import auth_disabled, require_user, unguarded
 
 log = logging.getLogger(__name__)
 _MSK = ZoneInfo("Europe/Moscow")
@@ -37,6 +37,7 @@ def _ctx(request: Request, **extra: Any) -> Dict[str, Any]:
     base = {
         "request": request,
         "auth_disabled": auth_disabled(),
+        "unguarded": unguarded(request),
         "simulate": config.SIMULATE_PUBLISH,
     }
     base.update(extra)
