@@ -119,7 +119,7 @@ def list_slide(path, heading, bullets, note=None):
 
 
 # ── слайды ──
-cover(f"{OUT}/01.png", f"{SRC}/covK.png",
+cover(f"{OUT}/01.png", f"{SRC}/covP.png",
       "Чем нельзя запивать витамины",
       "4 напитка, из-за которых часть дозы уходит впустую")
 
